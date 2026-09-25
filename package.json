@@ -1,0 +1,25 @@
+{
+  "name": "greenline-erp",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "GreenLine Web ERP - panel interno (SPA React desplegada en Vercel)",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "lint": "oxlint frontend/src",
+    "pdf:ceo": "node scripts/generar-pdf-ceo.mjs",
+    "emails:limpiar": "node scripts/limpiar-emails.mjs",
+    "emails:lote": "node scripts/gen-lote-n8n.mjs"
+  },
+  "devDependencies": {
+    "oxlint": "^1.75.0"
+  }
+}

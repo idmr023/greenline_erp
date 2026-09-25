@@ -1,0 +1,602 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-brand: #009000;
+  --color-brand-dark: #006400;
+  --color-brand-light: #2eb82e;
+  --color-bbva: #004481;
+  --color-bbva-light: #0068b4;
+  --color-gray-bg: #f6f7f8;
+
+  /* ===== Paleta de marca (Green Line) — valores absolutos =====
+     Verde Greenline (marca) · Negro (contraste) · Blanco (legibilidad) · Amarillo eléctrico (acentos) */
+  --color-greenline: #009000;
+  --color-greenline-dark: #006400;
+  --color-greenline-light: #2eb82e;
+  --color-black-contrast: #000000;
+  --color-white-legible: #ffffff;
+  --color-yellow-electric: #ffd400;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #111827;
+  background-color: #ffffff;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  margin: 0;
+}
+
+p, span, a, li, button, input, textarea {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 400;
+  margin: 0;
+}
+
+@keyframes slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+@keyframes slide-down {
+  from { transform: translateY(-120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.5s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.35s ease-out;
+}
+
+/* Admin panel inputs */
+.input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.input:focus {
+  box-shadow: 0 0 0 3px rgba(0, 144, 0, 0.1);
+  border-color: #009000;
+}
+
+.input::placeholder {
+  color: #9ca3af;
+}
+
+/* Fallback visual cuando los tiles del mapa no se pueden cargar
+   (evita un mapa en blanco silencioso). */
+.map-tile-fallback {
+  background: #eef0f2;
+}
+.map-tile-fallback::after {
+  content: "No se pudo cargar el mapa. Revisa tu conexión e intenta de nuevo.";
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.65);
+  pointer-events: none;
+}
+
+/* ===== Tema Aniversario ===== */
+.gl-aniv-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gl-aniv-serpentina {
+  position: absolute;
+  top: -100px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow:
+    7px 14px 0 0 currentColor,
+    -7px 28px 0 0 currentColor,
+    7px 42px 0 0 currentColor,
+    -7px 56px 0 0 currentColor,
+    7px 70px 0 0 currentColor,
+    -7px 84px 0 0 currentColor;
+  opacity: 0.9;
+  animation-name: gl-serpentina-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.gl-aniv-num {
+  position: absolute;
+  font-size: 96px;
+  font-weight: 900;
+  font-family: 'Montserrat', sans-serif;
+  color: rgba(0, 144, 0, 0.16);
+  text-shadow: 0 2px 0 #ffffff, 3px 3px 0 rgba(0, 0, 0, 0.18);
+  animation: gl-num-float 6s ease-in-out infinite;
+  user-select: none;
+  line-height: 1;
+}
+
+/* N° 9 gigante de fondo: sombra sutil detrás del contenido */
+.gl-aniv-num-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: min(78vw, 78vh);
+  font-weight: 900;
+  font-family: 'Montserrat', sans-serif;
+  color: rgba(0, 144, 0, 0.06);
+  text-shadow: none;
+  line-height: 1;
+  user-select: none;
+  z-index: 1;
+  animation: none;
+}
+
+/* Destellos / chispas amarillo eléctrico */
+.gl-aniv-spark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ffd400;
+  transform: rotate(45deg);
+  animation: gl-spark 3.5s ease-in-out infinite;
+}
+
+/* Etiqueta: MES DE LOCURA */
+.gl-aniv-tag {
+  position: absolute;
+  padding: 4px 12px;
+  background: #000000;
+  color: #ffffff;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 2px;
+  box-shadow: 0 0 0 2px #ffd400 inset;
+  animation: gl-tag-pulse 2.4s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+/* Botón S/ (descuentos) */
+.gl-aniv-sol {
+  animation: gl-sol-bob 3s ease-in-out infinite;
+}
+
+.gl-aniv-close {
+  animation: gl-close-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes gl-serpentina-fall {
+  0% {
+    transform: translateY(0) rotate(0deg) translateX(0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.9;
+  }
+  50% {
+    transform: translateY(55vh) rotate(180deg) translateX(22px);
+  }
+  92% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(115vh) rotate(360deg) translateX(-16px);
+    opacity: 0;
+  }
+}
+
+@keyframes gl-num-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-8deg);
+  }
+  50% {
+    transform: translateY(-22px) rotate(8deg);
+  }
+}
+
+@keyframes gl-spark {
+  0%,
+  100% {
+    opacity: 0;
+    transform: rotate(45deg) scale(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.15);
+  }
+}
+
+@keyframes gl-tag-pulse {
+  0%,
+  100% {
+    transform: rotate(var(--rot, 0deg)) scale(1);
+  }
+  50% {
+    transform: rotate(var(--rot, 0deg)) scale(1.06);
+  }
+}
+
+@keyframes gl-sol-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes gl-close-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ============================================================
+   Zoom de producto (react-inner-image-zoom)
+   La librería envuelve la <img> en un <div> sin altura, por lo que
+   un max-height:100% sobre la imagen nunca resolvía y la parte
+   inferior se recortaba dentro del contenedor aspect-[4/3].
+   Se fuerza altura en el wrapper y se centra la imagen completa.
+   ============================================================ */
+.iiz > div {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iiz .iiz__img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* ============================================================
+   Cuerpo de artículo (blog) — compartido entre la vista pública,
+   la Vista Previa y el patrón de estilos que antes vivía en
+   clases utilitarias dentro de NovedadDetalle.
+   ============================================================ */
+.gl-article-body {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.9;
+  color: #404040;
+}
+
+.gl-article-body h2 {
+  margin: 3.5rem 0 1rem;
+  scroll-margin-top: 6rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 1.875rem;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  color: #0a0a0a;
+}
+
+.gl-article-body h3 {
+  margin: 2.5rem 0 0.75rem;
+  scroll-margin-top: 6rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: #171717;
+}
+
+.gl-article-body p {
+  margin: 0 0 1.5rem;
+}
+
+.gl-article-body ul {
+  margin: 0 0 1.5rem;
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+.gl-article-body ol {
+  margin: 0 0 1.5rem;
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+
+.gl-article-body li {
+  margin: 0 0 0.5rem;
+  line-height: 1.75rem;
+}
+
+.gl-article-body a {
+  color: #006400;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.gl-article-body strong {
+  font-weight: 600;
+  color: #171717;
+}
+
+.gl-article-body em {
+  font-style: italic;
+}
+
+.gl-article-body blockquote {
+  margin: 2.5rem 0;
+  border-left: 4px solid #009000;
+  background: #fafafa;
+  padding: 1.25rem 1.5rem;
+  font-size: 1.125rem;
+  line-height: 2rem;
+  color: #525252;
+}
+
+.gl-article-body hr {
+  margin: 3rem 0;
+  border: 0;
+  border-top: 1px solid #e5e5e5;
+}
+
+.gl-article-body img {
+  margin: 2.5rem auto;
+  width: 100%;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Tablas */
+.gl-article-body table {
+  width: 100%;
+  margin: 2rem 0;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.gl-article-body th,
+.gl-article-body td {
+  border: 1px solid #e5e5e5;
+  padding: 0.65rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.gl-article-body th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #171717;
+}
+
+.gl-article-body tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+/* Columnas (2 y 3) */
+.gl-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.gl-col {
+  min-width: 0;
+}
+
+.gl-col > :first-child {
+  margin-top: 0;
+}
+
+.gl-col > :last-child {
+  margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  .gl-columns-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gl-columns-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ============================================================
+   RichTextEditor (TipTap) — área editable del admin
+   ============================================================ */
+.rich-text-editor {
+  padding: 1.25rem;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  color: #374151;
+}
+
+.rich-text-editor p {
+  margin: 0 0 0.5rem;
+}
+
+.rich-text-editor ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.rich-text-editor ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.rich-text-editor blockquote {
+  border-left: 3px solid #009000;
+  padding-left: 1rem;
+  color: #525252;
+  font-style: italic;
+  margin: 0.75rem 0;
+}
+
+.rich-text-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  margin: 0.75rem auto;
+}
+
+.rich-text-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.9375rem;
+}
+
+.rich-text-editor th,
+.rich-text-editor td {
+  border: 1px solid #e5e5e5;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  position: relative;
+}
+
+.rich-text-editor th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rich-text-editor .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 144, 0, 0.12);
+  pointer-events: none;
+}
+
+.rich-text-editor .gl-columns {
+  margin: 0.5rem 0;
+}
+
+.rich-text-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ============================================================
+   Columnas (2/3) y tablas — editor y vista pública (prose)
+   ============================================================ */
+.rich-text-editor .gl-columns,
+.prose .gl-columns {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.rich-text-editor .gl-columns-2,
+.prose .gl-columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rich-text-editor .gl-columns-3,
+.prose .gl-columns-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rich-text-editor .gl-columns .gl-col,
+.prose .gl-columns .gl-col {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .rich-text-editor .gl-columns-2,
+  .rich-text-editor .gl-columns-3,
+  .prose .gl-columns-2,
+  .prose .gl-columns-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.prose table {
+  width: 100%;
+  font-size: 0.9375rem;
+  margin: 1.25rem 0;
+}
+
+.prose :where(table) th,
+.prose :where(table) td {
+  border: 1px solid #e5e5e5;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose :where(table) thead th {
+  background: #fafafa;
+  font-weight: 600;
+}

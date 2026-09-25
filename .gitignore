@@ -1,0 +1,44 @@
+# ============================================================
+# GreenLine ERP - dependencias ignoradas por Git
+# (raíz del repo ERP; el sitio público tiene el suyo propio)
+# ============================================================
+
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+build/
+dev-dist/
+
+# Secretos y credenciales NUNCA al repositorio
+.env
+.env.*
+!.env.example
+service-account.json
+*.pem
+*.key
+
+# Cobertura y reportes
+coverage/
+.sonar/
+.scannerwork/
+
+# Artefactos de testing / QA
+test-results/
+playwright-report/
+.lighthouseci/
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Vercel / entorno local
+.vercel
+
+# Editor / SO
+.DS_Store
+Thumbs.db
+.idea/
+*.swp

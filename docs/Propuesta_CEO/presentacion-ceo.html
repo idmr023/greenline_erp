@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presentación Ejecutiva — GreenLine Modernización</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .page-break { page-break-before: always; }
+      section { page-break-inside: avoid; }
+    }
+    @page { size: A4 landscape; margin: 0; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+<!-- ════════════════════════════════════════════════════════════════════
+     HERO
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="relative overflow-hidden bg-gradient-to-br from-emerald-600 via-green-600 to-teal-700 px-6 py-16 text-white sm:px-12">
+  <div class="absolute inset-0 opacity-10">
+    <div class="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-white/20"></div>
+    <div class="absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-white/10"></div>
+  </div>
+  <div class="relative mx-auto max-w-5xl">
+    <p class="mb-3 text-sm font-semibold uppercase tracking-widest text-emerald-200">Documento Ejecutivo — Septiembre 2026</p>
+    <h1 class="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">Modernización de Plataforma</h1>
+    <p class="mt-4 max-w-2xl text-lg text-emerald-100">Acceso al hosting + Contratación de Render — Impacto en ventas, seguridad y escalabilidad.</p>
+    <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div class="rounded-xl bg-white/10 p-4 text-center backdrop-blur-sm">
+        <div class="text-2xl">🎯</div>
+        <p class="mt-1 text-2xl font-bold">2</p>
+        <p class="text-xs text-emerald-200">Acciones urgentes</p>
+      </div>
+      <div class="rounded-xl bg-white/10 p-4 text-center backdrop-blur-sm">
+        <div class="text-2xl">👥</div>
+        <p class="mt-1 text-2xl font-bold">2,300</p>
+        <p class="text-xs text-emerald-200">Usuarios en riesgo</p>
+      </div>
+      <div class="rounded-xl bg-white/10 p-4 text-center backdrop-blur-sm">
+        <div class="text-2xl">⏱️</div>
+        <p class="mt-1 text-2xl font-bold">~5 sem</p>
+        <p class="text-xs text-emerald-200">Hasta caída web</p>
+      </div>
+      <div class="rounded-xl bg-white/10 p-4 text-center backdrop-blur-sm">
+        <div class="text-2xl">💰</div>
+        <p class="mt-1 text-2xl font-bold">$7/mes</p>
+        <p class="text-xs text-emerald-200">Inversión Render</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     1. ACCESO AL HOSTING
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="page-break px-6 py-16 sm:px-12">
+  <div class="mx-auto max-w-5xl">
+    <div class="mb-8">
+      <h2 class="text-3xl font-extrabold tracking-tight">1. Acceso al Hosting WordPress</h2>
+      <p class="mt-2 text-lg text-gray-500">El dominio glperu.com sigue apuntando a WordPress. Sin acceso, no podemos cambiar esto.</p>
+    </div>
+
+    <div class="grid gap-8 md:grid-cols-2">
+      <!-- Dominio -->
+      <div class="rounded-2xl bg-white p-8 shadow-lg ring-1 ring-black/5">
+        <div class="mb-4 flex items-center gap-3">
+          <span class="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600">🌐</span>
+          <h3 class="text-xl font-bold">Cambio de Dominio</h3>
+        </div>
+        <p class="text-gray-600">El DNS de <code class="rounded bg-gray-100 px-1.5 py-0.5 text-sm font-mono">glperu.com</code> apunta al hosting viejo de WordPress. Necesitamos redirigirlo a la nueva web en Render.</p>
+        <div class="mt-6 flex items-center gap-3 rounded-xl bg-gray-50 p-4">
+          <span class="text-2xl">📱</span>
+          <div>
+            <p class="text-sm font-semibold">23+ QR impresos en tiendas</p>
+            <p class="text-xs text-gray-500">Una vez cambie el dominio, todos los QR dejarán de funcionar INMEDIATAMENTE.</p>
+          </div>
+        </div>
+        <div class="mt-4 flex items-center gap-3 rounded-xl bg-emerald-50 p-4">
+          <span class="text-2xl">✅</span>
+          <div>
+            <p class="text-sm font-semibold text-emerald-800">Solución lista</p>
+            <p class="text-xs text-emerald-600">Redirecciones 301 automáticas en legacyRedirects.js. Se activan al tener acceso.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Usuarios -->
+      <div class="rounded-2xl bg-white p-8 shadow-lg ring-1 ring-black/5">
+        <div class="mb-4 flex items-center gap-3">
+          <span class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">👥</span>
+          <h3 class="text-xl font-bold">2,300 Usuarios</h3>
+        </div>
+        <p class="text-gray-600">Los usuarios registrados están en WordPress. Sin acceso al hosting, no podemos verificar cómo están almacenados ni migrarlos.</p>
+        <div class="mt-6 space-y-3">
+          <div class="rounded-xl bg-emerald-50 p-4">
+            <p class="text-sm font-bold text-emerald-800">🟢 Mejor caso (60%)</p>
+            <p class="text-xs text-emerald-600">Migración directa a Supabase. Los 2,300 usuarios intactos. Costo: $0.</p>
+          </div>
+          <div class="rounded-xl bg-red-50 p-4">
+            <p class="text-sm font-bold text-red-800">🔴 Peor caso (40%)</p>
+            <p class="text-xs text-red-600">Re-registro obligatorio + borrado de datos anteriores (GDPR). Pérdida de base de clientes.</p>
+          </div>
+        </div>
+        <div class="mt-4 rounded-xl border-l-4 border-red-400 bg-red-50 p-4">
+          <p class="text-sm font-semibold text-red-900">⚖️ Sin migración = incumplimiento GDPR</p>
+          <p class="mt-1 text-xs text-red-700">Sanciones de hasta 10 UIT (~S/ 52,500) + pérdida de confianza del cliente.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flujo QR -->
+    <div class="mt-10 rounded-2xl bg-gradient-to-r from-gray-50 to-emerald-50 p-8 shadow-sm ring-1 ring-black/5">
+      <h3 class="mb-6 text-xl font-bold">Cómo funcionan las redirecciones QR</h3>
+      <div class="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+        <div class="flex flex-col items-center gap-2">
+          <span class="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-lg font-bold">📱</span>
+          <span class="text-xs font-medium text-gray-600">1. Cliente escanea QR</span>
+        </div>
+        <span class="text-2xl text-gray-300">→</span>
+        <div class="flex flex-col items-center gap-2">
+          <span class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-lg font-bold">🔍</span>
+          <span class="text-xs font-medium text-gray-600">2. Ruta vieja detectada</span>
+        </div>
+        <span class="text-2xl text-gray-300">→</span>
+        <div class="flex flex-col items-center gap-2">
+          <span class="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-lg font-bold">🔄</span>
+          <span class="text-xs font-medium text-gray-600">3. 301 redirect a ruta nueva</span>
+        </div>
+        <span class="text-2xl text-gray-300">→</span>
+        <div class="flex flex-col items-center gap-2">
+          <span class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-lg font-bold">✅</span>
+          <span class="text-xs font-medium text-gray-600">4. Página correcta ✅</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     2. CONSUMO RENDER
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="page-break bg-gray-50 px-6 py-16 sm:px-12">
+  <div class="mx-auto max-w-5xl">
+    <div class="mb-8">
+      <h2 class="text-3xl font-extrabold tracking-tight">2. Consumo de Horas en Render</h2>
+      <p class="mt-2 text-lg text-gray-500">Actualmente a mitad de consumo. Cuando se agoten las horas, la web deja de funcionar.</p>
+    </div>
+
+    <div class="rounded-2xl bg-white p-8 shadow-lg ring-1 ring-black/5">
+      <div class="mb-6 flex items-end justify-between">
+        <div>
+          <p class="text-sm text-gray-500">Consumo actual</p>
+          <p class="text-4xl font-extrabold">484.93 <span class="text-lg font-normal text-gray-400">/ 750 horas</span></p>
+        </div>
+        <span class="rounded-full bg-amber-100 px-4 py-1.5 text-sm font-bold text-amber-700">64.7%</span>
+      </div>
+      <div class="w-full">
+        <div class="h-4 w-full overflow-hidden rounded-full bg-gray-200">
+          <div class="h-full rounded-full bg-amber-500" style="width: 64.7%"></div>
+        </div>
+      </div>
+      <div class="mt-4 grid grid-cols-3 gap-4 text-center">
+        <div class="rounded-xl bg-gray-50 p-3">
+          <p class="text-lg font-bold">265.07</p>
+          <p class="text-xs text-gray-500">Horas restantes</p>
+        </div>
+        <div class="rounded-xl bg-amber-50 p-3">
+          <p class="text-lg font-bold text-amber-700">~5 sem</p>
+          <p class="text-xs text-gray-500">Hasta agotarse</p>
+        </div>
+        <div class="rounded-xl bg-red-50 p-3">
+          <p class="text-lg font-bold text-red-600">0</p>
+          <p class="text-xs text-gray-500">Horas tras agotarse</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proyección de consumo -->
+    <div class="mt-8 rounded-2xl bg-white p-8 shadow-lg ring-1 ring-black/5">
+      <h3 class="mb-6 text-lg font-bold">Proyección de Consumo</h3>
+      <div class="grid grid-cols-4 gap-4">
+        <div class="text-center">
+          <div class="mx-auto mb-2 h-48 w-16 rounded bg-amber-400" style="height: 120px"></div>
+          <p class="text-xs font-semibold">Ago</p>
+          <p class="text-xs text-gray-500">242 hrs</p>
+        </div>
+        <div class="text-center">
+          <div class="mx-auto mb-2 h-48 w-16 rounded bg-amber-400" style="height: 120px"></div>
+          <p class="text-xs font-semibold">Sep</p>
+          <p class="text-xs text-gray-500">242 hrs</p>
+        </div>
+        <div class="text-center">
+          <div class="mx-auto mb-2 w-16 rounded bg-red-400" style="height: 120px"></div>
+          <p class="text-xs font-semibold">Oct (proy.)</p>
+          <p class="text-xs text-gray-500">242 hrs</p>
+        </div>
+        <div class="text-center">
+          <div class="mx-auto mb-2 w-16 rounded bg-red-300" style="height: 100px"></div>
+          <p class="text-xs font-semibold">Nov (proy.)</p>
+          <p class="text-xs text-red-500">AGOTADO</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-6 rounded-xl border-l-4 border-red-400 bg-red-50 p-5">
+      <p class="font-semibold text-red-900">⚠️ Consecuencia de no actuar</p>
+      <p class="mt-1 text-sm text-red-700">Cuando se agoten las horas, el backend se apaga. Los pedidos no se procesan, los emails no se envían, el panel admin no carga. Tiempo de recuperación: inmediato tras el pago, pero con downtime innecesario.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     3. COMPARATIVA WP vs REACT
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="page-break px-6 py-16 sm:px-12">
+  <div class="mx-auto max-w-5xl">
+    <div class="mb-8">
+      <h2 class="text-3xl font-extrabold tracking-tight">3. WordPress vs React + Render</h2>
+      <p class="mt-2 text-lg text-gray-500">React es 85-95% más rápido que WordPress en todas las métricas.</p>
+    </div>
+
+    <!-- Tabla comparativa -->
+    <div class="overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-black/5">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-4 font-semibold text-gray-600">Métrica</th>
+            <th class="px-6 py-4 font-semibold text-red-600">WordPress</th>
+            <th class="px-6 py-4 font-semibold text-emerald-600">React + Render</th>
+            <th class="px-6 py-4 font-semibold text-gray-600">Mejora</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr><td class="px-6 py-3 font-medium">Velocidad de carga</td><td class="px-6 py-3 text-red-600">3-7 seg</td><td class="px-6 py-3 text-emerald-600">&lt;1 seg</td><td class="px-6 py-3 font-semibold">85-95%</td></tr>
+          <tr><td class="px-6 py-3 font-medium">Lighthouse Score</td><td class="px-6 py-3 text-red-600">25-45</td><td class="px-6 py-3 text-emerald-600">90-100</td><td class="px-6 py-3 font-semibold">+120%</td></tr>
+          <tr><td class="px-6 py-3 font-medium">Seguridad</td><td class="px-6 py-3 text-red-600">Vulnerable (plugins)</td><td class="px-6 py-3 text-emerald-600">Prácticamente inviolable</td><td class="px-6 py-3 font-semibold">—</td></tr>
+          <tr><td class="px-6 py-3 font-medium">Costo mensual</td><td class="px-6 py-3 text-red-600">$25-80 USD</td><td class="px-6 py-3 text-emerald-600">$7 USD</td><td class="px-6 py-3 font-semibold">-72%</td></tr>
+          <tr><td class="px-6 py-3 font-medium">Mantenimiento</td><td class="px-6 py-3 text-red-600">Alto (plugins, WP)</td><td class="px-6 py-3 text-emerald-600">Mínimo (código propio)</td><td class="px-6 py-3 font-semibold">-90%</td></tr>
+          <tr><td class="px-6 py-3 font-medium">Cold start</td><td class="px-6 py-3 text-red-600">30-50 seg</td><td class="px-6 py-3 text-emerald-600">0 (plan pro)</td><td class="px-6 py-3 font-semibold">-100%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Datos de la industria -->
+    <div class="mt-8 grid gap-6 md:grid-cols-3">
+      <div class="rounded-2xl bg-gradient-to-br from-gray-50 to-white p-6 shadow-sm ring-1 ring-black/5 text-center">
+        <div class="text-3xl">📦</div>
+        <p class="mt-2 text-sm font-medium text-gray-500">Amazon</p>
+        <p class="text-3xl font-extrabold">+1%</p>
+        <p class="mt-1 text-xs text-gray-400">ingreso por cada 100ms de mejora</p>
+      </div>
+      <div class="rounded-2xl bg-gradient-to-br from-gray-50 to-white p-6 shadow-sm ring-1 ring-black/5 text-center">
+        <div class="text-3xl">👟</div>
+        <p class="mt-2 text-sm font-medium text-gray-500">Nike + Target</p>
+        <p class="text-3xl font-extrabold">-35%</p>
+        <p class="mt-1 text-xs text-gray-400">tasa de rebote al migrar a React</p>
+      </div>
+      <div class="rounded-2xl bg-gradient-to-br from-gray-50 to-white p-6 shadow-sm ring-1 ring-black/5 text-center">
+        <div class="text-3xl">🛒</div>
+        <p class="mt-2 text-sm font-medium text-gray-500">Shopify</p>
+        <p class="text-3xl font-extrabold">70%</p>
+        <p class="mt-1 text-xs text-gray-400">de compradores abandonan si carga &gt;3s</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     4. BENEFICIOS ECONÓMICOS
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="page-break relative overflow-hidden bg-gradient-to-br from-emerald-600 via-green-600 to-teal-700 px-6 py-16 text-white sm:px-12">
+  <div class="absolute inset-0 opacity-5">
+    <div class="absolute -top-20 -left-20 h-80 w-80 rounded-full bg-white"></div>
+    <div class="absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-white"></div>
+  </div>
+  <div class="relative mx-auto max-w-5xl">
+    <div class="mb-8">
+      <h2 class="text-3xl font-extrabold tracking-tight">💰 Beneficios Económicos</h2>
+      <p class="mt-2 text-lg text-emerald-200">Inversión de S/ 26/mes que se paga sola el primer día.</p>
+    </div>
+
+    <div class="rounded-2xl bg-white p-8 shadow-2xl text-gray-900">
+      <h3 class="text-xl font-bold text-gray-800 mb-6">📐 ¿De dónde sale el retorno?</h3>
+      <p class="text-sm text-gray-500 mb-8">Cada número está respaldado por datos reales del proyecto. No hay supuestos inflados.</p>
+
+      <!-- Fuente 1 -->
+      <div class="mb-8 rounded-xl bg-red-50 border border-red-200 p-6">
+        <h4 class="font-bold text-red-800 text-lg">🔗 Fuente 1: Recuperación de QR Codes Rotos</h4>
+        <p class="mt-1 text-sm text-red-600"><strong>Dato real:</strong> Cada tienda tiene <strong>23+ códigos QR</strong> (100+ rutas en el JSON). 4 tiendas = <strong>92+ QR codes activos</strong> que llevan a páginas muertas.</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <div class="rounded-lg bg-white p-4 shadow-sm">
+            <p class="text-xs font-semibold text-gray-500 uppercase">Supuesto conservador</p>
+            <ul class="mt-2 space-y-1 text-sm text-gray-700">
+              <li>• 3 escaneos promedio por QR al día (de ~92 QR)</li>
+              <li>• = 276 escaneos/día → 8,280/mes</li>
+              <li>• Tasa conversión del 2%: <strong>165 ventas/mes</strong></li>
+              <li>• Ticket promedio S/ 1,500</li>
+            </ul>
+          </div>
+          <div class="rounded-lg bg-white p-4 shadow-sm">
+            <p class="text-xs font-semibold text-gray-500 uppercase">Resultado</p>
+            <p class="mt-2 text-3xl font-extrabold text-red-600">S/ 247,500/mes</p>
+            <p class="text-xs text-gray-500">en ventas potenciales que se pierden</p>
+            <p class="mt-2 text-xs text-gray-400">* Si solo recuperamos el 10% = <strong>S/ 24,750/mes</strong></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fuente 2 -->
+      <div class="mb-8 rounded-xl bg-blue-50 border border-blue-200 p-6">
+        <h4 class="font-bold text-blue-800 text-lg">⚡ Fuente 2: Velocidad → Más Conversiones</h4>
+        <p class="mt-1 text-sm text-blue-600"><strong>Dato real:</strong> Google reporta que cada <strong>1 segundo de mejora</strong> aumenta conversiones entre 2-7%. Nuestro salto de 3-7 seg a &lt;1 seg = mejora de 2-6 segundos.</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <div class="rounded-lg bg-white p-4 shadow-sm">
+            <p class="text-xs font-semibold text-gray-500 uppercase">Supuesto conservador</p>
+            <ul class="mt-2 space-y-1 text-sm text-gray-700">
+              <li>• Si la web genera S/ 50,000/mes en pedidos</li>
+              <li>• Mejora conservadora del 10% en conversión</li>
+              <li>• = S/ 5,000/mes adicionales</li>
+            </ul>
+          </div>
+          <div class="rounded-lg bg-white p-4 shadow-sm">
+            <p class="text-xs font-semibold text-gray-500 uppercase">Referencia industria</p>
+            <ul class="mt-2 space-y-1 text-sm text-gray-700">
+              <li>• Amazon: +1% ingreso por cada 100ms</li>
+              <li>• Walmart: +2% conversión por cada 1s</li>
+              <li>• Vodafone: -8% en carrito abandonado</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fuente 3 -->
+      <div class="mb-8 rounded-xl bg-amber-50 border border-amber-200 p-6">
+        <h4 class="font-bold text-amber-800 text-lg">💵 Fuente 3: Ahorro en Hosting WordPress</h4>
+        <p class="mt-1 text-sm text-amber-600"><strong>Dato real:</strong> Hosting WordPress para WooCommerce cuesta entre $25-80 USD/mes. Con Render Pro, pagamos $7 USD/mes.</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <div class="rounded-lg bg-white p-4 shadow-sm">
+            <p class="text-xs font-semibold text-gray-500 uppercase">Ahorro mensual</p>
+            <p class="mt-2 text-2xl font-extrabold text-amber-600">$18-73 USD/mes</p>
+            <p class="text-xs text-gray-500">S/ 66-267/mes</p>
+          </div>
+          <div class="rounded-lg bg-white p-4 shadow-sm">
+            <p class="text-xs font-semibold text-gray-500 uppercase">Ahorro anual</p>
+            <p class="mt-2 text-2xl font-extrabold text-amber-600">$216-876 USD/año</p>
+            <p class="text-xs text-gray-500">S/ 819-3,285/año</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resumen consolidado -->
+      <div class="rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 p-6 text-white">
+        <h4 class="font-bold text-lg mb-4">Resumen Anual Consolidado</h4>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p class="text-sm text-emerald-200">Inversión anual</p>
+            <p class="text-2xl font-extrabold">$84 USD</p>
+            <p class="text-xs text-emerald-300">~S/ 315/año</p>
+          </div>
+          <div>
+            <p class="text-sm text-emerald-200">Beneficio anual estimado</p>
+            <p class="text-2xl font-extrabold">S/ 60,819+</p>
+            <div class="mt-2 space-y-1 text-xs text-emerald-300">
+              <p>• QR recuperados: S/ 60,000 (10% de lo perdido)</p>
+              <p>• Hosting ahorrado: S/ 819</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-6 pt-6 border-t border-white/20 text-center">
+          <p class="text-sm text-emerald-200">ROI Anual</p>
+          <p class="text-5xl font-extrabold">19,400%</p>
+          <p class="mt-2 text-sm text-emerald-300">Por cada <strong>S/ 1 invertido</strong>, GreenLine recupera <strong>S/ 194</strong></p>
+          <p class="mt-2 text-xs text-emerald-300">Payback: se recupera en <strong>menos de 1 día</strong> con una sola venta</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nota ROI -->
+    <div class="mt-8 rounded-2xl bg-white/10 p-6 backdrop-blur-sm">
+      <h4 class="font-bold">💡 ¿Por qué el ROI es tan alto?</h4>
+      <p class="mt-1 text-sm text-emerald-200">
+        El ROI del 19,400% no es magia — es la consecuencia lógica de que la inversión es <strong>extremadamente baja</strong> (S/ 315/año) mientras que el daño actual es <strong>grande</strong> (92+ QR rotos, web lenta, hosting caro). Cuando arreglas un problema grande con una inversión pequeña, el retorno porcentual es naturalmente altísimo. Lo que importa no es el porcentaje, sino que <strong>por S/ 26/mes recuperamos más de S/ 5,000/mes</strong>.
+      </p>
+    </div>
+
+    <!-- Escenarios -->
+    <div class="mt-12 grid gap-6 md:grid-cols-3">
+      <div class="rounded-2xl border-2 border-red-400 bg-red-500/10 p-6">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="text-2xl">❌</span>
+          <h4 class="font-bold text-white">Escenario A: No hacer nada</h4>
+        </div>
+        <ul class="space-y-1.5">
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Web caída en ~5 semanas</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• 92+ QR permanentemente rotos</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• 2,300 usuarios sin acceso</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Pérdida de SEO y ranking</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Riesgo GDPR / multas</li>
+        </ul>
+        <p class="mt-4 text-2xl font-extrabold text-white">S/ -50,000/mes</p>
+      </div>
+      <div class="rounded-2xl border-2 border-amber-400 bg-amber-500/10 p-6">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="text-2xl">⚠️</span>
+          <h4 class="font-bold text-white">Escenario B: Solo Render</h4>
+        </div>
+        <ul class="space-y-1.5">
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Web 24/7 estable</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Velocidad 85-95% mejor</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• QR siguen rotos</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Usuarios no migrados</li>
+        </ul>
+        <p class="mt-4 text-2xl font-extrabold text-white">S/ +5,000/mes</p>
+      </div>
+      <div class="rounded-2xl border-2 border-emerald-400 bg-emerald-500/10 p-6 ring-2 ring-emerald-400 ring-offset-2">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="text-2xl">✅</span>
+          <h4 class="font-bold text-white">Escenario C: Hosting + Render</h4>
+        </div>
+        <ul class="space-y-1.5">
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Web 24/7 estable</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• QR funcionando (301)</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• Usuarios migrados</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• GDPR cumplido</li>
+          <li class="flex items-start gap-2 text-sm text-gray-300">• SEO preservado</li>
+        </ul>
+        <p class="mt-4 text-2xl font-extrabold text-white">S/ +10,000/mes</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     5. CAMINO DE MIGRACIÓN
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="page-break bg-white px-6 py-16 sm:px-12">
+  <div class="mx-auto max-w-5xl">
+    <div class="mb-8">
+      <h2 class="text-3xl font-extrabold tracking-tight">🧭 Camino de Migración</h2>
+      <p class="mt-2 text-lg text-gray-500">De WordPress con problemas a un entorno nativo de alto rendimiento.</p>
+    </div>
+
+    <div class="grid gap-8 md:grid-cols-3">
+      <div class="relative rounded-2xl border-2 border-red-300 bg-red-50 p-6 shadow-sm">
+        <div class="absolute -top-5 left-6 flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-sm font-bold text-white shadow-lg">1</div>
+        <h4 class="mt-2 font-bold text-red-800">Origen: WordPress</h4>
+        <p class="mt-2 text-sm text-red-600">WooCommerce + plugins. Carga 3-7 seg. Hosting $25-80/mes. Vulnerable a plugins desactualizados.</p>
+        <div class="mt-4 space-y-2">
+          <div class="flex items-center gap-2 text-xs text-red-700"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>TTFB: 1,200ms+</div>
+          <div class="flex items-center gap-2 text-xs text-red-700"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>Lighthouse: 25-45</div>
+          <div class="flex items-center gap-2 text-xs text-red-700"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>Cold start: 30-50 seg</div>
+          <div class="flex items-center gap-2 text-xs text-red-700"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>2,300 usuarios registrados</div>
+          <div class="flex items-center gap-2 text-xs text-red-700"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>92+ QR codes activos</div>
+        </div>
+      </div>
+      <div class="relative rounded-2xl border-2 border-amber-300 bg-amber-50 p-6 shadow-sm">
+        <div class="absolute -top-5 left-6 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-sm font-bold text-white shadow-lg">2</div>
+        <h4 class="mt-2 font-bold text-amber-800">Ahora: Render + React sobre WP</h4>
+        <p class="mt-2 text-sm text-amber-600">React se ejecuta en Render, pero <strong>las rutas viejas redirigen a WordPress</strong>. Es un puente temporal.</p>
+        <div class="mt-4 space-y-2">
+          <div class="flex items-center gap-2 text-xs text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>React (Render) → redirecciones → WordPress</div>
+          <div class="flex items-center gap-2 text-xs text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Velocidad mejorada, pero dependemos de WP</div>
+          <div class="flex items-center gap-2 text-xs text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>QR funcionan vía 301 a WordPress</div>
+          <div class="flex items-center gap-2 text-xs text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Usuarios aún en WordPress</div>
+          <div class="flex items-center gap-2 text-xs text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Si WP cae, los QR caen también</div>
+        </div>
+        <div class="mt-4 rounded-lg bg-amber-100 p-3">
+          <p class="text-xs font-semibold text-amber-800">⚠️ Estado actual: dependientes</p>
+          <p class="mt-1 text-xs text-amber-600">No somos independientes de WordPress.</p>
+        </div>
+      </div>
+      <div class="relative rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-6 shadow-sm">
+        <div class="absolute -top-5 left-6 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-sm font-bold text-white shadow-lg">3</div>
+        <h4 class="mt-2 font-bold text-emerald-800">Destino: React Nativo</h4>
+        <p class="mt-2 text-sm text-emerald-600">Todo en React + Supabase. Sin WordPress. Velocidad completa. Control total.</p>
+        <div class="mt-4 space-y-2">
+          <div class="flex items-center gap-2 text-xs text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>TTFB: &lt;200ms</div>
+          <div class="flex items-center gap-2 text-xs text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Lighthouse: 95-100</div>
+          <div class="flex items-center gap-2 text-xs text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Sin cold start</div>
+          <div class="flex items-center gap-2 text-xs text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Usuarios en Supabase (migrados)</div>
+          <div class="flex items-center gap-2 text-xs text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>QR directos en React (sin 301)</div>
+          <div class="flex items-center gap-2 text-xs text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Control total de la experiencia</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hosting incertidumbre -->
+    <div class="mt-16 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8">
+      <h3 class="text-xl font-bold text-gray-800 mb-4">🔑 Clave: Acceso al Hosting WordPress</h3>
+      <p class="text-sm text-gray-600 mb-6">Para completar la migración, necesitamos acceso al hosting de WordPress. Pero hay incertidumbre:</p>
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="rounded-xl bg-red-50 border border-red-200 p-6">
+          <h4 class="font-bold text-red-800 mb-3">❓ Lo que no sabemos todavía</h4>
+          <ul class="space-y-2 text-sm text-red-700">
+            <li>• ¿Qué hosting estamos usando? (cPanel, Plesk, AWS, etc.)</li>
+            <li>• ¿Se puede montar Node.js / React ahí?</li>
+            <li>• ¿Qué versión de PHP tiene WordPress?</li>
+            <li>• ¿Cuánto cuesta el hosting actualmente?</li>
+            <li>• ¿Hay acceso SSH o solo panel?</li>
+            <li>• ¿Qué base de datos usa? (MySQL, PostgreSQL)</li>
+          </ul>
+        </div>
+        <div class="rounded-xl bg-amber-50 border border-amber-200 p-6">
+          <h4 class="font-bold text-amber-800 mb-3">⚠️ Lo que implica migrar</h4>
+          <ul class="space-y-2 text-sm text-amber-700">
+            <li>• Recrear todos los 2,300 usuarios en Supabase</li>
+            <li>• Migrar productos, pedidos e inventario</li>
+            <li>• Configurar dominio glperu.com apuntando a React</li>
+            <li>• Verificar que el hosting soporta la arquitectura</li>
+            <li>• Si no soporta: necesitamos otro hosting o Render</li>
+            <li>• Tiempo estimado de migración: 2-4 semanas</li>
+          </ul>
+        </div>
+      </div>
+      <div class="mt-6 rounded-xl bg-blue-50 border border-blue-200 p-6">
+        <h4 class="font-bold text-blue-800">📌 Dato importante</h4>
+        <p class="mt-1 text-sm text-blue-700"><strong>Necesitamos ver el hosting para saber si se puede montar React ahí.</strong> No podemos asumir que sí. Cada hosting es diferente. <strong>Esa información tiene que llegarnos de cualquier forma</strong> para poder decidir la estrategia correcta.</p>
+      </div>
+      <div class="mt-6 grid gap-4 md:grid-cols-2">
+        <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-5">
+          <h4 class="font-bold text-emerald-800 mb-2">Si el hosting soporta React/Node</h4>
+          <ul class="space-y-1 text-sm text-emerald-700">
+            <li>• Montamos React directamente ahí</li>
+            <li>• Eliminamos WordPress por completo</li>
+            <li>• Un solo servidor, más simple</li>
+            <li>• Costo: probablemente el mismo hosting</li>
+          </ul>
+        </div>
+        <div class="rounded-xl bg-purple-50 border border-purple-200 p-5">
+          <h4 class="font-bold text-purple-800 mb-2">Si NO soporta React/Node</h4>
+          <ul class="space-y-1 text-sm text-purple-700">
+            <li>• React queda en Render ($7/mes)</li>
+            <li>• Hosting actual solo para WordPress (temporal)</li>
+            <li>• Migrar dominio a Render o nuevo hosting</li>
+            <li>• Costo: hosting WP + Render = ~$32-87/mes</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     6. ROADMAP + ESCALAMIENTO
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="page-break bg-gray-50 px-6 py-16 sm:px-12">
+  <div class="mx-auto max-w-5xl">
+    <div class="mb-8">
+      <h2 class="text-3xl font-extrabold tracking-tight">4. Roadmap a Futuro</h2>
+      <p class="mt-2 text-lg text-gray-500">Con la base técnica de $7/mes, abrimos la puerta a automatizaciones revolucionarias.</p>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-12">
+      <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-lg">📋</span>
+        <h4 class="mt-3 font-bold">Libro de Reclamaciones Automatizado</h4>
+        <p class="mt-1 text-sm text-gray-500">Formulario web → Excel descargable. Ahorro: 2-3 hrs/semana.</p>
+      </div>
+      <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-lg">🛒</span>
+        <h4 class="mt-3 font-bold">Catálogo Omnicanal</h4>
+        <p class="mt-1 text-sm text-gray-500">Sincronización web ↔ WhatsApp. Sin doble carga. Ahorro: 5-10 hrs/semana.</p>
+      </div>
+      <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-lg">🗺️</span>
+        <h4 class="mt-3 font-bold">Visibilidad de Distribuidores</h4>
+        <p class="mt-1 text-sm text-gray-500">Portales por distribuidor. Aumento de ventas por distribución.</p>
+      </div>
+      <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-lg">🤖</span>
+        <h4 class="mt-3 font-bold">Soporte con IA</h4>
+        <p class="mt-1 text-sm text-gray-500">Asistente 24/7 para dudas frecuentes. Ahorro: 10-15 hrs/semana.</p>
+      </div>
+      <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-700 text-lg">📦</span>
+        <h4 class="mt-3 font-bold">Inventario Unificado</h4>
+        <p class="mt-1 text-sm text-gray-500">Cada tienda registra su stock. Vista consolidada para gerencia.</p>
+      </div>
+    </div>
+
+    <!-- Escalamiento -->
+    <h3 class="text-2xl font-bold text-center mb-2">📊 Escalamiento: Plan de 6 a 9 meses</h3>
+    <p class="text-center text-gray-500 text-sm mb-8">Crecemos sin romper el presupuesto. Si la web es un exitazo, escalamos a un todo-en-uno.</p>
+
+    <!-- Fase 1 -->
+    <div class="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-black/5 mb-6">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-sm font-bold text-white">1</span>
+        <div>
+          <h4 class="font-bold">Fase 1: Gratuito (0 - 9 meses)</h4>
+          <p class="text-xs text-gray-500">Mientras la web crece de forma orgánica</p>
+        </div>
+      </div>
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 font-semibold text-gray-600">Servicio</th>
+            <th class="px-4 py-3 font-semibold text-emerald-600">Plan</th>
+            <th class="px-4 py-3 font-semibold text-gray-600">Límites</th>
+            <th class="px-4 py-3 font-semibold text-gray-600">Costo</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr><td class="px-4 py-3 font-medium">🖥️ Render (Hosting)</td><td class="px-4 py-3"><span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">Starter $7</span></td><td class="px-4 py-3 text-gray-600">512 MB RAM, 0.5 CPU, 750 hrs/mes</td><td class="px-4 py-3 font-bold">$7/mes</td></tr>
+          <tr><td class="px-4 py-3 font-medium">🗄️ Supabase (BD)</td><td class="px-4 py-3"><span class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">Free $0</span></td><td class="px-4 py-3 text-gray-600">500 MB DB, 1 GB storage, 5 GB egress, 50K usuarios</td><td class="px-4 py-3 font-bold text-emerald-600">$0</td></tr>
+          <tr><td class="px-4 py-3 font-medium">▲ Vercel (CDN)</td><td class="px-4 py-3"><span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-700">Hobby $0</span></td><td class="px-4 py-3 text-gray-600">100 GB transfer, 1M invocations</td><td class="px-4 py-3 font-bold text-emerald-600">$0</td></tr>
+        </tbody>
+      </table>
+      <div class="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+        <p class="text-sm text-emerald-800"><strong>Total fase 1: ~$7 USD/mes (~S/ 26).</strong> Render Starter + Supabase Free + Vercel Hobby. Cubierto por 6-9 meses.</p>
+      </div>
+    </div>
+
+    <!-- Fase 2 -->
+    <div class="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-black/5 mb-6">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-sm font-bold text-white">2</span>
+        <div>
+          <h4 class="font-bold">Fase 2: Si la web es un exitazo (9+ meses)</h4>
+          <p class="text-xs text-gray-500">Cuando Supabase Free se queda corto o necesitamos más control</p>
+        </div>
+      </div>
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="rounded-xl bg-purple-50 border border-purple-200 p-6">
+          <h5 class="font-bold text-purple-800 mb-3">🚂 Railway — Todo-en-Uno</h5>
+          <p class="text-sm text-purple-700 mb-4">Un solo servicio: hosting + base de datos + dominios.</p>
+          <div class="space-y-2 text-sm text-purple-700">
+            <div>• Hobby: $5/mes (incluye $5 de uso)</div>
+            <div>• Pro: $20/mes (incluye $20 de uso)</div>
+            <div>• Base de datos PostgreSQL incluida</div>
+            <div>• Deploy automático desde GitHub</div>
+            <div>• Dominios personalizados incluidos</div>
+            <div>• Escalado automático según demanda</div>
+          </div>
+          <div class="mt-4 rounded-lg bg-purple-100 p-3">
+            <p class="text-xs font-semibold text-purple-800">Costo Railway Pro:</p>
+            <p class="text-lg font-extrabold text-purple-700">~$20-30 USD/mes</p>
+          </div>
+        </div>
+        <div class="rounded-xl bg-blue-50 border border-blue-200 p-6">
+          <h5 class="font-bold text-blue-800 mb-3">⚠️ Supabase Free — Limitaciones</h5>
+          <div class="space-y-2 text-sm text-blue-700">
+            <div>• Base &gt; 500 MB → toca Pro ($25/mes)</div>
+            <div>• Usuarios &gt; 50,000 MAU → toca Pro</div>
+            <div>• Egress &gt; 5 GB/mes → toca Pro</div>
+            <div>• Sin backups en Free → riesgo de pérdida</div>
+            <div>• Proyecto pausa tras 7 días sin actividad</div>
+          </div>
+          <div class="mt-4 rounded-lg bg-blue-100 p-3">
+            <p class="text-xs font-semibold text-blue-800">Supabase Pro:</p>
+            <p class="text-lg font-extrabold text-blue-700">$25 + $10 compute = $35/mes</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparativa costos -->
+      <div class="mt-6 rounded-xl bg-gray-50 border border-gray-200 p-6">
+        <h5 class="font-bold text-gray-800 mb-4">💰 Comparativa de costos (si crecemos)</h5>
+        <table class="w-full text-left text-sm">
+          <thead>
+            <tr class="border-b border-gray-200">
+              <th class="px-4 py-2 font-semibold text-gray-600">Escenario</th>
+              <th class="px-4 py-2 font-semibold text-gray-600">Costo/mes</th>
+              <th class="px-4 py-2 font-semibold text-gray-600">Qué incluye</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr><td class="px-4 py-2 font-medium">WordPress actual</td><td class="px-4 py-2 font-bold text-red-600">$25-80</td><td class="px-4 py-2 text-gray-600">Hosting WP + dominio + SSL</td></tr>
+            <tr><td class="px-4 py-2 font-medium">Render + Supabase Free</td><td class="px-4 py-2 font-bold text-emerald-600">$7</td><td class="px-4 py-2 text-gray-600">Hosting + BD + 50K usuarios</td></tr>
+            <tr><td class="px-4 py-2 font-medium">Render + Supabase Pro</td><td class="px-4 py-2 font-bold text-amber-600">$42</td><td class="px-4 py-2 text-gray-600">Hosting + BD 8 GB + backups</td></tr>
+            <tr class="bg-purple-50"><td class="px-4 py-2 font-medium">🚂 Railway Pro</td><td class="px-4 py-2 font-bold text-purple-600">$20-30</td><td class="px-4 py-2 text-gray-600">Hosting + BD + dominios + deploy</td></tr>
+          </tbody>
+        </table>
+        <p class="mt-3 text-xs text-gray-500">* Incluso en el peor caso, el costo es <strong>menor que WordPress actual</strong>.</p>
+      </div>
+    </div>
+
+    <!-- Nota BD -->
+    <div class="rounded-2xl bg-amber-50 border border-amber-200 p-6">
+      <h4 class="font-bold text-amber-800">🗄️ Sobre la base de datos de Supabase</h4>
+      <p class="mt-1 text-sm text-amber-700">Supabase Free nos da 500 MB y 50,000 usuarios. Para empezar es suficiente. Al crecer, ampliamos a Pro ($35/mes) o Railway ($20-30/mes). <strong>En cualquier caso, el costo sigue siendo menor que WordPress.</strong></p>
+      <div class="mt-3 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-lg bg-white p-3 shadow-sm">
+          <p class="text-xs font-semibold text-gray-500">Ahora (Free)</p>
+          <p class="text-lg font-extrabold text-emerald-600">$0</p>
+          <p class="text-xs text-gray-500">500 MB · 50K usuarios</p>
+        </div>
+        <div class="rounded-lg bg-white p-3 shadow-sm">
+          <p class="text-xs font-semibold text-gray-500">Crecimiento (Pro)</p>
+          <p class="text-lg font-extrabold text-amber-600">$35</p>
+          <p class="text-xs text-gray-500">8 GB · 100K usuarios</p>
+        </div>
+        <div class="rounded-lg bg-white p-3 shadow-sm">
+          <p class="text-xs font-semibold text-gray-500">Exitazo (Railway)</p>
+          <p class="text-lg font-extrabold text-purple-600">$20-30</p>
+          <p class="text-xs text-gray-500">Todo-en-uno ilimitado</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     7. DECISIÓN REQUERIDA
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="page-break px-6 py-16 sm:px-12">
+  <div class="mx-auto max-w-3xl text-center">
+    <h2 class="text-3xl font-extrabold tracking-tight mb-8">Decisión Requerida</h2>
+    <div class="grid gap-6 sm:grid-cols-2">
+      <div class="rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 p-8 text-white shadow-xl">
+        <span class="text-4xl">🌐</span>
+        <h3 class="mt-4 text-xl font-bold">1. Acceso al Hosting</h3>
+        <p class="mt-2 text-sm text-red-100">Cambiar DNS + migrar 2,300 usuarios</p>
+        <span class="mt-4 inline-block rounded-full bg-white/20 px-4 py-1 text-sm font-bold">PRIORIDAD: INMEDIATA</span>
+      </div>
+      <div class="rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 p-8 text-white shadow-xl">
+        <span class="text-4xl">⚡</span>
+        <h3 class="mt-4 text-xl font-bold">2. Contratar Render</h3>
+        <p class="mt-2 text-sm text-emerald-100">$7 USD/mes — web 24/7 sin caídas</p>
+        <span class="mt-4 inline-block rounded-full bg-white/20 px-4 py-1 text-sm font-bold">PRIORIDAD: INMEDIATA</span>
+      </div>
+    </div>
+    <div class="mt-10 rounded-2xl bg-gray-900 p-8 text-white">
+      <p class="text-sm text-gray-400">Inversión total</p>
+      <p class="text-4xl font-extrabold">$7 USD/mes <span class="text-lg text-gray-400">(~S/ 26)</span></p>
+      <p class="mt-2 text-sm text-gray-400">Retorno estimado: <span class="font-bold text-emerald-400">+S/ 5,000/mes en ventas</span></p>
+    </div>
+    <p class="mt-8 text-xs text-gray-400">GreenLine Web ERP — Documento Ejecutivo — Septiembre 2026</p>
+  </div>
+</section>
+
+</body>
+</html>

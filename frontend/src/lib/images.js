@@ -8,14 +8,40 @@ const VERSION = buildVersion();
 
 const VERSION_RE = /[?&]v=([\w.-]+)/;
 
+// Base del sitio público, que es quien hospeda el catálogo de imágenes.
+// El ERP solo empaqueta sus propios estáticos (logo); todo lo demás que
+// venga como ruta relativa /assets/... se resuelve contra esta base.
+function siteBase() {
+  const env =
+    import.meta.env?.VITE_ASSETS_URL ||
+    import.meta.env?.VITE_SITE_URL ||
+    'https://greenline-eta.vercel.app';
+  return String(env).replace(/\/+$/, '');
+}
+
+const ESQUEMA_ABSOLUTO = /^[a-z][a-z0-9+.-]*:/i;
+
+// Resuelve el origen de una imagen:
+// - URLs absolutas (https, Supabase Storage, data:, blob:) → intactas.
+// - /assets/imagenes/logos/* → relativo (el ERP sí los empaqueta en public/).
+// - Cualquier otro /assets/* → absoluto contra el sitio público (si no, en el
+//   ERP resuelve a localhost o al dominio del panel y da 404).
+function resolverOrigen(src) {
+  if (!src || ESQUEMA_ABSOLUTO.test(src) || src.startsWith('//')) return src;
+  if (src.startsWith('/assets/imagenes/logos/')) return src;
+  if (src.startsWith('/assets/')) return siteBase() + src;
+  return src;
+}
+
 function agregarVersion(src) {
   return src + (src.includes("?") ? "&" : "?") + `v=${VERSION}`;
 }
 
 export function versionarImagen(src) {
   if (!src) return src;
-  if (VERSION_RE.test(src)) return src;
-  return agregarVersion(src);
+  const absoluta = resolverOrigen(src);
+  if (VERSION_RE.test(absoluta)) return absoluta;
+  return agregarVersion(absoluta);
 }
 
 export function versionarImagenAltaResolucion(src) {

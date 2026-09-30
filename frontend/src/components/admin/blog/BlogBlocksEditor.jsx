@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { sanitizeHtml } from '../../../utils/sanitizeHtml';
 import {
   Type, Image, Table,
   ArrowUp, ArrowDown, Trash2, Plus, ChevronDown,
@@ -38,10 +39,27 @@ function MiniRichInput({ value, onChange }) {
   const ref = useRef(null);
 
   useEffect(() => {
-    if (ref.current && ref.current.innerHTML !== (value || '')) {
-      ref.current.innerHTML = value || '';
-    }
+    if (!ref.current) return;
+    // Si el DOM ya refleja el valor crudo no se toca nada: reescribirlo
+    // mientras se escribe perdería el cursor. Se sanitiza sólo al hidratar
+    // desde el valor persistido (que es cuando puede traer HTML ajeno).
+    if (ref.current.innerHTML === (value || '')) return;
+    ref.current.innerHTML = sanitizeHtml(value || ''); // html-sink:allow sanitizado en esta misma línea
   }, [value]);
+
+  // El pegado es la única vía por la que HTML ajeno entra en el contentEditable
+  // en caliente; se intercepta y sanitiza antes de insertarlo.
+  const manejarPegado = (e) => {
+    const html = e.clipboardData?.getData('text/html') || '';
+    const texto = e.clipboardData?.getData('text/plain') || '';
+    e.preventDefault();
+    if (html) {
+      document.execCommand('insertHTML', false, sanitizeHtml(html));
+    } else if (texto) {
+      document.execCommand('insertText', false, texto);
+    }
+    onChange(ref.current?.innerHTML || '');
+  };
 
   const exec = (command, arg) => {
     ref.current?.focus();
@@ -80,6 +98,7 @@ function MiniRichInput({ value, onChange }) {
         suppressContentEditableWarning
         onInput={(e) => onChange(e.currentTarget.innerHTML)}
         onBlur={(e) => onChange(e.currentTarget.innerHTML)}
+        onPaste={manejarPegado}
         className="rich-text-editor min-h-[120px] rounded-lg border border-gray-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand/30"
       />
     </div>
@@ -212,7 +231,7 @@ export default function BlogBlocksEditor({ value, onChange, onUpload }) {
       case 'heading':
         return <h2 className="text-xl font-bold text-gray-900">{block.content || 'Título'}</h2>;
       case 'text':
-        return <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: block.content || '<p>Texto…</p>' }} />;
+        return <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.content || '<p>Texto…</p>') }} />;
       case 'image':
         return (
           <div className="space-y-1">
@@ -224,7 +243,7 @@ export default function BlogBlocksEditor({ value, onChange, onUpload }) {
         return (
           <div className="grid grid-cols-2 gap-4">
             {(block.blocks || []).map((col, ci) => (
-              <div key={ci} className="bg-gray-50 rounded-lg p-4 border border-gray-100" dangerouslySetInnerHTML={{ __html: col.content || `<p>Columna ${ci + 1}</p>` }} />
+              <div key={ci} className="bg-gray-50 rounded-lg p-4 border border-gray-100" dangerouslySetInnerHTML={{ __html: sanitizeHtml(col.content || `<p>Columna ${ci + 1}</p>`) }} />
             ))}
           </div>
         );

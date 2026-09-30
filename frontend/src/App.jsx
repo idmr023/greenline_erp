@@ -1,7 +1,9 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import ProtectedRoute, { ADMIN_ROLES } from './components/ProtectedRoute';
+import { VaultProvider } from './contexts/VaultContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import { ADMIN_ROLES, PANEL_ROLES } from './lib/roles';
 import SEOHead from './components/SEOHead';
 import LoginPage from './pages/LoginPage';
 import PageLoader from './PageLoader';
@@ -59,31 +61,35 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<RootPortal />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/admin/*"
-            element={
-              <ProtectedRoute requiredRoles={ADMIN_ROLES}>
-                <Suspense fallback={<PageLoader />}>
-                  <AdminPanel />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/fase-2-implementacion"
-            element={
-              <ProtectedRoute requiredRoles={ADMIN_ROLES}>
-                <Suspense fallback={<PageLoader />}>
-                  <Fase2Implementacion />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        {/* §9: el estado de desbloqueo de la bóveda es independiente de la
+            sesión; vive en memoria y muere con el árbol. */}
+        <VaultProvider>
+          <Routes>
+            <Route path="/" element={<RootPortal />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/admin/*"
+              element={
+                <ProtectedRoute requiredRoles={PANEL_ROLES}>
+                  <Suspense fallback={<PageLoader />}>
+                    <AdminPanel />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fase-2-implementacion"
+              element={
+                <ProtectedRoute requiredRoles={ADMIN_ROLES}>
+                  <Suspense fallback={<PageLoader />}>
+                    <Fase2Implementacion />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </VaultProvider>
       </AuthProvider>
     </BrowserRouter>
   );

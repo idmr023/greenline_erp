@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { versionarImagen } from '../../lib/images';
 import stripHtml from '../../utils/stripHtml';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import { subirImagenBlog } from '../../lib/blogUpload';
 import BlogBlocksEditor from './blog/BlogBlocksEditor';
 import VistaPreviaModal from './blog/VistaPreviaModal';
@@ -40,7 +41,7 @@ function htmlToBlocks(html) {
   } catch {}
   const blocks = [];
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = html;
+  wrapper.innerHTML = sanitizeHtml(html);
   let currentText = '';
   const flushText = () => {
     if (currentText.trim()) {
@@ -110,7 +111,17 @@ function htmlToBlocks(html) {
   return blocks;
 }
 
+/**
+ * Convierte los bloques del editor a HTML listo para guardar/publicar.
+ * El resultado SIEMPRE pasa por sanitizeHtml: además de limpiar el contenido
+ * de los bloques, corrige la interpolación sin escapar de src/alt/caption
+ * de las imágenes y de las celdas de tabla.
+ */
 function blocksToHtml(blocks) {
+  return sanitizeHtml(blocksToHtmlCrudo(blocks));
+}
+
+function blocksToHtmlCrudo(blocks) {
   if (typeof blocks === 'string') {
     try {
       const parsed = JSON.parse(blocks);

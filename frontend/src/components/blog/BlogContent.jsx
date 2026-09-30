@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { versionarHtml, versionarImagen } from '../../lib/images';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import BlogCarrusel from './BlogCarrusel';
 
 function leerImagenes(block) {
@@ -48,7 +49,7 @@ export default function BlogContent({ html, className }) {
     <div
       ref={containerRef}
       className={className}
-      dangerouslySetInnerHTML={{ __html: versionarHtml(html || '') }}
+      dangerouslySetInnerHTML={{ __html: sanitizeHtml(versionarHtml(html || '')) }}
     />
   );
 }

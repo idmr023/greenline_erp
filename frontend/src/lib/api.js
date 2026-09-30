@@ -1,4 +1,32 @@
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+/**
+ * URL base de la API (Bóveda Segura V5 §39 / R7).
+ *
+ * Fail-closed: si en un build de producción no hay VITE_API_URL, NO se
+ * arranca la app. El fallback a localhost sólo se tolera en desarrollo,
+ * porque en un sitio publicado apuntaría al puerto 3000 de la máquina del
+ * visitante y podría filtrar credenciales a un servicio local ajeno.
+ */
+function resolverApiUrl() {
+  const crudo = import.meta.env.VITE_API_URL;
+  const url = typeof crudo === 'string' ? crudo.trim().replace(/\/+$/, '') : '';
+
+  if (url) {
+    if (!/^https?:\/\/[^\s]+$/i.test(url)) {
+      throw new Error('VITE_API_URL no es una URL http(s) válida.');
+    }
+    return url;
+  }
+
+  if (import.meta.env.PROD) {
+    throw new Error(
+      'VITE_API_URL no está definida: la app no puede arrancar en producción sin la URL de la API.',
+    );
+  }
+
+  return 'http://localhost:3000/api';
+}
+
+export const API_URL = resolverApiUrl();
 
 // Umbral (ms) sobre el cual un fetch se considera "cold start" (Render dormido)
 export const COLD_START_THRESHOLD_MS = 1200;
@@ -122,6 +150,34 @@ export const authAPI = {
       body: JSON.stringify({ token }),
     }),
 
+  inviteGet: (token) =>
+    request(`/auth/invite/${encodeURIComponent(token)}`),
+
+  inviteAccept: (token, password) =>
+    request('/auth/invite/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    }),
+
+  onboardingSetup2FA: (onboardingToken) =>
+    request('/auth/onboarding/setup-2fa', {
+      method: 'POST',
+      body: JSON.stringify({ onboardingToken }),
+    }),
+
+  onboardingConfirm2FA: (onboardingToken, token) =>
+    request('/auth/onboarding/confirm-2fa', {
+      method: 'POST',
+      body: JSON.stringify({ onboardingToken, token }),
+    }),
+
+  updateProfile: (payload, accessToken) =>
+    request('/auth/me/profile', {
+      method: 'PUT',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
   supabaseSync: (password, accessToken) =>
     request('/auth/supabase-sync', {
       method: 'POST',
@@ -137,6 +193,52 @@ export const authAPI = {
       method: 'POST',
       headers: authHeaders(accessToken),
       body: JSON.stringify(payload),
+    }),
+};
+
+/**
+ * Gestión de usuarios del panel: delega en la API del backend
+ * (`/api/users`, RBAC `usuarios:*`). El ERP no toca `public.users` por
+ * Supabase: esa tabla está REVOKEada para `authenticated`.
+ */
+export const usuariosAPI = {
+  listar: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/users${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+
+  obtener: (id, accessToken) =>
+    request(`/users/${encodeURIComponent(id)}`, { headers: authHeaders(accessToken) }),
+
+  crear: (payload, accessToken) =>
+    request('/users', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  actualizar: (id, payload, accessToken) =>
+    request(`/users/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  eliminar: (id, accessToken) =>
+    request(`/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(accessToken),
+    }),
+
+  /** Manda el correo con el que el usuario fija su contraseña (OTP de reset). */
+  enviarCorreoClave: (email) =>
+    request('/auth/request-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     }),
 };
 

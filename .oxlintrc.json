@@ -3,7 +3,23 @@
   "plugins": ["react", "oxc"],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+
+    // Bloqueos de seguridad (Bóveda Segura V5 §16 / R60, §39).
+    // No hay excepciones: ninguno de estos patrones es aceptable en el panel.
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "no-debugger": "error",
+    "no-proto": "error",
+    "no-global-assign": "error",
+    "no-delete-var": "error",
+
+    // Cada `dangerouslySetInnerHTML` debe pasar por utils/sanitizeHtml.
+    // El warning es intencionado: deja visible en cada lint el listado
+    // completo de puntos de inyección de HTML del repo.
+    "react/no-danger": "warn"
   },
   "ignorePatterns": ["frontend/dist", "node_modules"]
 }

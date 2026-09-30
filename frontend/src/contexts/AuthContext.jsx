@@ -1,15 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI } from '../lib/api';
 import { supabase } from '../lib/supabase';
+import { ADMIN_ROLES, STAFF_ROLES } from '../lib/roles';
 
 const AuthContext = createContext(null);
-
-const STAFF_ROLES = [
-  'ADMIN', 'EDITORA_BLOG', 'DISTRIBUCION', 'GERENTE_TIENDA',
-  'COLABORADOR_TIENDA', 'GERENTE_ALMACEN', 'COLABORADOR_ALMACEN', 'DESARROLLADOR_WEB',
-];
-
-const ADMIN_ROLES = ['ADMIN', 'DESARROLLADOR_WEB'];
 
 const STORAGE_KEY = 'gl_auth';
 

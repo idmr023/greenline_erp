@@ -4,8 +4,7 @@ import { metricsAPI } from '../../lib/api';
 import {
   Cpu, MemoryStick, Activity, Timer, RefreshCw, Loader2, AlertCircle, ShieldOff,
 } from '../../lib/icons';
-
-const ALLOWED = ['ADMIN', 'DESARROLLADOR_WEB'];
+import { ROLES_MAXIMOS, tieneRol } from '../../lib/roles';
 
 function MB(n) { return `${Number(n).toFixed(1)} MB`; }
 
@@ -62,7 +61,7 @@ export default function AdminMetrics() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (!user || !ALLOWED.includes(user.rol)) {
+  if (!user || !tieneRol(ROLES_MAXIMOS, user.rol)) {
     return (
       <div className="p-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 flex flex-col items-center text-center">

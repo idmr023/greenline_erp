@@ -1,0 +1,82 @@
+Listo. Preparé la Bóveda Segura V4 tomando la V3 como base y orientándola específicamente a una password vault de alta seguridad. 
+
+Añadí especialmente:
+
+* Arquitectura Zero-Knowledge.
+* Separación entre autenticación y cifrado.
+* Argon2id como KDF.
+* Jerarquía KEK → DEK.
+* Envelope Encryption.
+* AES-256-GCM y cifrado autenticado.
+* Versionado y rotación de claves.
+* Recuperación segura de la bóveda.
+* Protección específica para revelar contraseñas.
+* Step-up Authentication + MFA para operaciones críticas.
+* Protección del clipboard.
+* Auto-hide de contraseñas.
+* Prohibición de secretos en logs, analytics, URLs y errores.
+* Protección contra XSS/CSRF/IDOR/BOLA.
+* RLS multi-tenant.
+* Auditoría de reveal/copy/export.
+* Protección de backups.
+* Gestión segura de dispositivos y sesiones.
+* Detección de comportamiento anómalo.
+* TOTP cifrado.
+* Exportación segura.
+* Autocompletado tratado como superficie de ataque.
+* Supply-chain security.
+* Incident Response.
+* Pruebas específicas de criptografía.
+* Mega prompts para implementación, auditoría y pentesting.
+* Checklist de seguridad antes de producción.
+
+Además, corregí conceptos de la V3 que podían dar una falsa sensación de seguridad, como considerar RLS automáticamente O(1) o afirmar que determinadas medidas garantizan protección absoluta.
+
+El principio central de la V4 quedó así:
+
+```text
+                    USUARIO
+                       │
+                 Master Password
+                       │
+                    Argon2id
+                       │
+                 Vault Key
+                       │
+                AES-256-GCM
+                       │
+                       ▼
+               SECRETOS CIFRADOS
+                       │
+                       ▼
+                    BACKEND
+                       │
+                       ▼
+                  PostgreSQL
+```
+
+Y para mostrar una contraseña:
+
+```text
+Sesión válida
+     ↓
+Autorización
+     ↓
+Step-up Authentication
+     ↓
+MFA cuando corresponda
+     ↓
+Descifrado autorizado
+     ↓
+Visualización temporal
+     ↓
+Auto-hide
+     ↓
+Auditoría sin registrar el secreto
+```
+
+Aquí tienes el documento completo:
+
+[Descargar Bóveda Segura V4](sandbox:/mnt/data/boveda-segura-v4.md)
+
+Importante: ningún sistema puede garantizar seguridad absoluta. La V4 está planteada para que incluso ante compromisos parciales —por ejemplo, robo de la base de datos o de un backup— el atacante no obtenga directamente las contraseñas almacenadas.

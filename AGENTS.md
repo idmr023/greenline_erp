@@ -53,7 +53,9 @@ Los scripts de este repo cuyos datos o workflows viven en el sitio lo indican ex
 | `npm run dev` | Dev server Vite del panel |
 | `npm run build` | Build de producción (`frontend/dist/`) |
 | `npm run preview` | Vista previa del build servida por Vite |
-| `npm run lint` | Oxlint sobre `frontend/src` |
+| `npm run lint` | Oxlint sobre `frontend/src` + `scripts/auditar-sinks-html.mjs` (falla si hay un `innerHTML` sin `sanitizeHtml`) |
+| `npm run lint:html` | Sólo la auditoría de sinks de HTML |
+| `npm test` | `node --test` sobre `frontend/src/**/*.test.js` (suite de criptografía de la bóveda, V5) |
 | `npm run pdf:ceo` | Regenera `docs/Propuesta_CEO/presentacion-ceo.pdf` (requiere `npm i -D puppeteer` local) |
 | `npm run emails:limpiar` | `scripts/limpiar-emails.mjs` — limpia/deduplica CSVs de `docs/emails/` |
 | `npm run emails:lote` | `scripts/gen-lote-n8n.mjs` — genera la lista embebida del workflow n8n |
@@ -63,6 +65,7 @@ Los scripts de este repo cuyos datos o workflows viven en el sitio lo indican ex
 |---|---|
 | `scripts/gen-lote-n8n.mjs` | Lee `docs/emails/` y reescribe el nodo "Prepare Email Payloads" del workflow n8n. Ese JSON vive en el **repo hermano**: si se omite `--workflow=` se buscan `<raíz>/`, `<raíz>/../`, `<raíz>/../greenline/` y `<raíz>/../../greenline/`. Escribir fuera de este repo exige `--salida=<ruta>` (no se toca el repo hermano sin pedirlo). |
 | `scripts/limpiar-emails.mjs` | Limpia/deduplica CSVs de `docs/emails/` (requiere `<entrada.csv>`) |
+| `scripts/auditar-sinks-html.mjs` | Recorre `frontend/src` y falla si algún `dangerouslySetInnerHTML`, `.innerHTML =` o `insertAdjacentHTML` no pasa por `utils/sanitizeHtml` (Bóveda Segura V5 §16 / R60) |
 | `scripts/generar-pdf-ceo.mjs` | Genera el PDF de `docs/Propuesta_CEO/` (necesita Chromium/Puppeteer) |
 
 ### Repo hermano `greenline` (plataforma compartida)
@@ -76,6 +79,7 @@ Los scripts de este repo cuyos datos o workflows viven en el sitio lo indican ex
 ## 5. Control de Calidad y Verificación
 - Antes de proponer cambios mayores en este repo:
   - `npm run lint` — sin errores (los warnings no bloquean).
+  - `npm test` — suite de criptografía de `frontend/src/lib/vault/` en verde.
   - `npm run build` (frontend del panel) — debe compilar sin errores.
   - Smoke del SPA: `npm run preview` y comprobar que `/`, `/login`, `/admin` y `/fase-2-implementacion` montan sin errores de runtime.
   - Si se toca lógica que depende del backend/RLS, verificar también en el repo hermano `greenline`: `npm run lint`, `npm run security-smoke`, `npm test` (en `backend/`).

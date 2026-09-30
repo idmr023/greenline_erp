@@ -23,6 +23,7 @@ import {
   Images as ImagesIcon,
 } from '../../../lib/icons';
 import { ColumnLayout, Column } from './ColumnExtensions';
+import { sanitizeHtml } from '../../../utils/sanitizeHtml';
 import Carrusel from './CarruselExtension';
 import CarruselModal from './CarruselModal';
 
@@ -84,7 +85,7 @@ export default function RichTextEditor({ value, onChange, onUpload, placeholder 
       ColumnLayout,
       Carrusel,
     ],
-    content: value || '',
+    content: sanitizeHtml(value || ''),
     editorProps: {
       attributes: {
         class: 'rich-text-editor min-h-[320px] focus:outline-none',
@@ -100,7 +101,7 @@ export default function RichTextEditor({ value, onChange, onUpload, placeholder 
     if (editor.isFocused) return;
     const current = editor.getHTML();
     if (current === (value || '')) return;
-    editor.commands.setContent(value || '', { emitUpdate: false });
+    editor.commands.setContent(sanitizeHtml(value || ''), { emitUpdate: false });
   }, [value, editor]);
 
   // Menú flotante de formato. TipTap v3 no incluye <BubbleMenu/> de React,

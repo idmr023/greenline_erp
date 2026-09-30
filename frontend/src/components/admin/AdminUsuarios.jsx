@@ -33,8 +33,21 @@ const FORM_VACIO = {
   activo: true,
 };
 
-/** `request()` lanza `{ status, error }` con el JSON del backend. */
-const mensajeDe = (err, porDefecto) => err?.error || err?.message || porDefecto;
+/**
+ * `request()` lanza `{ status, error, details }` con el JSON del backend.
+ * En un 400 de zod, `details` trae el campo que ha fallado: sin él el
+ * mensaje se queda en un inútil «Validación fallida».
+ */
+const mensajeDe = (err, porDefecto) => {
+  const base = err?.error || err?.message || porDefecto;
+  const detalles =
+    err?.details && typeof err.details === 'object'
+      ? Object.entries(err.details)
+          .map(([campo, fallos]) => `${campo}: ${[].concat(fallos || []).join(', ')}`)
+          .join(' · ')
+      : '';
+  return detalles ? `${base} — ${detalles}` : base;
+};
 
 export default function AdminUsuarios() {
   const { user, accessToken } = useAuth();

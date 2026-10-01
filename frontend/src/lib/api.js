@@ -115,6 +115,13 @@ export const authAPI = {
   login: (email, password) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
+  changePassword: (currentPassword, newPassword, accessToken) =>
+    request('/auth/change-password', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
   verifyOTP: (email, codigo) =>
     request('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ email, codigo }) }),
 

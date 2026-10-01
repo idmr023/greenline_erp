@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { ADMIN_ROLES, PANEL_ROLES, rolesDe, tieneRol } from './lib/roles';
 import SEOHead from './components/SEOHead';
 import LoginPage from './pages/LoginPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import PageLoader from './PageLoader';
 
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
@@ -24,6 +25,7 @@ function RootPortal() {
 
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
   // Multi-rol: con cualquier rol efectivo de equipo se entra al panel.
   if (!tieneRol(['CLIENTE'], rolesDe(user))) return <Navigate to="/admin" replace />;
 
@@ -68,6 +70,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<RootPortal />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route
               path="/admin/*"
               element={

@@ -38,13 +38,13 @@ export default function LoginPage() {
 
   const completeLogin = async (tokens, user) => {
     const esCliente = tieneRol(['CLIENTE'], rolesDe(user));
-    if (!esCliente) {
+    saveSession(tokens, user);
+    if (!esCliente && !user.mustChangePassword) {
       // La sesión de Supabase se vincula aquí, de forma transparente, usando
       // las mismas credenciales. No se debe mostrar un segundo login en /admin.
       await linkSupabase(email, password, tokens.accessToken);
     }
-    saveSession(tokens, user);
-    navigate(esCliente ? '/' : '/admin');
+    navigate(esCliente ? '/' : (user.mustChangePassword ? '/change-password' : '/admin'));
   };
 
   const handleSubmit = async (e) => {

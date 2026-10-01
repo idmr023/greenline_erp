@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usuariosAPI } from '../../lib/api';
 import {
   USUARIOS_ESCRITURA_ROLES,
+  rolesDe,
   tieneRol,
 } from '../../lib/roles';
 import { Check, Loader2, Mail, Pencil, Plus, Search, ShieldCheck, Trash2, Users, X } from '../../lib/icons';
@@ -29,7 +30,7 @@ const FORM_VACIO = {
   apellido: '',
   email: '',
   telefono: '',
-  rol: 'COLABORADOR_TIENDA',
+  roles: ['COLABORADOR_TIENDA'],
   activo: true,
 };
 
@@ -51,9 +52,10 @@ const mensajeDe = (err, porDefecto) => {
 
 export default function AdminUsuarios() {
   const { user, accessToken } = useAuth();
-  const puedeEscribir = tieneRol(USUARIOS_ESCRITURA_ROLES, user?.rol);
+  const misRoles = rolesDe(user);
+  const puedeEscribir = tieneRol(USUARIOS_ESCRITURA_ROLES, misRoles);
   /** El correo es la credencial de acceso: sólo un ADMIN lo cambia (§RBAC). */
-  const esAdmin = user?.rol === 'ADMIN';
+  const esAdmin = tieneRol(['ADMIN'], misRoles);
 
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -115,7 +117,7 @@ export default function AdminUsuarios() {
       apellido: u.apellido || '',
       email: u.email || '',
       telefono: u.telefono || '',
-      rol: u.rol || 'COLABORADOR_TIENDA',
+      roles: rolesDe(u).length > 0 ? rolesDe(u) : ['COLABORADOR_TIENDA'],
       activo: u.activo !== false,
     });
     setFormAbierto(true);
@@ -124,10 +126,35 @@ export default function AdminUsuarios() {
 
   const setCampo = (clave, valor) => setForm((f) => ({ ...f, [clave]: valor }));
 
+  /**
+   * Alterna un rol en el conjunto. Reglas de la UI, las mismas que el backend:
+   *  - al menos un rol (se valida al guardar);
+   *  - CLIENTE no se combina: marcarlo deja sólo CLIENTE y marcar un rol de
+   *    equipo quita CLIENTE de la selección.
+   */
+  const alternarRol = (rol) => {
+    setForm((f) => {
+      const actuales = Array.isArray(f.roles) ? f.roles : [];
+      if (actuales.includes(rol)) {
+        return { ...f, roles: actuales.filter((r) => r !== rol) };
+      }
+      if (rol === 'CLIENTE') return { ...f, roles: ['CLIENTE'] };
+      return { ...f, roles: [...actuales.filter((r) => r !== 'CLIENTE'), rol] };
+    });
+  };
+
   const guardar = async (e) => {
     e?.preventDefault?.();
     setGuardando(true);
     setMensaje(null);
+
+    const rolesSel = [...new Set((form.roles || []).filter(Boolean))];
+    if (rolesSel.length === 0) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona al menos un rol.' });
+      setGuardando(false);
+      return;
+    }
+
     try {
       if (editando) {
         const nuevoEmail = form.email.trim();
@@ -137,7 +164,7 @@ export default function AdminUsuarios() {
             nombre: form.nombre.trim(),
             apellido: form.apellido.trim(),
             telefono: form.telefono.trim() || null,
-            rol: form.rol,
+            roles: rolesSel,
             activo: form.activo,
             // Sólo viaja si cambió y el rol es ADMIN: el backend también lo
             // comprueba (403) por si alguien lo manda a mano.
@@ -162,7 +189,7 @@ export default function AdminUsuarios() {
             nombre: form.nombre.trim(),
             apellido: form.apellido.trim(),
             telefono: form.telefono.trim() || undefined,
-            rol: form.rol,
+            roles: rolesSel,
           },
           accessToken,
         );
@@ -184,7 +211,7 @@ export default function AdminUsuarios() {
       await usuariosAPI.enviarCorreoClave(u.email);
       setMensaje({
         tipo: 'ok',
-        texto: `Correo enviado a ${u.email} (si la cuenta está activa).`,
+        texto: `Correo enviado a ${u.email} con el link para restablecer la contraseña (si la cuenta está activa).`,
       });
     } catch (err) {
       setMensaje({ tipo: 'error', texto: mensajeDe(err, 'No se pudo enviar el correo.') });
@@ -320,6 +347,13 @@ export default function AdminUsuarios() {
                   <span className="text-[10px] font-semibold text-brand bg-brand/10 px-2 py-0.5 rounded">
                     {ETIQUETA_ROL[u.rol] || u.rol}
                   </span>
+                  {rolesDe(u)
+                    .filter((rol) => rol !== u.rol)
+                    .map((rol) => (
+                      <span key={rol} className="text-[10px] font-semibold text-brand bg-brand/10 px-2 py-0.5 rounded">
+                        {ETIQUETA_ROL[rol] || rol}
+                      </span>
+                    ))}
                   {!u.activo && (
                     <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded">
                       Inactivo
@@ -352,7 +386,7 @@ export default function AdminUsuarios() {
                       onClick={() => enviarCorreo(u)}
                       disabled={accionando === u.id}
                       className="p-1.5 text-gray-400 hover:text-brand hover:bg-brand/10 rounded-lg transition-colors disabled:opacity-50"
-                      title="Enviar correo para activar contraseña"
+                      title="Enviar correo para restablecer contraseña"
                     >
                       <Mail className="w-4 h-4" />
                     </button>
@@ -417,7 +451,7 @@ export default function AdminUsuarios() {
 
       <p className="mt-6 text-[11px] text-gray-400">
         Los permisos de escritura sobre cada sección se conceden por rol en el panel lateral
-        («Acceso al panel»); aquí se decide el rol de cada cuenta.
+        («Acceso al panel»); aquí se asignan los roles de cada cuenta (pueden ser varios).
       </p>
 
       {/* Formulario crear / editar */}
@@ -518,19 +552,27 @@ export default function AdminUsuarios() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Rol (permisos) *
+                  Roles (permisos) *
                 </label>
-                <select
-                  value={form.rol}
-                  onChange={(e) => setCampo('rol', e.target.value)}
-                  className="input"
-                >
+                <div className="grid grid-cols-2 gap-1.5">
                   {ROLES_DISPONIBLES.map(([valor, etiqueta]) => (
-                    <option key={valor} value={valor}>{etiqueta}</option>
+                    <label
+                      key={valor}
+                      className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer rounded-lg border border-gray-100 px-2 py-1.5 hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(form.roles || []).includes(valor)}
+                        onChange={() => alternarRol(valor)}
+                        className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand"
+                      />
+                      {etiqueta}
+                    </label>
                   ))}
-                </select>
+                </div>
                 <p className="text-[11px] text-gray-400 mt-1">
-                  El rol decide qué puede ver y hacer en el panel y en la bóveda.
+                  Un usuario puede tener varios roles: los permisos del panel son
+                  la unión de todos ellos. «Cliente» no se combina con roles de equipo.
                 </p>
               </div>
 
@@ -560,7 +602,7 @@ export default function AdminUsuarios() {
                 </button>
                 <button
                   type="submit"
-                  disabled={guardando}
+                  disabled={guardando || (form.roles || []).length === 0}
                   className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-50"
                 >
                   {guardando && <Loader2 className="w-4 h-4 animate-spin" />}

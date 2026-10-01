@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI } from '../lib/api';
 import { supabase } from '../lib/supabase';
-import { ADMIN_ROLES, STAFF_ROLES } from '../lib/roles';
+import { ADMIN_ROLES, STAFF_ROLES, rolesDe, tieneRol } from '../lib/roles';
 
 const AuthContext = createContext(null);
 
@@ -25,8 +25,8 @@ export function AuthProvider({ children }) {
   const [refreshToken, setRefreshToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const isStaff = user ? STAFF_ROLES.includes(user.rol) : false;
-  const isAdmin = user ? ADMIN_ROLES.includes(user.rol) : false;
+  const isStaff = user ? tieneRol(STAFF_ROLES, rolesDe(user)) : false;
+  const isAdmin = user ? tieneRol(ADMIN_ROLES, rolesDe(user)) : false;
 
   const saveSession = useCallback((tokens, userData) => {
     setAccessToken(tokens.accessToken);

@@ -18,7 +18,7 @@ import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, AlertCircle, Activity, FileText, Gift, MapPin, Users } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
-import { ADMIN_ROLES, PANEL_ROLES, ROLES_BLOG, ROLES_DISTRIBUCION, ROLES_MAXIMOS, USUARIOS_ROLES, tieneRol } from '../../lib/roles';
+import { ADMIN_ROLES, PANEL_ROLES, ROLES_BLOG, ROLES_DISTRIBUCION, ROLES_MAXIMOS, USUARIOS_ROLES, rolesDe, tieneRol } from '../../lib/roles';
 
 const VIEWS = {
   DASHBOARD: 'dashboard',
@@ -62,27 +62,42 @@ const NAV_ITEMS = [
 const NAV_STAFF = [VIEWS.DASHBOARD, VIEWS.PEDIDOS, VIEWS.CONTACTOS, VIEWS.RECLAMACIONES, VIEWS.BOVEDA];
 
 /**
- * Menú visible para un rol. Las reglas, en orden:
+ * Menú visible para UN solo rol. Las reglas, en orden (§40 mínimo privilegio):
  *  - EDITORA_BLOG sólo blog; DISTRIBUCION sólo distribuidores (ya era así).
  *    Ambos además abren la Bóveda en modo lectura (§40 / D2).
  *  - Autoridad máxima (ADMIN_ROLES): todo lo que sus `soloRoles` permitan.
  *  - El resto de colaboradores: sólo las secciones operativas de NAV_STAFF.
  */
-function navVisibleDe(user) {
-  if (!user) return [];
-  if (tieneRol(ROLES_BLOG, user.rol)) {
+function navDelRol(rol) {
+  if (!rol) return [];
+  if (rol === 'EDITORA_BLOG') {
     return NAV_ITEMS.filter((i) => i.key === VIEWS.BLOG || i.key === VIEWS.BOVEDA);
   }
-  if (tieneRol(ROLES_DISTRIBUCION, user.rol)) {
+  if (rol === 'DISTRIBUCION') {
     return NAV_ITEMS.filter(
       (i) => i.key === VIEWS.DISTRIBUIDORES || i.key === VIEWS.USUARIOS || i.key === VIEWS.BOVEDA,
     );
   }
-  const base = tieneRol(ADMIN_ROLES, user.rol)
+  const base = ADMIN_ROLES.includes(rol)
     ? NAV_ITEMS
     : NAV_ITEMS.filter((i) => NAV_STAFF.includes(i.key));
-  // Los ítems con `soloRoles` sólo aparecen para esos roles (§40).
-  return base.filter((i) => !i.soloRoles || tieneRol(i.soloRoles, user.rol));
+  // Los ítems con `soloRoles` sólo aparecen para ese rol (§40).
+  return base.filter((i) => !i.soloRoles || i.soloRoles.includes(rol));
+}
+
+/**
+ * Menú visible para un usuario MULTI-ROL: unión de los menús de cada uno de
+ * sus roles efectivos, conservando el orden original de NAV_ITEMS.
+ */
+function navVisibleDe(user) {
+  if (!user) return [];
+  const roles = rolesDe(user);
+  if (roles.length === 0) return [];
+  const claves = new Set();
+  for (const rol of roles) {
+    for (const item of navDelRol(rol)) claves.add(item.key);
+  }
+  return NAV_ITEMS.filter((i) => claves.has(i.key));
 }
 
 function AdminSupabaseLogin({ accessToken, userEmail, onLinked }) {
@@ -217,8 +232,9 @@ export default function AdminPanel() {
     else if (path.includes('/admin/dashboard')) candidata = VIEWS.DASHBOARD;
 
     if (user) {
-      if (tieneRol(ROLES_BLOG, user.rol)) candidata = VIEWS.BLOG;
-      else if (tieneRol(ROLES_DISTRIBUCION, user.rol)) candidata = VIEWS.DISTRIBUIDORES;
+      const roles = rolesDe(user);
+      if (tieneRol(ROLES_BLOG, roles)) candidata = VIEWS.BLOG;
+      else if (tieneRol(ROLES_DISTRIBUCION, roles)) candidata = VIEWS.DISTRIBUIDORES;
     }
 
     // Una URL directa no debe abrir una sección que el rol no ve (§40).
@@ -234,9 +250,9 @@ export default function AdminPanel() {
   const [grants, setGrants] = useState([]);
   const [grantsLoading, setGrantsLoading] = useState(false);
 
-  const canGrant = user ? tieneRol(ROLES_MAXIMOS, user.rol) : false;
+  const canGrant = user ? tieneRol(ROLES_MAXIMOS, rolesDe(user)) : false;
 
-  const canManageAniv = user ? tieneRol(ROLES_MAXIMOS, user.rol) : false;
+  const canManageAniv = user ? tieneRol(ROLES_MAXIMOS, rolesDe(user)) : false;
   const [anivOn, setAnivOn] = useState(() => temaAniversarioActivo());
   const handleAnivToggle = () => setAnivOn(toggleTemaAniversario());
 
@@ -308,7 +324,13 @@ export default function AdminPanel() {
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">GreenLine</p>
-              <p className="text-[10px] text-gray-400">{user?.rol === 'EDITORA_BLOG' ? 'Editar Blog' : user?.rol === 'DISTRIBUCION' ? 'Distribuidores' : 'Admin Panel'}</p>
+              <p className="text-[10px] text-gray-400">{(() => {
+                const roles = rolesDe(user);
+                if (tieneRol(ROLES_MAXIMOS, roles)) return 'Admin Panel';
+                if (tieneRol(ROLES_BLOG, roles)) return 'Editar Blog';
+                if (tieneRol(ROLES_DISTRIBUCION, roles)) return 'Distribuidores';
+                return 'Admin Panel';
+              })()}</p>
             </div>
           </div>
         </div>

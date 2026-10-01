@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { VaultProvider } from './contexts/VaultContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import { ADMIN_ROLES, PANEL_ROLES } from './lib/roles';
+import { ADMIN_ROLES, PANEL_ROLES, rolesDe, tieneRol } from './lib/roles';
 import SEOHead from './components/SEOHead';
 import LoginPage from './pages/LoginPage';
 import PageLoader from './PageLoader';
@@ -24,7 +24,8 @@ function RootPortal() {
 
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.rol !== 'CLIENTE') return <Navigate to="/admin" replace />;
+  // Multi-rol: con cualquier rol efectivo de equipo se entra al panel.
+  if (!tieneRol(['CLIENTE'], rolesDe(user))) return <Navigate to="/admin" replace />;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">

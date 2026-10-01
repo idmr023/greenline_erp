@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Lock, Plus, ShieldCheck, Trash2, ArrowLeft } from '../../lib/icons';
 import { useVault } from '../../contexts/VaultContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { ROLES_MAXIMOS, tieneRol } from '../../lib/roles';
+import { ROLES_MAXIMOS, rolesDe, tieneRol } from '../../lib/roles';
 import { useStepUp } from '../../hooks/useStepUp';
 import SecretField from '../vault/SecretField';
 import {
@@ -107,7 +107,7 @@ export default function AdminBoveda() {
   // §40 — D1: el RLS sólo acepta escritura de ADMIN/DESARROLLADOR_WEB; la UI
   // no debe ni ofrecerla a los demás roles.
   const { user } = useAuth();
-  const puedeEscribir = tieneRol(ROLES_MAXIMOS, user?.rol);
+  const puedeEscribir = tieneRol(ROLES_MAXIMOS, rolesDe(user));
 
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(null);

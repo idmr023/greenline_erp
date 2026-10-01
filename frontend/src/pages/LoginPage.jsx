@@ -8,6 +8,7 @@ import OTPVerify from '../components/auth/OTPVerify';
 import StaffGateVerify from '../components/auth/StaffGateVerify';
 import TwoFactorVerify from '../components/auth/TwoFactorVerify';
 import { Lock, Mail, AlertCircle } from '../lib/icons';
+import { rolesDe, tieneRol } from '../lib/roles';
 
 // Vincula la sesión de Supabase Auth del staff usando la misma credencial del backend.
 async function linkSupabase(email, password, accessToken) {
@@ -37,14 +38,15 @@ export default function LoginPage() {
 
   const completeLogin = async (tokens, user) => {
     saveSession(tokens, user);
-    if (user.rol !== 'CLIENTE') {
+    const esCliente = tieneRol(['CLIENTE'], rolesDe(user));
+    if (!esCliente) {
       try {
         await linkSupabase(email, password, tokens.accessToken);
       } catch {
         // El panel pedirá la vinculación si hace falta
       }
     }
-    navigate(user.rol === 'CLIENTE' ? '/' : '/admin');
+    navigate(esCliente ? '/' : '/admin');
   };
 
   const handleSubmit = async (e) => {

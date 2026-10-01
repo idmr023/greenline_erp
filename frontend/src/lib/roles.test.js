@@ -8,6 +8,7 @@ import {
   ROLES_MAXIMOS,
   ROLES_BLOG,
   ROLES_DISTRIBUCION,
+  rolesDe,
   tieneRol,
 } from './roles.js';
 
@@ -51,4 +52,32 @@ test('tieneRol es null-safe y no admite roles desconocidos', () => {
   assert.equal(tieneRol(ADMIN_ROLES, undefined), false);
   assert.equal(tieneRol(null, 'ADMIN'), false);
   assert.equal(tieneRol('ADMIN', 'ADMIN'), false);
+});
+
+test('rolesDe une el rol primario y los adicionales sin duplicados', () => {
+  assert.deepEqual(rolesDe({ rol: 'ADMIN', extraRoles: ['EDITORA_BLOG'] }), ['ADMIN', 'EDITORA_BLOG']);
+  assert.deepEqual(rolesDe({ rol: 'ADMIN', extraRoles: ['ADMIN'] }), ['ADMIN']);
+  assert.deepEqual(rolesDe({ rol: 'GERENTE_TIENDA', extraRoles: [] }), ['GERENTE_TIENDA']);
+});
+
+test('rolesDe prefiere `roles` calculado por el backend si existe', () => {
+  assert.deepEqual(rolesDe({ rol: 'CLIENTE', extraRoles: ['ADMIN'], roles: ['ADMIN', 'DISTRIBUCION'] }),
+    ['ADMIN', 'DISTRIBUCION']);
+});
+
+test('rolesDe es null-safe', () => {
+  assert.deepEqual(rolesDe(null), []);
+  assert.deepEqual(rolesDe(undefined), []);
+  assert.deepEqual(rolesDe({}), []);
+});
+
+test('tieneRol acepta el array de roles efectivos (multi-rol)', () => {
+  const efectivos = rolesDe({ rol: 'GERENTE_TIENDA', extraRoles: ['COLABORADOR_TIENDA'] });
+  assert.equal(tieneRol(ADMIN_ROLES, efectivos), false);
+  assert.equal(tieneRol(ROLES_BLOG, efectivos), false);
+  assert.equal(tieneRol(PANEL_ROLES, efectivos), true);
+  const mixto = rolesDe({ rol: 'GERENTE_TIENDA', extraRoles: ['EDITORA_BLOG'] });
+  assert.equal(tieneRol(ROLES_BLOG, mixto), true);
+  assert.equal(tieneRol(ADMIN_ROLES, rolesDe({ rol: 'ADMIN', extraRoles: ['EDITORA_BLOG'] })), true);
+  assert.equal(tieneRol(ADMIN_ROLES, []), false);
 });

@@ -17,6 +17,11 @@
  *
  * Nota: el RLS exige además `panel_acceso` (grant por rol) y `activo`; estos
  * arrays son sólo la parte de rol, que es lo que decide la UI.
+ *
+ * MULTI-ROL: una cuenta puede tener VARIOS roles a la vez (rol primario +
+ * `extraRoles`). Todo permiso se resuelve con la UNIÓN de los roles efectivos,
+ * que es lo que devuelve `rolesDe(user)`; `tieneRol` acepta tanto un rol suelto
+ * como ese array de roles efectivos.
  */
 
 /** Autoridad máxima: entra en /admin y ve todas las secciones habilitadas. */
@@ -56,7 +61,28 @@ export const USUARIOS_ROLES = ['ADMIN', 'DESARROLLADOR_WEB', 'DISTRIBUCION'];
  */
 export const USUARIOS_ESCRITURA_ROLES = ['ADMIN', 'DESARROLLADOR_WEB'];
 
-/** Null-safe: `undefined`/`null` de rol nunca crashea un guard. */
+/**
+ * Roles efectivos de un usuario: la unión del rol primario (`user.rol`) y los
+ * adicionales (`user.extraRoles`). Si el backend ya manda `roles` calculado,
+ * se usa ese. Null-safe: `undefined`/`null` nunca crashea un guard.
+ */
+export function rolesDe(user) {
+  if (!user) return [];
+  if (Array.isArray(user.roles) && user.roles.length > 0) {
+    return [...new Set(user.roles.filter(Boolean))];
+  }
+  const primario = user.rol ? [user.rol] : [];
+  const extras = Array.isArray(user.extraRoles) ? user.extraRoles : [];
+  return [...new Set([...primario, ...extras].filter(Boolean))];
+}
+
+/**
+ * ¿Tiene `roles` (lista permitida) ALGUNO de los roles dados?
+ * El segundo argumento acepta un rol suelto (`user.rol`) o el array de
+ * roles efectivos de `rolesDe(user)`.
+ */
 export function tieneRol(roles, rol) {
-  return Boolean(rol) && Array.isArray(roles) && roles.includes(rol);
+  if (!Array.isArray(roles) || !rol) return false;
+  const delUsuario = Array.isArray(rol) ? rol : [rol];
+  return delUsuario.some((r) => Boolean(r) && roles.includes(r));
 }

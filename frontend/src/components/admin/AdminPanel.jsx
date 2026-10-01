@@ -16,7 +16,7 @@ import AdminReclamaciones from './AdminReclamaciones';
 import AdminEmails from './AdminEmails';
 import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, AlertCircle, Activity, FileText, Gift, MapPin, Users } from '../../lib/icons';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
 import { ADMIN_ROLES, PANEL_ROLES, ROLES_BLOG, ROLES_DISTRIBUCION, ROLES_MAXIMOS, USUARIOS_ROLES, rolesDe, tieneRol } from '../../lib/roles';
 
@@ -98,118 +98,6 @@ function navVisibleDe(user) {
     for (const item of navDelRol(rol)) claves.add(item.key);
   }
   return NAV_ITEMS.filter((i) => claves.has(i.key));
-}
-
-function AdminSupabaseLogin({ accessToken, userEmail, onLinked }) {
-  const [email, setEmail] = useState(userEmail || '');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const trySignIn = async (mail, pass) => {
-    const res = await supabase.auth.signInWithPassword({ email: mail, password: pass });
-    return res.error ? res.error : null;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    let err = await trySignIn(email, password);
-
-    if (err) {
-      // Primera vez: crear/actualizar la cuenta Supabase con la misma credencial
-      try {
-        await authAPI.supabaseSync(password, accessToken);
-      } catch (syncErr) {
-        const detail = syncErr?.details?.body?.[0];
-        setError(detail || syncErr?.error || syncErr?.message || 'No se pudo vincular el acceso de datos');
-        setLoading(false);
-        return;
-      }
-      err = await trySignIn(email, password);
-    }
-
-    setLoading(false);
-
-    if (err) {
-      setError(err.message || 'No se pudo iniciar sesión en el panel de datos');
-      return;
-    }
-
-    onLinked();
-  };
-
-  return (
-    <div className="w-full max-w-sm">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-brand rounded-xl flex items-center justify-center mx-auto mb-3">
-            <ShieldCheck className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-lg font-bold text-gray-900">Acceso al panel de datos</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Usa las mismas credenciales de tu cuenta de GreenLine
-          </p>
-        </div>
-
-        {error && (
-          <div className="flex items-center gap-2 bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg mb-4">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-                placeholder="tu@email.com"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand text-white font-semibold rounded-lg hover:bg-brand-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Conectando...
-              </>
-            ) : (
-              'Iniciar sesión'
-            )}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
 }
 
 export default function AdminPanel() {
@@ -308,7 +196,21 @@ export default function AdminPanel() {
   if (!hasSupabaseSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <AdminSupabaseLogin accessToken={accessToken} userEmail={user?.email} onLinked={() => setHasSupabaseSession(true)} />
+        <div className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+          <div className="text-2xl mb-3">!</div>
+          <h1 className="text-lg font-bold text-gray-900">No se pudo conectar el panel</h1>
+          <p className="text-sm text-gray-500 mt-2">
+            Cierra sesión y vuelve a ingresar. La conexión con el panel de datos
+            se realiza automáticamente durante el inicio de sesión.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.assign('/login')}
+            className="mt-5 w-full py-2.5 bg-brand text-white font-semibold rounded-lg hover:bg-brand-dark transition-colors"
+          >
+            Volver a iniciar sesión
+          </button>
+        </div>
       </div>
     );
   }

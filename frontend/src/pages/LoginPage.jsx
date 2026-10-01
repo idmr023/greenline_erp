@@ -37,15 +37,13 @@ export default function LoginPage() {
   const [tempToken, setTempToken] = useState('');
 
   const completeLogin = async (tokens, user) => {
-    saveSession(tokens, user);
     const esCliente = tieneRol(['CLIENTE'], rolesDe(user));
     if (!esCliente) {
-      try {
-        await linkSupabase(email, password, tokens.accessToken);
-      } catch {
-        // El panel pedirá la vinculación si hace falta
-      }
+      // La sesión de Supabase se vincula aquí, de forma transparente, usando
+      // las mismas credenciales. No se debe mostrar un segundo login en /admin.
+      await linkSupabase(email, password, tokens.accessToken);
     }
+    saveSession(tokens, user);
     navigate(esCliente ? '/' : '/admin');
   };
 

@@ -241,12 +241,6 @@ export const usuariosAPI = {
       headers: authHeaders(accessToken),
     }),
 
-  /** Manda el correo con el que el usuario fija su contraseña (OTP de reset). */
-  enviarCorreoClave: (email) =>
-    request('/auth/request-reset', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    }),
 };
 
 export const contactAPI = {

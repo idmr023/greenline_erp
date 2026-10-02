@@ -6,7 +6,7 @@ import {
   rolesDe,
   tieneRol,
 } from '../../lib/roles';
-import { Check, Loader2, Mail, Pencil, Plus, Search, ShieldCheck, Trash2, Users, X } from '../../lib/icons';
+import { Check, Loader2, RefreshCw, Pencil, Plus, Search, ShieldCheck, Trash2, Users, X } from '../../lib/icons';
 
 /** Roles que el backend acepta en POST/PUT /users (zod del users.routes). */
 const ROLES_DISPONIBLES = [
@@ -25,6 +25,8 @@ const ROLES_DISPONIBLES = [
 const ETIQUETA_ROL = Object.fromEntries(ROLES_DISPONIBLES);
 const LIMITE = 20;
 
+const CONTRASENA_ESTANDAR = 'greenline@2026';
+
 const FORM_VACIO = {
   nombre: '',
   apellido: '',
@@ -32,6 +34,7 @@ const FORM_VACIO = {
   telefono: '',
   roles: ['COLABORADOR_TIENDA'],
   activo: true,
+  password: CONTRASENA_ESTANDAR,
 };
 
 /**
@@ -204,17 +207,22 @@ export default function AdminUsuarios() {
     }
   };
 
-  const enviarCorreo = async (u) => {
+  const restablecerEstandar = async (u) => {
+    const seguro = window.confirm(
+      `¿Restablecer la contraseña de "${u.nombre} ${u.apellido}" a la estándar?` +
+        '\n\nEl usuario deberá cambiarla en su próximo ingreso y sus sesiones abiertas se cerrarán.',
+    );
+    if (!seguro) return;
     setAccionando(u.id);
     setMensaje(null);
     try {
-      await usuariosAPI.enviarCorreoClave(u.email);
+      await usuariosAPI.actualizar(u.id, { password: CONTRASENA_ESTANDAR }, accessToken);
       setMensaje({
         tipo: 'ok',
-        texto: `Correo enviado a ${u.email} con el link para restablecer la contraseña (si la cuenta está activa).`,
+        texto: `Contraseña de ${u.email} restablecida a la estándar. El usuario deberá cambiarla en el próximo ingreso.`,
       });
     } catch (err) {
-      setMensaje({ tipo: 'error', texto: mensajeDe(err, 'No se pudo enviar el correo.') });
+      setMensaje({ tipo: 'error', texto: mensajeDe(err, 'No se pudo restablecer la contraseña.') });
     } finally {
       setAccionando(null);
     }
@@ -383,12 +391,12 @@ export default function AdminUsuarios() {
                   <>
                     <button
                       type="button"
-                      onClick={() => enviarCorreo(u)}
+                      onClick={() => restablecerEstandar(u)}
                       disabled={accionando === u.id}
                       className="p-1.5 text-gray-400 hover:text-brand hover:bg-brand/10 rounded-lg transition-colors disabled:opacity-50"
-                      title="Enviar correo para restablecer contraseña"
+                      title="Restablecer a la contraseña estándar"
                     >
-                      <Mail className="w-4 h-4" />
+                      <RefreshCw className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
@@ -523,19 +531,19 @@ export default function AdminUsuarios() {
               {!editando && (
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">
-                    Contraseña inicial *
+                    Contraseña inicial (estándar) *
                   </label>
                   <input
                     required
                     type="password"
-                    minLength={8}
-                    value={form.password || ''}
-                    onChange={(e) => setCampo('password', e.target.value)}
-                    className="input"
-                    placeholder="Mínimo 8 caracteres"
+                    readOnly
+                    value={form.password || CONTRASENA_ESTANDAR}
+                    className="input opacity-60"
+                    placeholder="Contraseña estándar, oculta"
                   />
                   <p className="text-[11px] text-gray-400 mt-1">
-                    Si prefieres que cada quien la fije, créalo y usa el botón de correo.
+                    Contraseña estándar compartida (greenline@2026): el usuario deberá
+                    cambiarla en su primer ingreso (queda forzado).
                   </p>
                 </div>
               )}

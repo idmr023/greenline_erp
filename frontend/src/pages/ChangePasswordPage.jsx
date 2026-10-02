@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../lib/api';
+import { PasswordSchema } from '../lib/password';
+import PasswordStrength from '../components/auth/PasswordStrength';
 import { Lock, AlertCircle, Loader2 } from '../lib/icons';
 
 export default function ChangePasswordPage() {
@@ -13,10 +15,18 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const fuerte = PasswordSchema.safeParse(newPassword).success;
+
   const submit = async (event) => {
     event.preventDefault();
     if (newPassword !== confirmation) {
       setError('Las contraseñas nuevas no coinciden');
+      return;
+    }
+
+    const chequeo = PasswordSchema.safeParse(newPassword);
+    if (!chequeo.success) {
+      setError(chequeo.error.issues[0]?.message || 'La contraseña no es segura');
       return;
     }
     setLoading(true);
@@ -30,7 +40,8 @@ export default function ChangePasswordPage() {
       );
       navigate('/admin', { replace: true });
     } catch (err) {
-      setError(err?.error || err?.message || 'No se pudo cambiar la contraseña');
+      const detalle = Array.isArray(err?.details?.body) ? err.details.body[0] : null;
+      setError(detalle || err?.error || err?.message || 'No se pudo cambiar la contraseña');
     } finally {
       setLoading(false);
     }
@@ -66,16 +77,19 @@ export default function ChangePasswordPage() {
           <input
             type="password"
             required
-            minLength={8}
+            minLength={12}
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}
             className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm"
             placeholder="Nueva contraseña"
           />
+
+          <PasswordStrength value={newPassword} />
+
           <input
             type="password"
             required
-            minLength={8}
+            minLength={12}
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
             className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm"
@@ -83,7 +97,7 @@ export default function ChangePasswordPage() {
           />
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !fuerte}
             className="w-full py-2.5 bg-brand text-white font-semibold rounded-lg disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Guardar contraseña'}

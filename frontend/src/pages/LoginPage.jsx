@@ -9,6 +9,7 @@ import StaffGateVerify from '../components/auth/StaffGateVerify';
 import TwoFactorVerify from '../components/auth/TwoFactorVerify';
 import { Lock, Mail, AlertCircle } from '../lib/icons';
 import { rolesDe, tieneRol } from '../lib/roles';
+const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://www.glperu.com';
 
 // Vincula la sesión de Supabase Auth del staff usando la misma credencial del backend.
 async function linkSupabase(email, password, accessToken) {
@@ -186,6 +187,19 @@ export default function LoginPage() {
               {loading ? 'Ingresando...' : 'Iniciar sesión'}
             </button>
           </form>
+
+          <div>
+            <p className="text-sm text-gray-500 mt-4 text-center">
+              ¿Olvidaste tu contraseña?{' '}
+              <a
+                href={`${SITE_URL}/restablecer-contrasena`}
+                className="text-brand font-medium hover:underline"
+              >
+                Restablecer
+              </a>
+            </p>
+          </div>
+
         </div>
       </div>
     </div>

@@ -121,6 +121,7 @@ function adaptarVista(vista, catalogo = []) {
     id: vista.id,
     nombre: vista.nombre,
     slug: vista.slug || slugify(vista.nombre),
+    manual_pdf: vista.manual_pdf || null,
     descripcion: vista.descripcion,
     precio_original: vista.precio_original,
     precio_actual: vista.precio_actual,
@@ -178,6 +179,32 @@ function slugify(text) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
+}
+
+// Productos marcados manualmente como "últimas unidades". Como la vista
+// no trae stock numérico, se identifican por modelo (tokens del slug/nombre).
+// Cada grupo lista los tokens que deben aparecer TODOS para coincidir.
+const ULTIMAS_UNIDADES_TOKENS = [
+  ['tc2', '180a'], // TC2-180A
+  ['tm7'], // TM7
+  ['f4'], // F4
+  ['x3'], // X3
+  ['x6'], // X6 (no incluye X6 Pro: su token es "x6pro")
+];
+
+function tokensDe(texto) {
+  // Los tokens de modelo son ASCII puro; basta minúsculas + partir por
+  // cualquier cosa que no sea letra o número.
+  return (texto || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+export function esUltimasUnidades(producto) {
+  if (!producto) return false;
+  const tokens = new Set([...tokensDe(producto.slug), ...tokensDe(producto.nombre)]);
+  return ULTIMAS_UNIDADES_TOKENS.some((grupo) => grupo.every((t) => tokens.has(t)));
 }
 
 export const CATEGORIAS = [

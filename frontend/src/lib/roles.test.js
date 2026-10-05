@@ -5,9 +5,6 @@ import {
   ADMIN_ROLES,
   STAFF_ROLES,
   PANEL_ROLES,
-  ROLES_MAXIMOS,
-  ROLES_BLOG,
-  ROLES_DISTRIBUCION,
   rolesDe,
   tieneRol,
 } from './roles.js';
@@ -23,6 +20,7 @@ test('STAFF_ROLES contiene a los colaboradores por debajo y excluye el privilegi
   assert.ok(STAFF_ROLES.includes('COLABORADOR_TIENDA'));
   assert.ok(STAFF_ROLES.includes('GERENTE_ALMACEN'));
   assert.ok(STAFF_ROLES.includes('COLABORADOR_ALMACEN'));
+  assert.ok(STAFF_ROLES.includes('REDES_SOCIALES'));
   assert.ok(!STAFF_ROLES.includes('ADMIN'));
   assert.ok(!STAFF_ROLES.includes('DESARROLLADOR_WEB'));
 });
@@ -31,18 +29,30 @@ test('PANEL_ROLES es exactamente ADMIN_ROLES ∪ STAFF_ROLES, sin duplicados', (
   const union = [...new Set([...ADMIN_ROLES, ...STAFF_ROLES])].sort();
   assert.deepEqual([...PANEL_ROLES].sort(), union);
   assert.equal(new Set(PANEL_ROLES).size, PANEL_ROLES.length);
-  assert.equal(PANEL_ROLES.length, 8);
+  assert.equal(PANEL_ROLES.length, 9);
+});
+
+test('REDES_SOCIALES entra al panel pero no con privilegio máximo', () => {
+  assert.ok(PANEL_ROLES.includes('REDES_SOCIALES'));
+  assert.ok(!ADMIN_ROLES.includes('REDES_SOCIALES'));
 });
 
 test('ninguna lista admite duplicados', () => {
-  for (const lista of [ADMIN_ROLES, STAFF_ROLES, PANEL_ROLES, ROLES_MAXIMOS, ROLES_BLOG, ROLES_DISTRIBUCION]) {
+  for (const lista of [ADMIN_ROLES, STAFF_ROLES, PANEL_ROLES]) {
     assert.equal(new Set(lista).size, lista.length, `duplicados en ${lista.join(',')}`);
   }
 });
 
-test('ROLES_MAXIMOS (RLS de escritura de la bóveda) está contenido en ADMIN_ROLES', () => {
-  assert.deepEqual(ROLES_MAXIMOS, ['ADMIN', 'DESARROLLADOR_WEB']);
-  for (const rol of ROLES_MAXIMOS) assert.ok(ADMIN_ROLES.includes(rol));
+test('las listas de permisos NO viven aquí: roles.js sólo guarda guards de rol', async () => {
+  // Regresión de la migración a CASL: si vuelven a aparecer arrays tipo
+  // ROLES_MAXIMOS/USUARIOS_ROLES en este módulo es que alguien volvió a
+  // duplicar la matriz del backend en el cliente.
+  const fs = await import('node:fs/promises');
+  const fuente = await fs.readFile(new URL('./roles.js', import.meta.url), 'utf8');
+  for (const prohibido of ['ROLES_MAXIMOS', 'ROLES_BLOG', 'ROLES_DISTRIBUCION', 'USUARIOS_ROLES']) {
+    assert.ok(!fuente.includes(`export const ${prohibido}`),
+      `${prohibido} debe salir de roles.js: la matriz de permisos está en el backend`);
+  }
 });
 
 test('tieneRol es null-safe y no admite roles desconocidos', () => {
@@ -74,10 +84,7 @@ test('rolesDe es null-safe', () => {
 test('tieneRol acepta el array de roles efectivos (multi-rol)', () => {
   const efectivos = rolesDe({ rol: 'GERENTE_TIENDA', extraRoles: ['COLABORADOR_TIENDA'] });
   assert.equal(tieneRol(ADMIN_ROLES, efectivos), false);
-  assert.equal(tieneRol(ROLES_BLOG, efectivos), false);
   assert.equal(tieneRol(PANEL_ROLES, efectivos), true);
-  const mixto = rolesDe({ rol: 'GERENTE_TIENDA', extraRoles: ['EDITORA_BLOG'] });
-  assert.equal(tieneRol(ROLES_BLOG, mixto), true);
   assert.equal(tieneRol(ADMIN_ROLES, rolesDe({ rol: 'ADMIN', extraRoles: ['EDITORA_BLOG'] })), true);
   assert.equal(tieneRol(ADMIN_ROLES, []), false);
 });

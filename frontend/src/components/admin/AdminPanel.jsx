@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { authAPI } from '../../lib/api';
+import { PANEL_ROLES } from '../../lib/roles';
 import AdminDashboard from './AdminDashboard';
 import AdminProductos from './AdminProductos';
 import AdminProductoForm from './AdminProductoForm';
@@ -18,7 +20,6 @@ import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
-import { ADMIN_ROLES, PANEL_ROLES, ROLES_BLOG, ROLES_DISTRIBUCION, ROLES_MAXIMOS, USUARIOS_ROLES, rolesDe, tieneRol } from '../../lib/roles';
 
 const VIEWS = {
   DASHBOARD: 'dashboard',
@@ -37,71 +38,43 @@ const VIEWS = {
   USUARIOS: 'usuarios',
 };
 
+/**
+ * Secciones del panel. `perm` es el asunto CASL de la sección: la ability
+ * llega de `GET /auth/permissions` (matriz única del backend) y aquí sólo se
+ * pregunta `can('read', item.perm)`. Ni listas de roles ni casos por rol.
+ */
 const NAV_ITEMS = [
-  { key: VIEWS.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
-  { key: VIEWS.PRODUCTOS, label: 'Productos', icon: Package },
-  { key: VIEWS.COLORES, label: 'Colores', icon: Palette },
-  { key: VIEWS.BLOG, label: 'Blog', icon: FileText },
-  { key: VIEWS.DISTRIBUIDORES, label: 'Distribuidores', icon: MapPin },
-  { key: VIEWS.TESTIMONIOS, label: 'Testimonios', icon: MessageSquareQuote },
-  { key: VIEWS.PEDIDOS, label: 'Pedidos', icon: ShoppingCart },
-  { key: VIEWS.CONTACTOS, label: 'Contactos', icon: Mail },
-  { key: VIEWS.RECLAMACIONES, label: 'Reclamaciones', icon: FileText },
-  { key: VIEWS.EMAILS, label: 'Email Logs', icon: Activity, soloRoles: ADMIN_ROLES },
-  { key: VIEWS.METRICAS, label: 'Métricas', icon: Activity, soloRoles: ROLES_MAXIMOS },
+  { key: VIEWS.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard, perm: 'menu:dashboard' },
+  { key: VIEWS.PRODUCTOS, label: 'Productos', icon: Package, perm: 'menu:productos' },
+  { key: VIEWS.COLORES, label: 'Colores', icon: Palette, perm: 'menu:colores' },
+  { key: VIEWS.BLOG, label: 'Blog', icon: FileText, perm: 'menu:blog' },
+  { key: VIEWS.DISTRIBUIDORES, label: 'Distribuidores', icon: MapPin, perm: 'menu:distribuidores' },
+  { key: VIEWS.TESTIMONIOS, label: 'Testimonios', icon: MessageSquareQuote, perm: 'menu:testimonios' },
+  { key: VIEWS.PEDIDOS, label: 'Pedidos', icon: ShoppingCart, perm: 'menu:pedidos' },
+  { key: VIEWS.CONTACTOS, label: 'Contactos', icon: Mail, perm: 'menu:contactos' },
+  { key: VIEWS.RECLAMACIONES, label: 'Reclamaciones', icon: FileText, perm: 'menu:reclamaciones' },
+  { key: VIEWS.EMAILS, label: 'Email Logs', icon: Activity, perm: 'menu:emails' },
+  { key: VIEWS.METRICAS, label: 'Métricas', icon: Activity, perm: 'menu:metricas' },
   // Bóveda Segura V5: la ABRE todo el staff (§40 — ver y copiar es de todos);
-  // escribir dentro la decide AdminBoveda con ROLES_MAXIMOS, que es lo que
+  // escribir dentro la decide AdminBoveda con `boveda:write`, que es lo que
   // el RLS acepta en greenline_vault_items.
-  { key: VIEWS.BOVEDA, label: 'Bóveda', icon: Lock, soloRoles: PANEL_ROLES },
+  { key: VIEWS.BOVEDA, label: 'Bóveda', icon: Lock, perm: 'menu:boveda' },
   // Usuarios (backend /api/users, RBAC usuarios:*): ver y gestionar cuentas,
   // rol (permisos), alta/baja y el correo con el que cada quien fija su clave.
-  { key: VIEWS.USUARIOS, label: 'Usuarios', icon: Users, soloRoles: USUARIOS_ROLES },
+  { key: VIEWS.USUARIOS, label: 'Usuarios', icon: Users, perm: 'menu:usuarios' },
 ];
 
-/** Secciones que los colaboradores ven en /admin (§40 mínimo privilegio). */
-const NAV_STAFF = [VIEWS.DASHBOARD, VIEWS.PEDIDOS, VIEWS.CONTACTOS, VIEWS.RECLAMACIONES, VIEWS.BOVEDA];
-
 /**
- * Menú visible para UN solo rol. Las reglas, en orden (§40 mínimo privilegio):
- *  - EDITORA_BLOG sólo blog; DISTRIBUCION sólo distribuidores (ya era así).
- *    Ambos además abren la Bóveda en modo lectura (§40 / D2).
- *  - Autoridad máxima (ADMIN_ROLES): todo lo que sus `soloRoles` permitan.
- *  - El resto de colaboradores: sólo las secciones operativas de NAV_STAFF.
+ * Secciones visibles para la ability de ESTA sesión. La unión multi-rol ya
+ * la resolvió el servidor al construir la matriz; el cliente sólo filtra.
  */
-function navDelRol(rol) {
-  if (!rol) return [];
-  if (rol === 'EDITORA_BLOG') {
-    return NAV_ITEMS.filter((i) => i.key === VIEWS.BLOG || i.key === VIEWS.BOVEDA);
-  }
-  if (rol === 'DISTRIBUCION') {
-    return NAV_ITEMS.filter(
-      (i) => i.key === VIEWS.DISTRIBUIDORES || i.key === VIEWS.USUARIOS || i.key === VIEWS.BOVEDA,
-    );
-  }
-  const base = ADMIN_ROLES.includes(rol)
-    ? NAV_ITEMS
-    : NAV_ITEMS.filter((i) => NAV_STAFF.includes(i.key));
-  // Los ítems con `soloRoles` sólo aparecen para ese rol (§40).
-  return base.filter((i) => !i.soloRoles || i.soloRoles.includes(rol));
-}
-
-/**
- * Menú visible para un usuario MULTI-ROL: unión de los menús de cada uno de
- * sus roles efectivos, conservando el orden original de NAV_ITEMS.
- */
-function navVisibleDe(user) {
-  if (!user) return [];
-  const roles = rolesDe(user);
-  if (roles.length === 0) return [];
-  const claves = new Set();
-  for (const rol of roles) {
-    for (const item of navDelRol(rol)) claves.add(item.key);
-  }
-  return NAV_ITEMS.filter((i) => claves.has(i.key));
+function navVisibleDe(ability) {
+  return NAV_ITEMS.filter((i) => ability.can('read', i.perm));
 }
 
 export default function AdminPanel() {
-  const { user, logout, accessToken } = useAuth();
+  const { logout, accessToken } = useAuth();
+  const ability = useAbility();
 
   const getInitialView = () => {
     const path = window.location.pathname;
@@ -119,14 +92,10 @@ export default function AdminPanel() {
     else if (path.includes('/admin/usuarios')) candidata = VIEWS.USUARIOS;
     else if (path.includes('/admin/dashboard')) candidata = VIEWS.DASHBOARD;
 
-    if (user) {
-      const roles = rolesDe(user);
-      if (tieneRol(ROLES_BLOG, roles)) candidata = VIEWS.BLOG;
-      else if (tieneRol(ROLES_DISTRIBUCION, roles)) candidata = VIEWS.DISTRIBUIDORES;
-    }
-
-    // Una URL directa no debe abrir una sección que el rol no ve (§40).
-    const permitidas = navVisibleDe(user).map((i) => i.key);
+    // Una URL directa no debe abrir una sección que la sesión no ve (§40).
+    // El primer ítem permitido además resuelve la landing de quien sólo ve
+    // blog o distribuidores, sin casos especiales por rol.
+    const permitidas = navVisibleDe(ability).map((i) => i.key);
     if (permitidas.length === 0) return VIEWS.DASHBOARD;
     return permitidas.includes(candidata) ? candidata : permitidas[0];
   };
@@ -138,13 +107,22 @@ export default function AdminPanel() {
   const [grants, setGrants] = useState([]);
   const [grantsLoading, setGrantsLoading] = useState(false);
 
-  const canGrant = user ? tieneRol(ROLES_MAXIMOS, rolesDe(user)) : false;
+  const canGrant = ability.can('acceso', 'panel');
 
-  const canManageAniv = user ? tieneRol(ROLES_MAXIMOS, rolesDe(user)) : false;
+  const canManageAniv = ability.can('update', 'config');
   const [anivOn, setAnivOn] = useState(() => temaAniversarioActivo());
   const handleAnivToggle = () => setAnivOn(toggleTemaAniversario());
 
-  const visibleNav = navVisibleDe(user);
+  const visibleNav = navVisibleDe(ability);
+
+  // Rótulo del sidebar según el perfil de permisos de la sesión.
+  const subtitulo = canGrant
+    ? 'Admin Panel'
+    : ability.can('read', 'menu:blog')
+      ? 'Editar Blog'
+      : ability.can('read', 'menu:distribuidores')
+        ? 'Distribuidores'
+        : 'Admin Panel';
 
   const refreshGrants = useCallback(async () => {
     setGrantsLoading(true);
@@ -226,13 +204,7 @@ export default function AdminPanel() {
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">GreenLine</p>
-              <p className="text-[10px] text-gray-400">{(() => {
-                const roles = rolesDe(user);
-                if (tieneRol(ROLES_MAXIMOS, roles)) return 'Admin Panel';
-                if (tieneRol(ROLES_BLOG, roles)) return 'Editar Blog';
-                if (tieneRol(ROLES_DISTRIBUCION, roles)) return 'Distribuidores';
-                return 'Admin Panel';
-              })()}</p>
+              <p className="text-[10px] text-gray-400">{subtitulo}</p>
             </div>
           </div>
         </div>

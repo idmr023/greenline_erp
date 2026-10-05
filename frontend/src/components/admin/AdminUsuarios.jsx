@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usuariosAPI } from '../../lib/api';
-import {
-  USUARIOS_ESCRITURA_ROLES,
-  rolesDe,
-  tieneRol,
-} from '../../lib/roles';
+import { rolesDe } from '../../lib/roles';
 import { Check, Loader2, RefreshCw, Pencil, Plus, Search, ShieldCheck, Trash2, Users, X } from '../../lib/icons';
 
 /** Roles que el backend acepta en POST/PUT /users (zod del users.routes). */
@@ -55,10 +52,11 @@ const mensajeDe = (err, porDefecto) => {
 
 export default function AdminUsuarios() {
   const { user, accessToken } = useAuth();
-  const misRoles = rolesDe(user);
-  const puedeEscribir = tieneRol(USUARIOS_ESCRITURA_ROLES, misRoles);
+  const ability = useAbility();
+  /** Alta/baja y edición de cuentas: usuarios:create/update/delete. */
+  const puedeEscribir = ability.can('update', 'usuarios');
   /** El correo es la credencial de acceso: sólo un ADMIN lo cambia (§RBAC). */
-  const esAdmin = tieneRol(['ADMIN'], misRoles);
+  const esAdmin = ability.can('manage-roles', 'usuarios');
 
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);

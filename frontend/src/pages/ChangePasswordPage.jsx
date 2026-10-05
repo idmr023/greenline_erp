@@ -34,7 +34,7 @@ export default function ChangePasswordPage() {
     try {
       await authAPI.changePassword(currentPassword, newPassword, accessToken);
       await authAPI.supabaseSync(newPassword, accessToken);
-      saveSession(
+      await saveSession(
         { accessToken, refreshToken: null },
         { ...user, mustChangePassword: false },
       );

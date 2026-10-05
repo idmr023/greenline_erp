@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { metricsAPI } from '../../lib/api';
 import {
   Cpu, MemoryStick, Activity, Timer, RefreshCw, Loader2, AlertCircle, ShieldOff,
 } from '../../lib/icons';
-import { ROLES_MAXIMOS, rolesDe, tieneRol } from '../../lib/roles';
 
 function MB(n) { return `${Number(n).toFixed(1)} MB`; }
 
@@ -38,7 +38,8 @@ function Bar({ label, used, total }) {
 }
 
 export default function AdminMetrics() {
-  const { user, accessToken } = useAuth();
+  const { accessToken } = useAuth();
+  const ability = useAbility();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -61,13 +62,13 @@ export default function AdminMetrics() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (!user || !tieneRol(ROLES_MAXIMOS, rolesDe(user))) {
+  if (!ability.can('read', 'metricas')) {
     return (
       <div className="p-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 flex flex-col items-center text-center">
           <ShieldOff className="w-10 h-10 text-gray-300 mb-3" />
           <p className="text-sm font-medium text-gray-600">No tienes permiso para ver las métricas</p>
-          <p className="text-xs text-gray-400 mt-1">Solo los roles ADMIN y DESARROLLADOR_WEB.</p>
+          <p className="text-xs text-gray-400 mt-1">Requiere el permiso «metricas:read».</p>
         </div>
       </div>
     );

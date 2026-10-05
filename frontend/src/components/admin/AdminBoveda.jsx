@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Lock, Plus, ShieldCheck, Trash2, ArrowLeft } from '../../lib/icons';
 import { useVault } from '../../contexts/VaultContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { ROLES_MAXIMOS, rolesDe, tieneRol } from '../../lib/roles';
+import { useAbility } from '@casl/react';
 import { useStepUp } from '../../hooks/useStepUp';
 import SecretField from '../vault/SecretField';
 import {
@@ -57,7 +56,7 @@ const ITEM_VACIO = { title: '', username: '', password: '', url: '', notes: '', 
 /**
  * §40 — dos límites distintos, no los confundas:
  *
- *  • ESCRIBIR secretos: sólo ROLES_MAXIMOS (ADMIN/DESARROLLADOR_WEB). El
+ *  • ESCRIBIR secretos: sólo con el permiso `boveda:write` (ADMIN/DESARROLLADOR_WEB). El
  *    resto del staff abre la bóveda, ve y copia, pero no crea ni cambia nada.
  *  • REKEY (§27) y RECOVERY (§25): sólo el DUEÑO de la bóveda, porque en
  *    `greenline_vault_keys` el RLS es de propiedad y el miembro con
@@ -105,9 +104,9 @@ export default function AdminBoveda() {
   const { estado, ocupado, generacion, desbloquear, bloquear, obtenerCliente } = useVault();
   const desbloqueada = estado === 'activa';
   // §40 — D1: el RLS sólo acepta escritura de ADMIN/DESARROLLADOR_WEB; la UI
-  // no debe ni ofrecerla a los demás roles.
-  const { user } = useAuth();
-  const puedeEscribir = tieneRol(ROLES_MAXIMOS, rolesDe(user));
+  // no debe ni ofrecerla a los demás roles (permiso único: boveda:write).
+  const ability = useAbility();
+  const puedeEscribir = ability.can('write', 'boveda');
 
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(null);

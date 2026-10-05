@@ -5,7 +5,7 @@ import { authAPI } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import SEOHead from '../components/SEOHead';
 import OTPVerify from '../components/auth/OTPVerify';
-import StaffGateVerify from '../components/auth/StaffGateVerify';
+import TwoFactorSetup from '../components/auth/TwoFactorSetup';
 import TwoFactorVerify from '../components/auth/TwoFactorVerify';
 import { Lock, Mail, AlertCircle } from '../lib/icons';
 import { rolesDe, tieneRol } from '../lib/roles';
@@ -39,7 +39,9 @@ export default function LoginPage() {
 
   const completeLogin = async (tokens, user) => {
     const esCliente = tieneRol(['CLIENTE'], rolesDe(user));
-    saveSession(tokens, user);
+    // Espera también a los permisos de la sesión: /admin no debe montar con
+    // la ability CASL vacía (menú parpadeando o vacío).
+    await saveSession(tokens, user);
     if (!esCliente && !user.mustChangePassword) {
       // La sesión de Supabase se vincula aquí, de forma transparente, usando
       // las mismas credenciales. No se debe mostrar un segundo login en /admin.
@@ -61,9 +63,17 @@ export default function LoginPage() {
         return;
       }
 
-      if (res.requiresStaffGate) {
+      if (res.requires2FASetup) {
+        // Staff sin 2FA: hay que activarlo antes de entrar. El backend ya
+        // verificó la contraseña y sólo entrega un reto temporal.
         setTempToken(res.tempToken);
-        setStep('gate');
+        setStep('setup');
+        return;
+      }
+
+      if (res.requires2FA) {
+        setTempToken(res.tempToken);
+        setStep('2fa');
         return;
       }
 
@@ -94,15 +104,16 @@ export default function LoginPage() {
     setError('');
   };
 
-  if (step === 'gate') {
+  if (step === 'setup') {
     return (
-      <StaffGateVerify
-        tempToken={tempToken}
-        onVerified={completeLogin}
-        onRequires2FA={(newTemp) => {
-          setTempToken(newTemp);
-          setStep('2fa');
-        }}
+      <TwoFactorSetup
+        token={tempToken}
+        setup={authAPI.setup2FAChallenge}
+        confirm={authAPI.confirm2FAChallenge}
+        onSuccess={(res) => completeLogin(
+          { accessToken: res.accessToken, refreshToken: res.refreshToken },
+          res.user,
+        )}
         onBack={backToCredentials}
       />
     );
@@ -113,7 +124,7 @@ export default function LoginPage() {
       <TwoFactorVerify
         tempToken={tempToken}
         onVerified={completeLogin}
-        onBack={() => setStep('gate')}
+        onBack={backToCredentials}
       />
     );
   }

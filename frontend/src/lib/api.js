@@ -125,11 +125,25 @@ export const authAPI = {
   verifyOTP: (email, codigo) =>
     request('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ email, codigo }) }),
 
-  verifyGate: (tempToken, gate) =>
-    request('/auth/verify-gate', { method: 'POST', body: JSON.stringify({ tempToken, gate }) }),
-
   verify2FA: (tempToken, totpCode) =>
     request('/auth/verify-2fa', { method: 'POST', body: JSON.stringify({ tempToken, totpCode }) }),
+
+  // Retos del 2FA con tempToken: todavía no hay sesión, sólo la constancia
+  // de que la contraseña del paso 1 fue correcta (purpose '2fa' / '2fa_setup').
+  setup2FAChallenge: (tempToken) =>
+    request('/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ tempToken }) }),
+
+  confirm2FAChallenge: (tempToken, token) =>
+    request('/auth/2fa/setup/confirm', { method: 'POST', body: JSON.stringify({ tempToken, token }) }),
+
+  send2FAEmail: (tempToken) =>
+    request('/auth/2fa/email', { method: 'POST', body: JSON.stringify({ tempToken }) }),
+
+  verify2FAEmail: (tempToken, codigo) =>
+    request('/auth/verify-2fa-email', { method: 'POST', body: JSON.stringify({ tempToken, codigo }) }),
+
+  verify2FABackup: (tempToken, codigo) =>
+    request('/auth/2fa/backup', { method: 'POST', body: JSON.stringify({ tempToken, codigo }) }),
 
   refresh: (refreshToken) =>
     request('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
@@ -143,6 +157,11 @@ export const authAPI = {
 
   me: (accessToken) =>
     request('/auth/me', { headers: authHeaders(accessToken) }),
+
+  // Matriz única de permisos del backend (recurso:acción). El panel monta su
+  // ability CASL con esta lista y deja de copiar la matriz de roles.
+  permissions: (accessToken) =>
+    request('/auth/permissions', { headers: authHeaders(accessToken) }),
 
   setup2FA: (accessToken) =>
     request('/auth/setup-2fa', {

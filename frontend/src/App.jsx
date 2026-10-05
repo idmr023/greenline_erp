@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AbilityProvider } from '@casl/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { VaultProvider } from './contexts/VaultContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -11,6 +12,8 @@ import PageLoader from './PageLoader';
 
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
 const Fase2Implementacion = lazy(() => import('./pages/Fase2Implementacion'));
+// Link de invitación (`<ERP_URL>/activar?token=…`): pública, sin sesión.
+const ActivarPage = lazy(() => import('./pages/ActivarPage'));
 
 /**
  * Raíz del ERP.
@@ -60,40 +63,60 @@ function RootPortal() {
   );
 }
 
+/**
+ * Publica la ability CASL de la sesión (`useAuth().ability`, montada con los
+ * permisos que devuelve el backend) para que `useAbility()`/`<Can>` estén
+ * disponibles en todo el árbol.
+ */
+function Abilities({ children }) {
+  const { ability } = useAuth();
+  return <AbilityProvider value={ability}>{children}</AbilityProvider>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        {/* §9: el estado de desbloqueo de la bóveda es independiente de la
-            sesión; vive en memoria y muere con el árbol. */}
-        <VaultProvider>
-          <Routes>
-            <Route path="/" element={<RootPortal />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/change-password" element={<ChangePasswordPage />} />
-            <Route
-              path="/admin/*"
-              element={
-                <ProtectedRoute requiredRoles={PANEL_ROLES}>
+        <Abilities>
+          {/* §9: el estado de desbloqueo de la bóveda es independiente de la
+              sesión; vive en memoria y muere con el árbol. */}
+          <VaultProvider>
+            <Routes>
+              <Route path="/" element={<RootPortal />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/change-password" element={<ChangePasswordPage />} />
+              <Route
+                path="/activar"
+                element={
                   <Suspense fallback={<PageLoader />}>
-                    <AdminPanel />
+                    <ActivarPage />
                   </Suspense>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/fase-2-implementacion"
-              element={
-                <ProtectedRoute requiredRoles={ADMIN_ROLES}>
-                  <Suspense fallback={<PageLoader />}>
-                    <Fase2Implementacion />
-                  </Suspense>
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </VaultProvider>
+                }
+              />
+              <Route
+                path="/admin/*"
+                element={
+                  <ProtectedRoute requiredRoles={PANEL_ROLES}>
+                    <Suspense fallback={<PageLoader />}>
+                      <AdminPanel />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/fase-2-implementacion"
+                element={
+                  <ProtectedRoute requiredRoles={ADMIN_ROLES}>
+                    <Suspense fallback={<PageLoader />}>
+                      <Fase2Implementacion />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </VaultProvider>
+        </Abilities>
       </AuthProvider>
     </BrowserRouter>
   );

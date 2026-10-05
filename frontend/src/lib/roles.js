@@ -1,22 +1,23 @@
 /**
- * Fuente única de verdad de los roles del panel (§40 — mínimo privilegio).
+ * Fuente única de verdad de los ROLES del panel (§40 — mínimo privilegio).
  *
- * Antes había 5 copias repartidas por AuthContext, ProtectedRoute, AdminPanel
- * y AdminMetrics, con dos significados distintos para «ADMIN_ROLES». Cualquier
- * cambio de rol tenía que tocarse a mano en cinco sitios y se descuadraba.
+ * Qué puede hacer cada rol ya NO vive aquí: eso es la matriz de permisos del
+ * backend (`greenline/backend/src/config/permissions.js`), que el panel
+ * recibe con `GET /auth/permissions` y convierte en una ability CASL
+ * (`lib/permissions.js`). Antes había arrays duplicados (USUARIOS_ROLES,
+ * ROLES_MAXIMOS, ROLES_BLOG…) que había que sincronizar a mano con el
+ * servidor; se fueron con la migración a CASL.
+ *
+ * Aquí sólo queda lo que es de naturaleza de ROL:
+ *
+ *   PANEL_ROLES    → quién entra en /admin (guard de ProtectedRoute).
+ *   ADMIN_ROLES    → quién entra con autoridad máxima en /fase-2-implementacion
+ *                    y en las vistas que el propio router exige.
+ *   STAFF_ROLES    → quién es equipo por debajo (AuthContext.isStaff).
  *
  * Correspondencia con el backend / RLS (fuente única = SQL):
- *
- *   ADMIN_ROLES    → quién entra en /admin con autoridad máxima. Es la unión
- *                    de es_admin_panel() + es_blog_admin() + es_distribucion().
- *   STAFF_ROLES    → colaboradores por debajo: entran a /admin pero sólo ven
- *                    y editan las secciones que sus permisos permitan.
- *   PANEL_ROLES    → nadie más entra en /admin (ProtectedRoute).
- *   ROLES_MAXIMOS  → privilegio máximo: es_admin_panel() y, en la bóveda,
- *                    quienes tienen INSERT/UPDATE/DELETE sobre los items.
- *
- * Nota: el RLS exige además `panel_acceso` (grant por rol) y `activo`; estos
- * arrays son sólo la parte de rol, que es lo que decide la UI.
+ *   ADMIN_ROLES    → unión de es_admin_panel() + es_blog_admin() + es_distribucion().
+ *   Nota: el RLS exige además `panel_acceso` (grant por rol) y `activo`.
  *
  * MULTI-ROL: una cuenta puede tener VARIOS roles a la vez (rol primario +
  * `extraRoles`). Todo permiso se resuelve con la UNIÓN de los roles efectivos,
@@ -30,36 +31,15 @@ export const ADMIN_ROLES = ['ADMIN', 'DESARROLLADOR_WEB', 'EDITORA_BLOG', 'DISTR
 /** Colaboradores por debajo: acceso al panel limitado por sección (§40). */
 export const STAFF_ROLES = [
   'EDITORA_BLOG', 'DISTRIBUCION', 'GERENTE_TIENDA', 'COLABORADOR_TIENDA',
-  'GERENTE_ALMACEN', 'COLABORADOR_ALMACEN',
+  'GERENTE_ALMACEN', 'COLABORADOR_ALMACEN', 'REDES_SOCIALES',
 ];
 
 /** Único guard de la ruta /admin: autoridad máxima + colaboradores. */
 export const PANEL_ROLES = [
   'ADMIN', 'DESARROLLADOR_WEB', 'EDITORA_BLOG', 'DISTRIBUCION',
   'GERENTE_TIENDA', 'COLABORADOR_TIENDA', 'GERENTE_ALMACEN', 'COLABORADOR_ALMACEN',
+  'REDES_SOCIALES',
 ];
-
-/** Privilegio máximo (es_admin_panel): bóveda, métricas, grants, aniversario. */
-export const ROLES_MAXIMOS = ['ADMIN', 'DESARROLLADOR_WEB'];
-
-/** Sólo gestión de blog. */
-export const ROLES_BLOG = ['EDITORA_BLOG'];
-
-/** Sólo gestión de distribuidores. */
-export const ROLES_DISTRIBUCION = ['DISTRIBUCION'];
-
-/**
- * Quién ve /admin/usuarios: es `usuarios:read` del backend
- * (ADMIN, DESARROLLADOR_WEB, DISTRIBUCION).
- */
-export const USUARIOS_ROLES = ['ADMIN', 'DESARROLLADOR_WEB', 'DISTRIBUCION'];
-
-/**
- * Quién puede crear, editar y borrar usuarios: `usuarios:create/update/delete`
- * (el propio cambio de rol entra aquí; `usuarios:manage-roles` es de ADMIN,
- * pero la API lo resuelve con `usuarios:update`).
- */
-export const USUARIOS_ESCRITURA_ROLES = ['ADMIN', 'DESARROLLADOR_WEB'];
 
 /**
  * Roles efectivos de un usuario: la unión del rol primario (`user.rol`) y los

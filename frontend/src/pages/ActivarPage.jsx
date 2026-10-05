@@ -209,7 +209,6 @@ export default function ActivarPage() {
                 placeholder="••••••••"
               />
             </div>
-            <PasswordStrength value={password} />
           </div>
 
           <div>
@@ -226,6 +225,7 @@ export default function ActivarPage() {
                 placeholder="••••••••"
               />
             </div>
+            <PasswordStrength value={password} />
           </div>
 
           <button

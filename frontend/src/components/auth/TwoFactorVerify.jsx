@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { authAPI } from '../../lib/api';
 import EmailFactorVerify from './EmailFactorVerify';
-import { ShieldCheck, ArrowLeft, AlertCircle, Loader2, Mail, Lock } from '../../lib/icons';
+import { ShieldCheck, ArrowLeft, AlertCircle, Loader2, Mail } from '../../lib/icons';
 
 /**
- * Segundo factor del login. Tres vías sobre el MISMO tempToken:
- *  - `totp`:   el código de la app de autenticación (por defecto).
- *  - `email`:  código de 6 dígitos enviado al correo; se envía SOLO al entrar
- *              en la pestaña (twoFALimiter: 5 peticiones / 5 minutos, cuota
- *              compartida con setup, confirm y respaldo).
- *  - `backup`: uno de los 8 códigos generados al activar (un solo uso).
+ * Segundo factor del login. Dos vías sobre el MISMO tempToken:
+ *  - `totp`:  el código de la app de autenticación (por defecto).
+ *  - `email`: código de 6 dígitos enviado al correo; se envía SOLO al entrar
+ *             en la pestaña (twoFALimiter: 5 peticiones / 5 minutos, cuota
+ *             compartida con setup y confirm).
  */
 export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
   const [modo, setModo] = useState('totp');
@@ -17,7 +16,6 @@ export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
   const [aviso, setAviso] = useState('');
   const [error, setError] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [respaldo, setRespald] = useState('');
   const [verificando, setVerificando] = useState(false);
   const inputs = useRef([]);
   const correoEnviado = useRef(false);
@@ -98,30 +96,6 @@ export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
     }
   };
 
-  const handleRespaldo = async (e) => {
-    e.preventDefault();
-    const codigo = respaldo.trim();
-    if (!codigo) {
-      setError('Ingresa un código de respaldo');
-      return;
-    }
-
-    setVerificando(true);
-    setError('');
-    try {
-      const res = await authAPI.verify2FABackup(tempToken, codigo);
-      if (res?.success === false) {
-        setError(res.error || 'Código de respaldo inválido');
-        return;
-      }
-      onVerified({ accessToken: res.accessToken, refreshToken: res.refreshToken }, res.user);
-    } catch (err) {
-      setError(err.error || err.message || 'Código de respaldo inválido');
-    } finally {
-      setVerificando(false);
-    }
-  };
-
   const bloqueError = error && (
     <div className="flex items-center gap-2 bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg mb-4">
       <AlertCircle className="w-4 h-4 shrink-0" />
@@ -151,51 +125,6 @@ export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
               onResend={reenviarCorreo}
               onBack={() => cambiarModo('totp')}
             />
-          ) : modo === 'backup' ? (
-            <div className="space-y-4">
-              <div className="text-center mb-6">
-                <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                  <Lock className="w-6 h-6 text-blue-600" />
-                </div>
-                <h2 className="text-lg font-bold text-gray-900">Código de respaldo</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  Introduce uno de los 8 códigos que guardaste al activar.
-                  <br />
-                  <span className="font-medium text-gray-700">Cada código sirve una sola vez.</span>
-                </p>
-              </div>
-
-              {bloqueError}
-
-              <form onSubmit={handleRespaldo} className="space-y-4">
-                <input
-                  type="text"
-                  value={respaldo}
-                  onChange={(e) => setRespald(e.target.value.toUpperCase())}
-                  placeholder="ABC-123"
-                  autoComplete="one-time-code"
-                  aria-label="Código de respaldo"
-                  className="w-full text-center text-lg font-mono tracking-widest border border-gray-200 rounded-lg py-3 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-                />
-
-                <button
-                  type="submit"
-                  disabled={verificando || !respaldo.trim()}
-                  className="w-full py-2.5 bg-brand text-white font-semibold rounded-lg hover:bg-brand-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {verificando && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {verificando ? 'Verificando...' : 'Entrar'}
-                </button>
-              </form>
-
-              <button
-                type="button"
-                onClick={() => cambiarModo('totp')}
-                className="w-full text-sm text-gray-500 hover:text-gray-700"
-              >
-                Usar el código de la app
-              </button>
-            </div>
           ) : (
             <div className="space-y-4">
               <div className="text-center mb-6">
@@ -240,20 +169,13 @@ export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
                 </button>
               </form>
 
-              <div className="flex items-center justify-between text-sm pt-1">
+              <div className="flex justify-center text-sm pt-1">
                 <button
                   type="button"
                   onClick={() => cambiarModo('email')}
                   className="flex items-center gap-1 text-brand hover:underline"
                 >
                   <Mail className="w-3 h-3" /> Enviar código por correo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cambiarModo('backup')}
-                  className="flex items-center gap-1 text-gray-500 hover:text-gray-700"
-                >
-                  <Lock className="w-3 h-3" /> Usar respaldo
                 </button>
               </div>
             </div>

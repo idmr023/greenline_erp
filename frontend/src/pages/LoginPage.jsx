@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../lib/api';
-import { supabase } from '../lib/supabase';
+import { linkSupabase } from '../lib/supabaseLink';
 import SEOHead from '../components/SEOHead';
 import OTPVerify from '../components/auth/OTPVerify';
 import TwoFactorSetup from '../components/auth/TwoFactorSetup';
@@ -10,21 +10,6 @@ import TwoFactorVerify from '../components/auth/TwoFactorVerify';
 import { Lock, Mail, AlertCircle } from '../lib/icons';
 import { rolesDe, tieneRol } from '../lib/roles';
 const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://www.glperu.com';
-
-// Vincula la sesión de Supabase Auth del staff usando la misma credencial del backend.
-async function linkSupabase(email, password, accessToken) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) return;
-
-  let res = await supabase.auth.signInWithPassword({ email, password });
-  if (!res.error) return;
-
-  await authAPI.supabaseSync(password, accessToken);
-  res = await supabase.auth.signInWithPassword({ email, password });
-  if (res.error) {
-    throw new Error(res.error.message || 'No se pudo vincular el acceso de datos');
-  }
-}
 
 export default function LoginPage() {
   const { saveSession } = useAuth();

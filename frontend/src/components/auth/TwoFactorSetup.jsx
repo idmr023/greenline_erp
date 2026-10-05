@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { ShieldCheck, ArrowLeft, AlertCircle, Loader2, Copy, Check } from '../../lib/icons';
 
 /**
- * Activación del 2FA: QR + código secreto manual + códigos de respaldo, y
- * confirmación con el primer TOTP.
+ * Activación del 2FA: QR + código secreto manual y confirmación con el
+ * primer TOTP. (Los códigos de respaldo se generan en el servidor pero no
+ * se muestran: si alguien pierde el acceso a la app, recupera la cuenta
+ * con el reseteo de contraseña.)
  *
  * Se usa en dos flujos con la MISMA pantalla:
  *  - Login (tempToken, purpose '2fa_setup'): al confirmar el backend entrega
@@ -97,9 +99,6 @@ export default function TwoFactorSetup({ token, setup, confirm, onSuccess, onBac
     }
   };
 
-  const respaldos = datos?.backupCodes || [];
-  const listaRespaldos = respaldos.join('\n');
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
       <div className="w-full max-w-sm">
@@ -168,31 +167,6 @@ export default function TwoFactorSetup({ token, setup, confirm, onSuccess, onBac
                     )}
                   </button>
                 </div>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-100 rounded-lg p-3">
-                <p className="text-xs text-amber-800 mb-2">
-                  <strong>Códigos de respaldo:</strong> guárdalos en un lugar seguro.
-                  Se muestran <strong>sólo una vez</strong> y cada uno sirve una sola vez.
-                </p>
-                <ul className="grid grid-cols-2 gap-1 text-center">
-                  {respaldos.map((c) => (
-                    <li
-                      key={c}
-                      className="bg-white border border-amber-100 rounded py-1 text-xs font-mono text-gray-800"
-                    >
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  onClick={() => copiar(listaRespaldos, 'all')}
-                  className="mt-2 w-full text-xs text-amber-800 hover:underline flex items-center justify-center gap-1"
-                >
-                  {copiado === 'all' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  {copiado === 'all' ? 'Copiados' : 'Copiar los 8 códigos'}
-                </button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">

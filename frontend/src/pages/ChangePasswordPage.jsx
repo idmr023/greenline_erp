@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../lib/api';
 import { PasswordSchema } from '../lib/password';
 import PasswordStrength from '../components/auth/PasswordStrength';
+import { linkSupabase } from '../lib/supabaseLink';
 import { Lock, AlertCircle, Loader2 } from '../lib/icons';
 
 export default function ChangePasswordPage() {
@@ -33,18 +34,26 @@ export default function ChangePasswordPage() {
     setError('');
     try {
       await authAPI.changePassword(currentPassword, newPassword, accessToken);
-      await authAPI.supabaseSync(newPassword, accessToken);
-      await saveSession(
-        { accessToken, refreshToken: null },
-        { ...user, mustChangePassword: false },
-      );
-      navigate('/admin', { replace: true });
     } catch (err) {
       const detalle = Array.isArray(err?.details?.body) ? err.details.body[0] : null;
       setError(detalle || err?.error || err?.message || 'No se pudo cambiar la contraseña');
-    } finally {
       setLoading(false);
+      return;
     }
+
+    // La contraseña ya cambió: nada de lo siguiente debe impedir el paso al
+    // panel. Si el vínculo con Supabase falla, se reintenta en el próximo
+    // login (AdminPanel ofrece reintentar) y no se bloquea la navegación.
+    try {
+      await linkSupabase(user.email, newPassword, accessToken);
+    } catch { /* best-effort */ }
+
+    await saveSession(
+      { accessToken, refreshToken: null },
+      { ...user, mustChangePassword: false },
+    );
+    setLoading(false);
+    navigate('/admin', { replace: true });
   };
 
   return (
@@ -84,8 +93,6 @@ export default function ChangePasswordPage() {
             placeholder="Nueva contraseña"
           />
 
-          <PasswordStrength value={newPassword} />
-
           <input
             type="password"
             required
@@ -95,6 +102,8 @@ export default function ChangePasswordPage() {
             className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm"
             placeholder="Repite la nueva contraseña"
           />
+
+          <PasswordStrength value={newPassword} />
           <button
             type="submit"
             disabled={loading || !fuerte}

@@ -13,10 +13,12 @@ const MASCARA = '••••••••••••••••';
  *
  * - Oculto por defecto; el secreto **no está en el DOM** mientras está
  *   oculto (ni en `value`, ni en `title`, ni en `aria-label`).
- * - Revelar exige step-up (§13): se pide la maestra de nuevo y sólo
- *   devuelve un sí/no.
+ * - Revelar/copiando con `stepUp` (§13): se vuelve a pedir la contraseña y
+ *   sólo devuelve un sí/no. Con `stepUp={false}` no se pregunta nada (§53):
+ *   basta con tener la bóveda desbloqueada. El ERP usa `stepUp={false}`
+ *   porque el step-up de reveal fue retirado a petición del equipo.
  * - Auto-hide con timeout y limpieza del estado (§12 R35).
- * - Copiar requiere el mismo step-up (§14 R44) y avisa del historial del
+ * - Con step-up, copiar exige lo mismo (§14 R44) y avisa del historial del
  *   sistema operativo (R47): el borrado no es garantía (§53 L5).
  * - En modo revelado se pasa a ventana crítica de auto-lock (§9 R27).
  *

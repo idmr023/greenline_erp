@@ -1374,7 +1374,7 @@ export default function AdminBoveda() {
               onChange={(e) => setForm({ ...form, categoria: e.target.value })}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             >
-              {categorias.length === 0 && <option value="general">General</option>}
+              {categorias.length === 0 && <option value="general">Claves Generales</option>}
               {categorias.map((c) => (
                 <option key={c.clave} value={c.clave}>
                   {c.nombre}
@@ -1452,6 +1452,7 @@ export default function AdminBoveda() {
                 etiqueta="Contraseña"
                 idItem={registro.id}
                 proposito="reveal"
+                stepUp={false}
               />
             </div>
 

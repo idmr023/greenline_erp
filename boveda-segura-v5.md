@@ -2240,6 +2240,14 @@ L14. ARGON2ID EJECUTADO EN JAVASCRIPT PURO
      mismo para ambos. Si el equipo necesita más margen, subir `m` o
      pasar a WASM con `wasm-unsafe-eval` en la CSP es una decisión
      explícita, no un detalle de rendimiento.
+
+L15. STEP-UP RETIRADO EN REVEAL/COPIA (DESVIACIÓN DEL EQUIPO)
+     §13, R37 y R44 exigían volver a pedir la contraseña para revelar o
+     copiar un secreto. El panel ERP usa `stepUp={false}` en todos los
+     `SecretField`: con la bóveda desbloqueada, revelar y copiar no
+     preguntan nada. La protección restante es el auto-lock y la ventana
+     crítica de §9 R27. Decisión explícita del equipo (2026-10), no una
+     omisión de implementación.
 ```
 
 ---

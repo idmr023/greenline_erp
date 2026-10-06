@@ -12,7 +12,7 @@ import { rolesDe, tieneRol } from '../lib/roles';
 const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://www.glperu.com';
 
 export default function LoginPage() {
-  const { saveSession } = useAuth();
+  const { saveSession, sesionExpirada } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -136,6 +136,14 @@ export default function LoginPage() {
             <h1 className="text-xl font-bold text-gray-900">GreenLine</h1>
             <p className="text-sm text-gray-500 mt-1">Inicia sesión en tu cuenta</p>
           </div>
+
+          {sesionExpirada && (
+            <div className="flex items-center gap-2 bg-amber-50 text-amber-800 text-sm px-4 py-3 rounded-lg mb-4">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              Tu sesión se cerró sola a la hora (1 h por seguridad). Vuelve a
+              entrar con tu contraseña y tu código.
+            </div>
+          )}
 
           {error && (
             <div className="flex items-center gap-2 bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg mb-4">

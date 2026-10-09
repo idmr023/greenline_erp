@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { FileText, RefreshCw, Eye, CheckCircle2, AlertCircle } from '../../lib/icons';
+import { RefreshCw, Eye, Mail } from '../../lib/icons';
+import { reclamacionesAPI } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminReclamaciones() {
+  const { accessToken } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
 
   useEffect(() => {
     load();
@@ -22,6 +26,36 @@ export default function AdminReclamaciones() {
     setLoadError(error ? error.message : null);
     setItems(data || []);
     setLoading(false);
+    return data || [];
+  }
+
+  async function reenviarCorreo(r) {
+    if (!accessToken) {
+      alert('Sesión no disponible. Vuelve a iniciar sesión.');
+      return;
+    }
+    if (!r.correlativo) {
+      alert('Este reclamo no tiene correlativo; no se puede reenviar el correo.');
+      return;
+    }
+    setSendingId(r.id);
+    try {
+      const res = await reclamacionesAPI.reenviarEmail({ correlativo: r.correlativo }, accessToken);
+      if (res?.ok) {
+        // El envío ocurre en la cola del backend; refrescamos ahora y un poco
+        // después para capturar email_enviado/email_error cuando el worker termine.
+        const data = await load();
+        const actualizado = data.find((x) => x.id === r.id);
+        if (actualizado) setSelected(actualizado);
+        setTimeout(load, 2500);
+      } else {
+        alert(res?.error || 'No se pudo encolar el correo.');
+      }
+    } catch (err) {
+      alert(err?.error || 'No se pudo enviar el correo.');
+    } finally {
+      setSendingId(null);
+    }
   }
 
   async function updateEstado(item, nuevoEstado) {
@@ -97,7 +131,24 @@ export default function AdminReclamaciones() {
               <tbody className="divide-y divide-gray-50">
                 {items.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="p-4 font-bold text-brand">{r.correlativo || `#${r.correlativo_numero}`}</td>
+                    <td className="p-4">
+                      <p className="font-bold text-brand">{r.correlativo || `#${r.correlativo_numero}`}</p>
+                      {r.email_enviado === true ? (
+                        <span
+                          title={`Enviado${r.email_enviado_at ? ` ${formatFecha(r.email_enviado_at)}` : ''}`}
+                          className="mt-1 inline-block px-2 py-0.5 rounded text-xs font-semibold bg-green-50 text-green-700"
+                        >
+                          Correo ✓
+                        </span>
+                      ) : (
+                        <span
+                          title={r.email_error || 'Correo de notificación no confirmado'}
+                          className="mt-1 inline-block px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700"
+                        >
+                          Sin correo
+                        </span>
+                      )}
+                    </td>
                     <td className="p-4 text-gray-500 text-xs">{formatFecha(r.created_at)}</td>
                     <td className="p-4">
                       <p className="font-semibold text-gray-900">{r.nombre} {r.apellidos}</p>
@@ -192,6 +243,29 @@ export default function AdminReclamaciones() {
                   <p className="text-gray-900 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">{selected.observaciones}</p>
                 </div>
               )}
+
+              <div className="flex items-center justify-between gap-2 flex-wrap pt-4 border-t border-gray-100">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Correo de notificación
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    {selected.email_enviado === true
+                      ? `Enviado${selected.email_enviado_at ? ` ${formatFecha(selected.email_enviado_at)}` : ''}`
+                      : selected.email_error
+                        ? `Error: ${selected.email_error}`
+                        : 'Aún no enviado'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => reenviarCorreo(selected)}
+                  disabled={sendingId === selected.id || !selected.correlativo}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand/10 text-brand text-sm font-semibold hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Mail className="w-4 h-4" />
+                  {sendingId === selected.id ? 'Enviando...' : 'Enviar correo'}
+                </button>
+              </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                 <span className="text-xs font-semibold text-gray-500">Estado del reclamo:</span>

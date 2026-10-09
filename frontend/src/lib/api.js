@@ -289,6 +289,15 @@ export const pedidosAPI = {
     }),
 };
 
+export const reclamacionesAPI = {
+  reenviarEmail: (payload, accessToken) =>
+    request('/reclamaciones/reenviar-email', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+};
+
 export const metricsAPI = {
   get: (accessToken) =>
     request('/metrics', { headers: authHeaders(accessToken) }),
@@ -306,5 +315,61 @@ export const marketingAPI = {
     request('/marketing/unsubscribe', {
       method: 'POST',
       body: JSON.stringify({ email }),
+    }),
+};
+
+/**
+ * Citas de servicio técnico (§10): el panel administra las citas y los
+ * destinatarios de los correos de tienda vía el backend (`/api/citas`,
+ * RBAC `citas:*`); la creación es sólo pública (formulario web).
+ */
+export const citasAPI = {
+  listar: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/citas${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+
+  obtener: (id, accessToken) =>
+    request(`/citas/id/${encodeURIComponent(id)}`, { headers: authHeaders(accessToken) }),
+
+  actualizar: (id, payload, accessToken) =>
+    request(`/citas/id/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  reenviarEmail: (id, accessToken) =>
+    request(`/citas/id/${encodeURIComponent(id)}/reenviar-email`, {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+    }),
+
+  tiendas: () => request('/citas/tiendas'),
+
+  destinatarios: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/citas/destinatarios${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+
+  crearDestinatario: (payload, accessToken) =>
+    request('/citas/destinatarios', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  desactivarDestinatario: (id, accessToken) =>
+    request(`/citas/destinatarios/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(accessToken),
     }),
 };

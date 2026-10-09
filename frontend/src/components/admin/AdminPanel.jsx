@@ -15,10 +15,11 @@ import AdminMetrics from './AdminMetrics';
 import AdminDistribuidores from './AdminDistribuidores';
 import AdminContactos from './AdminContactos';
 import AdminReclamaciones from './AdminReclamaciones';
+import AdminCitas from './AdminCitas';
 import AdminEmails from './AdminEmails';
 import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users } from '../../lib/icons';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
 
 const VIEWS = {
@@ -33,6 +34,7 @@ const VIEWS = {
   DISTRIBUIDORES: 'distribuidores',
   CONTACTOS: 'contactos',
   RECLAMACIONES: 'reclamaciones',
+  CITAS: 'citas',
   EMAILS: 'emails',
   BOVEDA: 'boveda',
   USUARIOS: 'usuarios',
@@ -53,6 +55,9 @@ const NAV_ITEMS = [
   { key: VIEWS.PEDIDOS, label: 'Pedidos', icon: ShoppingCart, perm: 'menu:pedidos' },
   { key: VIEWS.CONTACTOS, label: 'Contactos', icon: Mail, perm: 'menu:contactos' },
   { key: VIEWS.RECLAMACIONES, label: 'Reclamaciones', icon: FileText, perm: 'menu:reclamaciones' },
+  // Citas de servicio técnico (§10): la agenda por tienda; las tiendas
+  // se enteran por correo, aquí sólo administra el equipo central.
+  { key: VIEWS.CITAS, label: 'Citas', icon: Wrench, perm: 'menu:citas' },
   { key: VIEWS.EMAILS, label: 'Email Logs', icon: Activity, perm: 'menu:emails' },
   { key: VIEWS.METRICAS, label: 'Métricas', icon: Activity, perm: 'menu:metricas' },
   // Bóveda Segura V5: la ABRE todo el staff (§40 — ver y copiar es de todos);
@@ -87,6 +92,7 @@ export default function AdminPanel() {
     else if (path.includes('/admin/pedidos')) candidata = VIEWS.PEDIDOS;
     else if (path.includes('/admin/contactos')) candidata = VIEWS.CONTACTOS;
     else if (path.includes('/admin/reclamaciones')) candidata = VIEWS.RECLAMACIONES;
+    else if (path.includes('/admin/citas')) candidata = VIEWS.CITAS;
     else if (path.includes('/admin/emails')) candidata = VIEWS.EMAILS;
     else if (path.includes('/admin/metricas')) candidata = VIEWS.METRICAS;
     else if (path.includes('/admin/usuarios')) candidata = VIEWS.USUARIOS;
@@ -327,6 +333,7 @@ export default function AdminPanel() {
         {view === VIEWS.PEDIDOS && <AdminPedidos />}
         {view === VIEWS.CONTACTOS && <AdminContactos />}
         {view === VIEWS.RECLAMACIONES && <AdminReclamaciones />}
+        {view === VIEWS.CITAS && <AdminCitas />}
         {view === VIEWS.EMAILS && <AdminEmails />}
         {view === VIEWS.METRICAS && <AdminMetrics />}
         {view === VIEWS.BOVEDA && <AdminBoveda />}

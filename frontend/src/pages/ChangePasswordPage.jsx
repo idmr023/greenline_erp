@@ -36,6 +36,21 @@ export default function ChangePasswordPage() {
     setLoading(true);
     setError('');
 
+    // Vincular Supabase ANTES de tocar la bóveda: en el flujo de cambio
+    // forzado (mustChangePassword) el LoginPage omite linkSupabase, así
+    // que las queries de bóveda correrían con el rol `anon` — que la
+    // migración revoca por completo (42501 "permission denied for table
+    // greenline_vaults"). Con la contraseña actual (que el usuario ya
+    // escribió) se crea la sesión y todo pasa como `authenticated`.
+    try {
+      await linkSupabase(user.email, currentPassword, accessToken);
+    } catch {
+      // Sin sesión de datos no hay nada que re-envolver; el backend
+      // rechazará el cambio más abajo si la contraseña actual es mala.
+      // (Si la contraseña actual es correcta pero Supabase no está
+      // sincronizado, linkSupabase ya hace el sync y reintenta.)
+    }
+
     // §11 — la bóveda se desbloquea con la contraseña de PANEL, así que al
     // cambiarla hay que re-envolver la DEK con la nueva ANTES de que el
     // backend la acepte (save-first): si el re-envoltorio falla, NADA ha
@@ -44,43 +59,61 @@ export default function ChangePasswordPage() {
     let reenvuelta = null; // envoltura bajo la contraseña NUEVA
     let salt = null; // salt de bóveda (no rota con el cambio de panel)
     let parametros = null; // snapshot KDF de la bóveda
+
+    // Leer la bóveda. Si no hay sesión de Supabase (o los permisos no
+    // alcanzan), se trata como "sin bóveda": no hay nada que re-envolver y
+    // el cambio de contraseña del panel sigue igual.
+    let b = null;
     try {
-      const b = await cargarBoveda();
-      clave = b?.bovedaId ? b.clavePropia : null;
-      if (clave) {
-        salt = b.salt;
-        parametros = b.parametros;
-        let abrir;
-        try {
-          abrir = await obtenerCliente().reenvolverConPassword({
-            passwordActual: currentPassword,
-            passwordNueva: newPassword,
-            salt,
-            parametros,
-            envoltura: clave.envoltura,
-            contexto: clave.contexto,
-          });
-        } catch {
-          // Abrir con la contraseña vieja falló: o la contraseña actual es
-          // incorrecta o la muestra R120 no cuadra — en cualquier caso NO
-          // se toca nada (ni servidor ni fila).
-          setLoading(false);
-          setError('La contraseña actual no es correcta.');
-          return;
-        }
-        reenvuelta = abrir.envoltura;
+      b = await cargarBoveda();
+    } catch (err) {
+      const sinSesion = err?.name === 'ErrorRls'
+        || /permission denied|row-level security|No hay sesión/i.test(err?.message || '');
+      if (!sinSesion) {
+        setLoading(false);
+        setError(
+          `No se pudo leer la bóveda: ${err?.message || 'error de conexión'}`,
+        );
+        return;
+      }
+    }
+
+    clave = b?.bovedaId ? b.clavePropia : null;
+    if (clave) {
+      salt = b.salt;
+      parametros = b.parametros;
+      let abrir;
+      try {
+        abrir = await obtenerCliente().reenvolverConPassword({
+          passwordActual: currentPassword,
+          passwordNueva: newPassword,
+          salt,
+          parametros,
+          envoltura: clave.envoltura,
+          contexto: clave.contexto,
+        });
+      } catch {
+        // Abrir con la contraseña vieja falló: o la contraseña actual es
+        // incorrecta o la muestra R120 no cuadra — en cualquier caso NO
+        // se toca nada (ni servidor ni fila).
+        setLoading(false);
+        setError('La contraseña actual no es correcta.');
+        return;
+      }
+      reenvuelta = abrir.envoltura;
+      try {
         await guardarClavePropia({
           vaultId: clave.contexto.vaultId,
           keyVersion: clave.contexto.keyVersion,
           envoltura: reenvuelta,
         });
+      } catch (err) {
+        setLoading(false);
+        setError(
+          `No se pudo guardar la clave re-envuelta de la bóveda: ${err?.message || 'error guardándola'}`,
+        );
+        return;
       }
-    } catch (err) {
-      setLoading(false);
-      setError(
-        `No se pudo re-envolver la clave de la bóveda: ${err?.message || 'error guardándola'}`,
-      );
-      return;
     }
 
     try {

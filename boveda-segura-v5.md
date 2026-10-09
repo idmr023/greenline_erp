@@ -723,6 +723,64 @@ Cada campo tiene una función verificable:
 | `aad_header` | splicing entre ítems y alteración de metadatos |
 | `nonce` | colisión (sujeto a §8.2) |
 
+## 11.1 Enmienda Fase 3 — envoltura de la DEK por USUARIO (KEK por usuario)
+
+Decisión implementada (2026-10): la contraseña maestra compartida se retira de
+la interfaz; la DEK de la bóveda se envuelve con la **contraseña de panel de
+cada usuario**.
+
+```text
+DEK de la bóveda  (una sola, por key_version)
+    |
+    +--> fila propia     (user_id = yo,    fuente='usuario') -> Argon2id(MI contraseña de panel, kdf_salt de la bóveda)
+    |
+    +--> fila legado     (user_id = dueño, fuente='maestra') -> Argon2id(la maestra original,  kdf_salt de la bóveda)
+```
+
+Reglas:
+
+- El `salt` (`kdf_salt`) y los parámetros son **los de la bóveda**: NO rotan
+  con la contraseña de cada usuario (todos derivan con el mismo salt; sólo
+  cambia el IKM, que es la contraseña).
+- El AAD de la envoltura (§7/§8.1) **no incluye `user_id`**: una fila propia
+  y una legado son indistinguibles para el formato; sólo se distinguen con
+  qué KEK se abren. La crypto de §5–§8 queda intacta.
+- `greenline_vault_keys` añade `user_id uuid` (DEFAULT `auth.uid()`,
+  `ON UPDATE/DELETE CASCADE`) y `fuente` (`'maestra'` | `'usuario'`, con
+  CHECK). Índice único `(vault_id, user_id, key_version, proposito)`.
+- RLS: cada miembro ve y escribe **sus** filas + las del dueño (legado); el
+  INSERT/UPDATE de miembro sólo admite `user_id = auth.uid()` y
+  `proposito = 'dek'`.
+- Desbloqueo: se usa la fila propia si existe; si sólo está la legado, el
+  panel ofrece **modo migración** UNA vez (maestra legado + contraseña de
+  panel) y guarda la fila propia con upsert.
+- Antes de guardar cualquier fila propia, la contraseña de panel se verifica
+  en el backend con `POST /auth/verify-password` (rate-limit 10/15 min por
+  IP+usuario, §13.1). En el worker, R120 comprueba la re-envoltura ANTES de
+  que nada se escriba.
+- Las filas legado NO se revocan al migrar: quedan como respaldo (p. ej.
+  tras un reset de contraseña de panel se vuelve al modo migración). La
+  migración es por-USUARIO: cada miembro la hace con su propia contraseña.
+- `vault_rekey` (§27) y las ops `cambiarMasterPassword`/`usarRecuperacion`
+  del worker se conservan a nivel de base de datos/pruebas, pero la interfaz
+  ya no los invoca: el re-envoltoro de cada usuario ocurre en el cambio de
+  contraseña de panel (§11.2) y en la recuperación (§25.3).
+
+## 11.2 Re-envoltoro al cambiar la contraseña de panel (save-first)
+
+`ChangePasswordPage` mantiene la bóveda y el panel consistentes en este
+orden:
+
+```text
+1. reenvolverConPassword(actual -> nueva)   [worker, sin desbloqueo; R120]
+2. guardarClavePropia(envoltura nueva)      [upsert: si falla, NADA cambió]
+3. POST /auth/change-password               [si falla → rollback local: nueva -> actual]
+4. linkSupabase + navegar
+```
+
+Si la contraseña actual no abre la envoltura, se aborta en el paso 1 antes
+de tocar servidor ni fila.
+
 ---
 
 # 12. VISUALIZACIÓN SEGURA DE CONTRASEÑAS
@@ -843,6 +901,22 @@ Requisitos:
 - R41: El descifrado real ocurre en cliente con la Unlock Key; el step-up sólo autoriza la **entrega** de material.
 - R42: El fallo de step-up debe contar hacia el mismo sistema de backoff que el login (§17) para evitar fuerza bruta sobre la reautenticación.
 - R43: Un chequeo de step-up implementado únicamente en el cliente **no cumple** este documento.
+
+## 13.3 Enmienda Fase 3 — el step-up pide la contraseña de USUARIO
+
+Con la KEK por usuario (§11.1), la contraseña que el step-up vuelva a pedir
+es la **contraseña de panel del usuario** (es la que deriva el material
+vigente), no una maestra compartida. Dos vías según la operación:
+
+- Operaciones que sólo re-envuelven en cliente (export §28, generar recovery
+  §25): step-up local contra el material del worker (`verificarMaster`,
+  comparación constante) — coherente con §13.2 y con L15.
+- Operaciones que ESCRIBEN una fila propia en servidor (migración §11.1,
+  creación, recuperación): la contraseña se verifica además contra el
+  backend con `POST /auth/verify-password` ANTES de escribir, con
+  rate-limit propio (10 intentos/15 min por IP+usuario) y auditoría
+  `VERIFY_PASSWORD_FAILED` sólo en fallo. Así una contraseña mal tecleada
+  no deja la bóveda envuelta bajo una contraseña inútil (§11.1).
 
 ## 13.2 Alcance real del step-up en una bóveda client-side (aclaración de la Fase 2)
 
@@ -1029,6 +1103,14 @@ Toda la jerarquía criptográfica es tan fuerte como la master password. V5 exig
 - R65: La master password **no** puede coincidir con la contraseña de la cuenta si el modelo lo permite detectar sin revelar ninguna de las dos.
 - R66: El feedback de fuerza no debe ejecutar llamadas de red con la contraseña o derivados no hasheados.
 
+**Enmienda Fase 3 (§11.1):** la maestra de la bóveda ES la contraseña de
+panel, así que su política pasa a ser la del panel (`PasswordSchema`:
+mínimo 12 caracteres, mayúscula, minúscula, número y símbolo) en lugar de
+R61 (14 caracteres). El formulario de creación de bóveda deja de imponer su
+propio mínimo y verifica la contraseña contra `POST /auth/verify-password`
+antes de envolver nada. R62–R66 siguen aplicándose donde el entorno lo
+permita; el HIBP del panel es el que manda.
+
 ## 17.2 Bloqueo y backoff
 
 - R67: El login y el step-up comparten contadores de intento por cuenta.
@@ -1146,6 +1228,7 @@ GET /vault/items                    -> metadatos mínimos (título está dentro 
 GET /vault/items/:id                -> blob cifrado + AAD + revision
 POST /vault/items/:id/reveal        -> paso de step-up, NO devuelve el secreto si la bóveda es client-side
 POST /auth/step-up                  -> emite step_up_token
+POST /auth/verify-password          -> valida la contraseña de panel (sólo {valid}, §11.1/§13.3)
 POST /vault/export                  -> export cifrado (§28)
 POST /vault/recovery/generate       -> genera recovery key (§25)
 ```
@@ -1333,6 +1416,15 @@ PERMITIDO:  "el usuario genera una recovery key localmente y nunca sale del disp
 - R108: La recuperación debe documentar **qué se recupera** (items) y **qué queda permanentemente inaccesible** (p. ej. historial, claves asimétricas viejas, shares).
 - R109: Tras recuperar, se exige cambiar la master password y revocar todas las sesiones.
 
+**Enmienda Fase 3 (§11.1):** con la KEK por usuario, «cambiar la master
+password» tras la recuperación se sustituye por **re-envolver la fila propia
+del usuario bajo su contraseña de panel con el MISMO `kdf_salt`** (el salt
+NO rota: lo comparten el resto de la bóveda). La recovery key abre las DEKs
+en el worker sin desbloqueo (`reenvolverDesdeRecuperacion`), R120 verifica
+cada muestra, después se hace upsert de la fila propia, se revoca la
+recovery key (R107), se audita y se cierran las demás sesiones (R109). La
+contraseña de panel se verifica en backend ANTES de escribir (§13.3).
+
 ---
 
 # 26. COMPARTIR BÓVEDAS Y ACCESO DE EMERGENCIA (NUEVA EN V5)
@@ -1408,6 +1500,21 @@ Requisitos:
 - R118: Exige step-up con MFA (§13).
 - R119: Tras el cambio: revocar todas las sesiones, notificar por canal independiente, y dejar constancia en auditoría con `prev_hash`.
 - R120: El cliente debe verificar tras el re-wrap que puede re-descifrar una muestra de items antes de confirmar el cambio (rollback automático si falla).
+
+**Enmienda Fase 3 (§11.1):** el flujo de arriba queda **retirado de la
+interfaz**. La maestra compartida ya no existe en UI, así que no hay
+«cambio de maestra» que rotar salt para todo el mundo:
+
+- Cada usuario cambia SÚ contraseña de panel y su propia envoltura se
+  re-envuelve con el mismo salt (§11.2, save-first + rollback). No afecta a
+  las filas de los demás usuarios: cada KEK es independiente.
+- La recuperación (§25.3 enmienda) re-envuelve sólo la fila del dueño.
+- R116/R117 (rotación atómica de salt + ventana R117) siguen descritos para
+  la capability de base de datos `vault_rekey`, que se conserva sin interfaz
+  (y con RLS que la niega si hay filas de miembros). R118–R120 aplican a esa
+  capability y a los re-envoltoros por usuario (R120 verificado en worker).
+- «Cambiar la contraseña maestra» desaparece como botón; el paso de
+  MFA/step-up asociado se resuelve con la contraseña de panel (§13.3).
 
 ---
 
@@ -2248,6 +2355,17 @@ L15. STEP-UP RETIRADO EN REVEAL/COPIA (DESVIACIÓN DEL EQUIPO)
      preguntan nada. La protección restante es el auto-lock y la ventana
      crítica de §9 R27. Decisión explícita del equipo (2026-10), no una
      omisión de implementación.
+
+L16. FILAS LEGADO TRAS UN RESET DE CONTRASEÑA DE PANEL
+     La migración a KEK por usuario (§11.1) NO revoca la fila legado
+     (`fuente='maestra'`). Si un usuario olvida su contraseña de panel y
+     la restablece por email, su fila propia deja de abrir: el panel vuelve
+     a ofrecer el modo migración con la maestra legado (o el dueño usa la
+     recovery key, §25). Mientras exista esa fila legado, quien posea la
+     maestra compartida original puede abrir la bóveda en modo migración
+     para cualquier usuario — es el coste de no rotar el salt y de dejar el
+     respaldo. Derivar de ello: custodiar la maestra legado y eliminarla
+     (re-key de base de datos) es una operación pendiente del equipo.
 ```
 
 ---

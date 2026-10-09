@@ -174,6 +174,17 @@ describe('cliente del worker (§9, §15.1)', () => {
     pendientes.push(cliente.abrirShare({ share: {}, publicaEmisor: new Uint8Array(32) }));
     assert.equal(worker.enviados.at(-1).mensaje.tipo, 'abrirShare');
 
+    // §11 (Fase 3): los tres pasos de la KEK por usuario sólo viven en el
+    // worker, así que sus helpers tienen que llegar a su mensaje.
+    pendientes.push(cliente.migrarClaveUsuario({ passwordUsuario: 'x' }));
+    assert.equal(worker.enviados.at(-1).mensaje.tipo, 'migrarClaveUsuario');
+
+    pendientes.push(cliente.reenvolverConPassword({ passwordActual: 'a', passwordNueva: 'b' }));
+    assert.equal(worker.enviados.at(-1).mensaje.tipo, 'reenvolverConPassword');
+
+    pendientes.push(cliente.reenvolverDesdeRecuperacion({ recoveryKey: new Uint8Array(32) }));
+    assert.equal(worker.enviados.at(-1).mensaje.tipo, 'reenvolverDesdeRecuperacion');
+
     cliente.destruir();
     // Todas quedaron en vuelo: destruir debe rechazarlas y ninguna puede
     // quedar como rechazo sin manejar.

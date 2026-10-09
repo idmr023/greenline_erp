@@ -82,6 +82,12 @@ export function crearClienteBoveda({ fabricaWorker = workerPorDefecto } = {}) {
 
     // --- Fase 4 (§25, §27): sólo el worker ve estas claves ---
 
+    /** §11 — la DEK abierta pasa a la contraseña de usuario (migración). */
+    migrarClaveUsuario: (datos) => pedir('migrarClaveUsuario', datos),
+    /** §11 — reenvuelve la DEK de otra contraseña de panel a otra (sin desbloqueo). */
+    reenvolverConPassword: (datos) => pedir('reenvolverConPassword', datos),
+    /** §11 + §25 — desde la recovery key, la DEK pasa a la contraseña de panel. */
+    reenvolverDesdeRecuperacion: (datos) => pedir('reenvolverDesdeRecuperacion', datos),
     /** §27 — devuelve el salt nuevo y las DEKs reenvueltas (R116/R120). */
     cambiarMasterPassword: (datos) => pedir('cambiarMasterPassword', datos),
     /** §25 R106 — devuelve las DEKs envueltas bajo la recovery key. */

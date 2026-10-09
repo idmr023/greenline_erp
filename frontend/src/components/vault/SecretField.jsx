@@ -187,8 +187,8 @@ export default function SecretField({
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
-            placeholder="Contraseña maestra"
-            aria-label="Contraseña maestra para autorizar"
+            placeholder="Tu contraseña de usuario"
+            aria-label="Tu contraseña de usuario para autorizar"
             className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
           />
           <button

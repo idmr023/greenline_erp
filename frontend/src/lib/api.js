@@ -122,6 +122,16 @@ export const authAPI = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
 
+  // ¿Es ésta la contraseña del USUARIO? La bóveda la pide antes de derivar la
+  // KEK que envuelve su DEK (KEK por usuario): sólo responde { valid } y no
+  // inicia sesión. Se le pasa el access token de la sesión vigente.
+  verifyPassword: (password, accessToken) =>
+    request('/auth/verify-password', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ password }),
+    }),
+
   verifyOTP: (email, codigo) =>
     request('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ email, codigo }) }),
 

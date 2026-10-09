@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Lock, Plus, ShieldCheck, Trash2, ArrowLeft } from '../../lib/icons';
 import { useVault } from '../../contexts/VaultContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '@casl/react';
 import { useStepUp } from '../../hooks/useStepUp';
 import SecretField from '../vault/SecretField';
+import { authAPI } from '../../lib/api';
 import {
   ErrorSinMigracion,
   cargarBoveda,
   cargarRecuperacion,
-  cambiarMasterPassword,
   contarEventos,
   crearBoveda,
   eliminarBovedaPropia,
   eliminarItem,
+  guardarClavePropia,
   guardarItem,
   guardarRecuperacion,
   listarCategorias,
@@ -102,6 +104,7 @@ function normalizarImportado(bruto) {
  */
 export default function AdminBoveda() {
   const { estado, ocupado, generacion, desbloquear, bloquear, obtenerCliente } = useVault();
+  const { accessToken } = useAuth();
   const desbloqueada = estado === 'activa';
   // §40 — D1: el RLS sólo acepta escritura de ADMIN/DESARROLLADOR_WEB; la UI
   // no debe ni ofrecerla a los demás roles (permiso único: boveda:write).
@@ -128,15 +131,15 @@ export default function AdminBoveda() {
   const [categorias, setCategorias] = useState([]);
 
   // --- Fase 4 (§25, §27, §28) ---
-  const [panel, setPanel] = useState(null); // 'recovery' | 'cambio' | 'export'
+  const [panel, setPanel] = useState(null); // 'recovery' | 'export' | 'import'
   const [trabajando, setTrabajando] = useState(false);
   /** §25.1 — se muestra UNA vez y no se guarda en ningún estado persistente. */
   const [recoveryTexto, setRecoveryTexto] = useState(null);
   const [activaRecovery, setActivaRecovery] = useState(false);
-  const [formCambio, setFormCambio] = useState({ actual: '', nueva: '', nueva2: '' });
-  const [formRecovery, setFormRecovery] = useState({ key: '', nueva: '', nueva2: '' });
+  /** §25 + §11 — recuperar reenvuelve MI fila bajo MI contraseña de panel. */
+  const [formRecovery, setFormRecovery] = useState({ key: '', password: '' });
   const [viendoRecuperacion, setViendoRecuperacion] = useState(false);
-  /** Contraseña maestra del panel de mantenimiento abierto (§13 step-up). */
+  /** Contraseña de usuario tecleada para el step-up del panel (§13/§28). */
   const [masterPanel, setMasterPanel] = useState('');
   /** §28.1 R122 — fichero de export elegido, ya parseado en memoria. */
   const [ficheroImport, setFicheroImport] = useState(null);
@@ -252,6 +255,38 @@ export default function AdminBoveda() {
     return { lista: ok, rotos };
   }, []);
 
+  /**
+   * §11 — valida la contraseña de panel contra el backend ANTES de guardar
+   * cualquier envoltura propia (migración / creación / recuperación): si no
+   * es la contraseña real, no se llega a escribir nada y no queda la bóveda
+   * envuelta bajo una contraseña que no sirve.
+   *
+   * No se usa en el desbloqueo normal: ahí la corrección la comprueba el
+   * worker con R120 y el servidor no tiene por qué estar disponible.
+   */
+  const verificarPasswordPanel = useCallback(
+    async (password) => {
+      try {
+        const r = await authAPI.verifyPassword(password, accessToken);
+        if (!r?.valid) {
+          setErrorMaestra('La contraseña de usuario no es correcta.');
+          return false;
+        }
+        return true;
+      } catch (err) {
+        if (err?.status === 401) {
+          setErrorMaestra('Tu sesión expiró. Vuelve a entrar para verificar la contraseña de usuario.');
+          return false;
+        }
+        setErrorMaestra(
+          `No se pudo verificar la contraseña de usuario: ${err?.error || err?.message || 'error del servidor'}`,
+        );
+        return false;
+      }
+    },
+    [accessToken],
+  );
+
   const alDesbloquear = useCallback(
     async (e) => {
       e?.preventDefault?.();
@@ -262,6 +297,15 @@ export default function AdminBoveda() {
         return;
       }
       try {
+        const migrando = Boolean(bootstrap.migracionPendiente);
+        if (migrando) {
+          // 1) la contraseña de panel se verifica en el backend ANTES de
+          //    derivar nada: sólo así la fila propia se guarda bajo una
+          //    contraseña que de verdad abre el panel.
+          if (!(await verificarPasswordPanel(master2))) return;
+        }
+        // 2) abrir la DEK con lo que haya (maestra legado en migración,
+        //    contraseña de panel en el caso normal — misma derivación).
         const r = await desbloquear({
           masterPassword: master,
           salt: bootstrap.salt,
@@ -269,16 +313,41 @@ export default function AdminBoveda() {
         });
         const cliente = obtenerCliente();
         await cliente.abrirDEK(bootstrap.clave.envoltura, bootstrap.clave.contexto);
+        if (migrando) {
+          // 3) re-envolver la MISMA DEK bajo MI contraseña de panel (R120
+          //    en el worker) y guardarla con upsert: si algo falla, la fila
+          //    legado sigue intacta y se puede reintentar.
+          const nueva = await cliente.migrarClaveUsuario({ passwordUsuario: master2 });
+          await guardarClavePropia({
+            vaultId: bootstrap.bovedaId,
+            keyVersion: nueva.contexto.keyVersion,
+            envoltura: nueva.envoltura,
+          });
+          setBootstrap(await leerBootstrap());
+        }
         const { lista, rotos } = await descifrarTodo(cliente, bootstrap.items);
         setDatos({ gen: r.generacion, lista, rotos });
         setMaster('');
+        setMaster2('');
         await registrarEvento({ evento: 'BOVED_UNLOCK', vaultId: bootstrap.bovedaId });
       } catch (err) {
         setErrorMaestra(err?.message || 'No se pudo desbloquear.');
         bloquear();
       }
     },
-    [avisoSinClave, bootstrap, bloquear, descifrarTodo, desbloquear, master, obtenerCliente, sinClave],
+    [
+      avisoSinClave,
+      bootstrap,
+      bloquear,
+      descifrarTodo,
+      desbloquear,
+      leerBootstrap,
+      master,
+      master2,
+      obtenerCliente,
+      sinClave,
+      verificarPasswordPanel,
+    ],
   );
 
   const alCrear = useCallback(
@@ -286,13 +355,14 @@ export default function AdminBoveda() {
       e?.preventDefault?.();
       setErrorMaestra(null);
       if (master !== master2) {
-        setErrorMaestra('Las contraseñas maestras no coinciden.');
+        setErrorMaestra('Las contraseñas no coinciden.');
         return;
       }
-      if (master.length < 14) {
-        setErrorMaestra('Usa al menos 14 caracteres (§17.1). Una frase de 4 palabras vale.');
-        return;
-      }
+      // §11 — la bóveda se envuelve con la contraseña de PANEL, así que
+      // debe ser la que el backend acepta (el mismo check del formulario de
+      // cambio de contraseña). Sin el check de 14 caracteres: la política
+      // del panel es la que manda.
+      if (!(await verificarPasswordPanel(master))) return;
       try {
         const ownerId = await obtenerOwnerId();
         const vaultId = crypto.randomUUID();
@@ -336,13 +406,13 @@ export default function AdminBoveda() {
         });
         setMaster('');
         setMaster2('');
-        setMensaje('Bóveda creada. La contraseña maestra no se ha guardado en ningún sitio.');
+        setMensaje('Bóveda creada. Tu contraseña de panel no se ha guardado en ningún sitio.');
       } catch (err) {
         setErrorMaestra(err?.message || 'No se pudo crear la bóveda.');
         bloquear();
       }
     },
-    [bloquear, desbloquear, leerBootstrap, master, master2, obtenerCliente],
+    [bloquear, desbloquear, leerBootstrap, master, master2, obtenerCliente, verificarPasswordPanel],
   );
 
   /**
@@ -516,66 +586,6 @@ export default function AdminBoveda() {
   }, [bootstrap, masterPanel, obtenerCliente, pasoRecovery, soyDueno]);
 
   /**
-   * §27 — R118 step-up con la maestra actual, re-envoltura verificada en
-   * cliente (R120) y escritura ATÓMICA vía `vault_rekey` (R116). Si algo
-   * falla, el RPC no se ejecuta y no queda estado mixto.
-   */
-  const alCambiarMaestra = useCallback(
-    async (e) => {
-      e?.preventDefault?.();
-      setMensaje(null);
-      if (!soyDueno) {
-        return fallo(null, 'Sólo el dueño de la bóveda puede cambiar la contraseña maestra (§27).');
-      }
-      if (formCambio.nueva !== formCambio.nueva2) {
-        return fallo(null, 'Las contraseñas maestras nuevas no coinciden.');
-      }
-      if (formCambio.nueva.length < 14) {
-        return fallo(null, 'Usa al menos 14 caracteres (§17.1).');
-      }
-      setTrabajando(true);
-      try {
-        const cliente = obtenerCliente();
-        const saltNuevo = saltAleatorio();
-        const r = await cliente.cambiarMasterPassword({
-          masterActual: formCambio.actual,
-          masterNueva: formCambio.nueva,
-          vaultId: bootstrap.bovedaId,
-          salt: saltNuevo,
-          parametros: ARGON2,
-          envolturas: bootstrap.claves.map((c) => ({
-            keyVersion: c.keyVersion,
-            envoltura: c.envoltura,
-            contexto: c.contexto,
-          })),
-        });
-        await cambiarMasterPassword({
-          vaultId: bootstrap.bovedaId,
-          salt: saltNuevo,
-          parametros: parametrosUsados(ARGON2),
-          claves: r.claves,
-        });
-        await registrarEvento({ evento: 'BOVED_REKEY', vaultId: bootstrap.bovedaId });
-        // R119 — todas las demás sesiones, fuera.
-        await revocarOtrasSesiones();
-        setFormCambio({ actual: '', nueva: '', nueva2: '' });
-        setMensaje({
-          tipo: 'ok',
-          texto:
-            'Contraseña maestra cambiada y demás sesiones cerradas. Vuelve a desbloquear con la nueva.',
-        });
-        bloquear();
-        setDatos(null);
-      } catch (err) {
-        fallo(err, 'No se pudo cambiar la contraseña maestra.');
-      } finally {
-        setTrabajando(false);
-      }
-    },
-    [bootstrap, bloquear, formCambio, obtenerCliente, soyDueno],
-  );
-
-  /**
    * §28 — export cifrado versionado con passphrase propia (R121), límite
    * por hora (R125), step-up (§28 «requerir step-up authentication») y
    * auditoría con recuento, nunca con contenido (R124).
@@ -734,9 +744,13 @@ export default function AdminBoveda() {
   );
 
   /**
-   * §25.3 R107/R109 — usar la recovery key: re-bajo una maestra nueva,
-   * escritura atómica, REVOCA la recovery key y cierra el resto de
-   * sesiones. Sólo se hace desde la pantalla de desbloqueo.
+   * §25.3 R107/R109 + §11 — usar la recovery key: abre las DEKs con ella,
+   * las reenvuelve bajo MI contraseña de panel (MISMO salt: no rota),
+   * guarda mi fila con upsert, REVOCA la recovery key y cierra el resto
+   * de sesiones. La contraseña de panel se verifica en el backend ANTES de
+   * escribir nada — si se teclea mal, no queda la fila propia envuelta
+   * bajo una contraseña inútil. Sólo se hace desde la pantalla de
+   * desbloqueo.
    */
   const alUsarRecovery = useCallback(
     async (e) => {
@@ -746,51 +760,47 @@ export default function AdminBoveda() {
         setErrorMaestra('Sólo el dueño de la bóveda puede usar la recovery key (§25).');
         return;
       }
-      if (formRecovery.nueva !== formRecovery.nueva2) {
-        setErrorMaestra('Las contraseñas maestras nuevas no coinciden.');
+      if (!formRecovery.password) {
+        setErrorMaestra('Escribe tu contraseña de panel.');
         return;
       }
-      if (formRecovery.nueva.length < 14) {
-        setErrorMaestra('Usa al menos 14 caracteres (§17.1).');
-        return;
-      }
+      if (!(await verificarPasswordPanel(formRecovery.password))) return;
       setTrabajando(true);
       try {
         const bytes = parsearRecoveryKey(formRecovery.key);
         const cliente = obtenerCliente();
-        const saltNuevo = saltAleatorio();
-        const r = await cliente.usarRecuperacion({
+        const r = await cliente.reenvolverDesdeRecuperacion({
           recoveryKey: bytes,
           salt: bootstrap.salt,
           vaultId: bootstrap.bovedaId,
-          masterNueva: formRecovery.nueva,
-          saltNuevo,
-          parametros: ARGON2,
+          passwordUsuario: formRecovery.password,
+          parametros: bootstrap.parametros,
           envolturas: bootstrap.recuperacion,
         });
         borrar(bytes);
 
-        await cambiarMasterPassword({
-          vaultId: bootstrap.bovedaId,
-          salt: saltNuevo,
-          parametros: parametrosUsados(ARGON2),
-          claves: r.claves,
-        });
+        for (const { keyVersion, envoltura } of r.envolturas) {
+          await guardarClavePropia({
+            vaultId: bootstrap.bovedaId,
+            keyVersion,
+            envoltura,
+          });
+        }
         // R107 — un solo uso: la recovery key queda revocada.
         await revocarRecuperacion(bootstrap.bovedaId);
         await registrarEvento({ evento: 'BOVED_RECOVERY', vaultId: bootstrap.bovedaId });
         // R109 — todas las sesiones, fuera.
         await revocarOtrasSesiones();
 
-        setFormRecovery({ key: '', nueva: '', nueva2: '' });
+        setFormRecovery({ key: '', password: '' });
         setViendoRecuperacion(false);
         setActivaRecovery(false);
         await recargar();
         setErrorMaestra(null);
         setMensaje(null);
         alert(
-          'Bóveda recuperada. La recovery key ha quedado revocada y las demás sesiones cerradas. ' +
-            'Entra ahora con tu nueva contraseña maestra.',
+          'Bóveda recuperada con tu contraseña de panel. La recovery key ha quedado revocada ' +
+            'y las demás sesiones cerradas. Desbloquea ahora con tu contraseña de usuario.',
         );
       } catch (err) {
         setErrorMaestra(err?.message || 'La recovery key no es válida.');
@@ -798,7 +808,7 @@ export default function AdminBoveda() {
         setTrabajando(false);
       }
     },
-    [bootstrap, formRecovery, obtenerCliente, recargar, soyDueno],
+    [bootstrap, formRecovery, obtenerCliente, recargar, soyDueno, verificarPasswordPanel],
   );
 
   if (cargando) {
@@ -839,6 +849,10 @@ export default function AdminBoveda() {
   }
 
   if (!desbloqueada) {
+    // §11 — sin envoltura propia todavía: se ofrece la maestra legado UNA
+    // vez, junto a la contraseña de panel, y al guardarla la siguiente
+    // apertura es sólo con la contraseña de usuario.
+    const migrando = !creada && Boolean(bootstrap?.migracionPendiente);
     return (
       <div className="m-6 max-w-lg rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex items-center gap-2">
@@ -849,8 +863,8 @@ export default function AdminBoveda() {
         </div>
         <p className="mt-2 text-sm text-gray-500">
           {creada
-            ? 'La contraseña maestra cifra tus secretos en este navegador y NUNCA se envía al servidor. Si la pierdes, nadie —ni el equipo de sistemas— podrá recuperarlos.'
-            : 'Se deriva la clave en tu equipo (Argon2id) y sólo se envía material cifrado.'}
+            ? 'La bóveda se envuelve con tu contraseña de panel: se deriva aquí (Argon2id) y NUNCA se envía al servidor — sólo se verifica contra el backend. Si la pierdes, usa la recovery key.'
+            : 'Se deriva la clave en tu equipo (Argon2id) con tu contraseña de usuario y sólo se envía material cifrado.'}
         </p>
 
         {sinClave && !bootstrap?.propiaReparable && (
@@ -887,13 +901,27 @@ export default function AdminBoveda() {
         )}
 
         <form onSubmit={creada ? alCrear : alDesbloquear} className="mt-5 space-y-3">
+          {migrando && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Primera apertura con clave por usuario: introduce la maestra legado y, además, tu
+              contraseña de panel. Al guardar, la bóveda queda envuelta bajo TÚ contraseña y después
+              sólo pedirá ésta.
+            </p>
+          )}
+
           <label className="block">
-            <span className="text-xs font-medium text-gray-600">Contraseña maestra</span>
+            <span className="text-xs font-medium text-gray-600">
+              {creada
+                ? 'Tu contraseña de panel'
+                : migrando
+                  ? 'Contraseña maestra (legado)'
+                  : 'Tu contraseña de usuario (contraseña de panel)'}
+            </span>
             <input
               type="password"
               value={master}
               onChange={(e) => setMaster(e.target.value)}
-              autoComplete="off"
+              autoComplete={migrando ? 'off' : 'current-password'}
               autoCorrect="off"
               spellCheck={false}
               required
@@ -903,12 +931,26 @@ export default function AdminBoveda() {
 
           {creada && (
             <label className="block">
-              <span className="text-xs font-medium text-gray-600">Repite la contraseña maestra</span>
+              <span className="text-xs font-medium text-gray-600">Repite tu contraseña de panel</span>
               <input
                 type="password"
                 value={master2}
                 onChange={(e) => setMaster2(e.target.value)}
-                autoComplete="off"
+                autoComplete="new-password"
+                required
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              />
+            </label>
+          )}
+
+          {migrando && !creada && (
+            <label className="block">
+              <span className="text-xs font-medium text-gray-600">Tu contraseña de panel</span>
+              <input
+                type="password"
+                value={master2}
+                onChange={(e) => setMaster2(e.target.value)}
+                autoComplete="current-password"
                 required
                 className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
               />
@@ -921,10 +963,21 @@ export default function AdminBoveda() {
 
           <button
             type="submit"
-            disabled={ocupado || master.length === 0 || sinClave || (creada && master2.length === 0)}
+            disabled={
+              ocupado ||
+              master.length === 0 ||
+              sinClave ||
+              ((creada || migrando) && master2.length === 0)
+            }
             className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
           >
-            {ocupado ? 'Derivando clave…' : creada ? 'Crear bóveda' : 'Desbloquear'}
+            {ocupado
+              ? 'Derivando clave…'
+              : creada
+                ? 'Crear bóveda'
+                : migrando
+                  ? 'Migrar y desbloquear'
+                  : 'Desbloquear'}
           </button>
         </form>
 
@@ -942,12 +995,13 @@ export default function AdminBoveda() {
                 onClick={() => setViendoRecuperacion(true)}
                 className="text-xs font-medium text-amber-600 hover:text-amber-700"
               >
-                ¿Olvidaste la contraseña maestra? Usa tu recovery key
+                ¿Olvidaste tu contraseña de usuario? Usa tu recovery key
               </button>
             ) : (
               <form onSubmit={alUsarRecovery} className="space-y-3">
                 <p className="text-xs text-gray-500">
-                  Se reenvolan las claves con una maestra nueva. Después, la recovery key queda
+                  Se reenvuelven las claves con tu contraseña de panel (si no la recuerdas,
+                  restablécela primero con «Olvidé mi contraseña»). Después, la recovery key queda
                   <strong> revocada</strong> y las demás sesiones se cierran (§25 R107/R109).
                 </p>
                 <label className="block">
@@ -961,22 +1015,17 @@ export default function AdminBoveda() {
                     className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-xs focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
                   />
                 </label>
-                {[
-                  ['nueva', 'Nueva contraseña maestra'],
-                  ['nueva2', 'Repite la nueva contraseña maestra'],
-                ].map(([campo, etiqueta]) => (
-                  <label key={campo} className="block">
-                    <span className="text-xs font-medium text-gray-600">{etiqueta}</span>
-                    <input
-                      type="password"
-                      value={formRecovery[campo]}
-                      onChange={(e) => setFormRecovery({ ...formRecovery, [campo]: e.target.value })}
-                      autoComplete="off"
-                      required
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                    />
-                  </label>
-                ))}
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-600">Tu contraseña de panel</span>
+                  <input
+                    type="password"
+                    value={formRecovery.password}
+                    onChange={(e) => setFormRecovery({ ...formRecovery, password: e.target.value })}
+                    autoComplete="current-password"
+                    required
+                    className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                  />
+                </label>
                 {errorMaestra && (
                   <p className="text-xs font-medium text-red-600" role="alert">{errorMaestra}</p>
                 )}
@@ -1068,9 +1117,9 @@ export default function AdminBoveda() {
             <p className="text-sm font-semibold text-gray-800">Mantenimiento de la bóveda</p>
             <p className="text-xs text-gray-500">
               {activaRecovery ? 'Recovery key activa' : 'Sin recovery key'} ·{' '}
-              {MAX_EXPORTS_POR_HORA} exportaciones/hora máx.
-              {!soyDueno &&
-                ' · Bóveda de equipo: cambiar la maestra y la recovery key es sólo del dueño'}
+              {MAX_EXPORTS_POR_HORA} exportaciones/hora máx. · Contraseña maestra retirada: la
+              bóveda se desbloquea y se reenvuelve con tu contraseña de panel (§11)
+              {!soyDueno && ' · La recovery key es sólo del dueño'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1086,19 +1135,6 @@ export default function AdminBoveda() {
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
             >
               {activaRecovery ? 'Renovar recovery key' : 'Crear recovery key'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPanel(panel === 'cambio' ? null : 'cambio')}
-              disabled={trabajando || !soyDueno}
-              title={
-                soyDueno
-                  ? undefined
-                  : 'Sólo el dueño de la bóveda puede cambiar la contraseña maestra (§27).'
-              }
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Cambiar maestra
             </button>
             <button
               type="button"
@@ -1127,12 +1163,12 @@ export default function AdminBoveda() {
               <form onSubmit={(e) => { e.preventDefault(); void alGenerarRecovery(); }} className="space-y-3">
                 <p className="text-xs text-gray-600">
                   Se genera <strong>en tu navegador</strong>, se guarda cifrada en tu bóveda y no se
-                  envía al servidor (§25.1). Si la pierdes junto con la maestra, nadie podrá abrir
-                  tus secretos — ni siquiera el administrador del sistema.
+                  envía al servidor (§25.1). Si la pierdes junto con tu contraseña de usuario,
+                  nadie podrá abrir tus secretos — ni siquiera el administrador del sistema.
                 </p>
                 <label className="block">
                   <span className="text-xs font-medium text-gray-600">
-                    Contraseña maestra (step-up §13)
+                    Tu contraseña de usuario (step-up §13)
                   </span>
                   <input
                     type="password"
@@ -1197,41 +1233,6 @@ export default function AdminBoveda() {
           </div>
         )}
 
-        {panel === 'cambio' && (
-          <form onSubmit={alCambiarMaestra} className="mt-4 space-y-3 border-t border-gray-100 pt-4">
-            {[
-              ['actual', 'Contraseña maestra actual'],
-              ['nueva', 'Nueva contraseña maestra'],
-              ['nueva2', 'Repite la nueva contraseña maestra'],
-            ].map(([campo, etiqueta]) => (
-              <label key={campo} className="block">
-                <span className="text-xs font-medium text-gray-600">{etiqueta}</span>
-                <input
-                  type="password"
-                  value={formCambio[campo]}
-                  onChange={(e) => setFormCambio({ ...formCambio, [campo]: e.target.value })}
-                  autoComplete="off"
-                  required
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                />
-              </label>
-            ))}
-            <p className="text-xs text-gray-500">
-              Sólo se reenvuelven las claves: los secretos NO se re-cifran (§27). Se exige la
-              maestra actual (step-up §13) y al terminar se cierran las demás sesiones (R119). La
-              maestra anterior queda disponible 7 días por si algún dispositivo no ha migrado
-              (R117).
-            </p>
-            <button
-              type="submit"
-              disabled={trabajando || formCambio.actual.length === 0 || formCambio.nueva.length === 0}
-              className="rounded-lg bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
-            >
-              {trabajando ? 'Reenvolviendo…' : 'Cambiar contraseña maestra'}
-            </button>
-          </form>
-        )}
-
         {panel === 'export' && (
           <form onSubmit={alExportar} className="mt-4 space-y-3 border-t border-gray-100 pt-4">
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -1250,7 +1251,7 @@ export default function AdminBoveda() {
             </div>
             <label className="block">
               <span className="text-xs font-medium text-gray-600">
-                Contraseña maestra (step-up §28)
+                Tu contraseña de usuario (step-up §28)
               </span>
               <input
                 type="password"

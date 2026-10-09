@@ -584,6 +584,10 @@ describe('Fase 4 §28 — export e import en el worker', () => {
       'usarRecuperacion',
       'crearExport',
       'abrirExport',
+      // --- Fase 3 §11 (KEK por usuario) ---
+      'migrarClaveUsuario',
+      'reenvolverConPassword',
+      'reenvolverDesdeRecuperacion',
       // --- Fase 5.1 ---
       'generarParAsimetrico',
       'abrirPar',
@@ -788,5 +792,172 @@ describe('Fase 5.1 — par asimétrico y compartición (§6.2, §26)', () => {
     await assert.rejects(
       antes.manejar({ tipo: 'abrirPar', datos: { envolturas: r.parAsimetrico, ...CONTEXTO_PAR } }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fase 3 §11 — la DEK pasa a estar envuelta bajo la CONTRASEÑA DE PANEL de
+// cada usuario (KEK por usuario). El salt y los parámetros NO rotan: son
+// los de la bóveda, compartidos por todos los miembros.
+// ---------------------------------------------------------------------------
+
+describe('Fase 3 §11 — KEK por usuario (contraseña de panel)', () => {
+  const PANEL = 'Panel-Passw0rd-2026!';
+
+  test('migrarClaveUsuario reenvuelve la DEK y el step-up pasa a la contraseña de panel', async () => {
+    const { salt, creada } = await conBovedaCreada();
+    const servicio = crearServicioBoveda();
+    await servicio.manejar({
+      tipo: 'desbloquear',
+      datos: { masterPassword: MAESTRA, salt, parametros: PARAMS },
+    });
+    // La DEK se abre antes de migrar: es lo que hace el UI al desbloquear
+    // (abrirDEK con la fila legado y DESPUÉS re-envolver).
+    await servicio.manejar({
+      tipo: 'abrirDEK',
+      datos: { envoltura: creada.dek.envoltura, contexto: CONTEXTO_DEK },
+    });
+
+    const r = await servicio.manejar({ tipo: 'migrarClaveUsuario', datos: { passwordUsuario: PANEL } });
+    assert.equal(r.contexto.keyVersion, CONTEXTO_DEK.keyVersion);
+    // Otro envoltorio (nonce nuevo): es otra KEK bajo el MISMO salt.
+    assert.notDeepEqual(r.envoltura.nonce, creada.dek.envoltura.nonce);
+
+    // El material del worker ya es el de la contraseña de panel: el step-up
+    // (§13) no vuelve a pedir la maestra legado.
+    const ok = await servicio.manejar({ tipo: 'verificarMaster', datos: { masterPassword: PANEL } });
+    assert.equal(ok.correcta, true);
+    const mal = await servicio.manejar({ tipo: 'verificarMaster', datos: { masterPassword: MAESTRA } });
+    assert.equal(mal.correcta, false);
+
+    // La fila nueva se abre con la contraseña de panel…
+    const nueva = crearServicioBoveda();
+    await nueva.manejar({ tipo: 'desbloquear', datos: { masterPassword: PANEL, salt, parametros: PARAMS } });
+    await nueva.manejar({ tipo: 'abrirDEK', datos: { envoltura: r.envoltura, contexto: r.contexto } });
+    const descifrado = await nueva.manejar({
+      tipo: 'descifrarItem',
+      datos: { envoltura: creada.envoltura, contextoItem: CONTEXTO_ITEM },
+    });
+    assert.deepEqual(await nueva.manejar({ tipo: 'deserializarItem', datos: descifrado }), ITEM);
+
+    // …y NO con la maestra legado.
+    const vieja = crearServicioBoveda();
+    await vieja.manejar({ tipo: 'desbloquear', datos: { masterPassword: MAESTRA, salt, parametros: PARAMS } });
+    await assert.rejects(
+      vieja.manejar({ tipo: 'abrirDEK', datos: { envoltura: r.envoltura, contexto: r.contexto } }),
+    );
+  });
+
+  test('migrarClaveUsuario exige la bóveda desbloqueada (§9)', async () => {
+    const servicio = crearServicioBoveda();
+    await assert.rejects(
+      servicio.manejar({ tipo: 'migrarClaveUsuario', datos: { passwordUsuario: PANEL } }),
+      (e) => e.codigo === CODIGOS.bloqueada,
+    );
+  });
+
+  test('reenvolverConPassword no exige desbloqueo y sólo devuelve la envoltura', async () => {
+    const { salt, creada } = await conBovedaCreada();
+    const servicio = crearServicioBoveda(); // nunca desbloqueado
+
+    const r = await servicio.manejar({
+      tipo: 'reenvolverConPassword',
+      datos: {
+        passwordActual: MAESTRA,
+        passwordNueva: PANEL,
+        salt,
+        parametros: PARAMS,
+        envoltura: creada.dek.envoltura,
+        contexto: CONTEXTO_DEK,
+      },
+    });
+    assert.notDeepEqual(r.envoltura.nonce, creada.dek.envoltura.nonce);
+
+    // El paso de cambio de contraseña NO desbloquea la bóveda para nada.
+    const estado = await servicio.estado();
+    assert.equal(estado.desbloqueado, false);
+    assert.equal(estado.dekAbierta, false);
+
+    // Abre con la contraseña nueva…
+    const nueva = crearServicioBoveda();
+    await nueva.manejar({ tipo: 'desbloquear', datos: { masterPassword: PANEL, salt, parametros: PARAMS } });
+    await nueva.manejar({ tipo: 'abrirDEK', datos: { envoltura: r.envoltura, contexto: CONTEXTO_DEK } });
+
+    // …y con la vieja no.
+    const vieja = crearServicioBoveda();
+    await vieja.manejar({ tipo: 'desbloquear', datos: { masterPassword: MAESTRA, salt, parametros: PARAMS } });
+    await assert.rejects(
+      vieja.manejar({ tipo: 'abrirDEK', datos: { envoltura: r.envoltura, contexto: CONTEXTO_DEK } }),
+    );
+  });
+
+  test('reenvolverConPassword con la contraseña actual equivocada no produce nada (R120)', async () => {
+    const { salt, creada } = await conBovedaCreada();
+    const servicio = crearServicioBoveda();
+    // La contraseña vieja no abre el envoltorio (fallo AEAD de §7) o, en
+    // cualquier caso, la muestra R120 de la envoltura nueva no llega a
+    // devolverse: nunca sale una envoltura "re-envuelta" con datos malos.
+    await assert.rejects(
+      servicio.manejar({
+        tipo: 'reenvolverConPassword',
+        datos: {
+          passwordActual: 'esta-no-es-la-contraseña',
+          passwordNueva: PANEL,
+          salt,
+          parametros: PARAMS,
+          envoltura: creada.dek.envoltura,
+          contexto: CONTEXTO_DEK,
+        },
+      }),
+    );
+  });
+
+  test('reenvolverDesdeRecuperacion funciona sin desbloquear y sin rotar el salt', async () => {
+    const { salt, creada } = await conBovedaCreada();
+    const recoveryKey = new Uint8Array(32).fill(7);
+
+    // Activa la recovery key (dueño, con la maestra legado todavía).
+    const activa = crearServicioBoveda();
+    await activa.manejar({
+      tipo: 'desbloquear',
+      datos: { masterPassword: MAESTRA, salt, parametros: PARAMS },
+    });
+    const activada = await activa.manejar({
+      tipo: 'activarRecuperacion',
+      datos: { recoveryKey, salt, vaultId: 'v-1', envolturas: [{ keyVersion: 1, envoltura: creada.dek.envoltura }] },
+    });
+
+    // Se ejecuta en una sesión BLOQUEADA: es lo que corre cuando la
+    // contraseña de panel se olvidó y sólo queda la recovery key.
+    const servicio = crearServicioBoveda();
+    const r = await servicio.manejar({
+      tipo: 'reenvolverDesdeRecuperacion',
+      datos: {
+        recoveryKey,
+        salt,
+        vaultId: 'v-1',
+        passwordUsuario: PANEL,
+        parametros: PARAMS,
+        envolturas: activada.envolturas,
+      },
+    });
+    assert.equal(r.envolturas.length, 1);
+    assert.notDeepEqual(r.envolturas[0].envoltura.nonce, activada.envolturas[0].envoltura.nonce);
+    const estado = await servicio.estado();
+    assert.equal(estado.desbloqueado, false);
+
+    // MISMO salt (no rota: los demás miembros siguen derivando con él) y la
+    // DEK se abre con la contraseña de panel.
+    const nueva = crearServicioBoveda();
+    await nueva.manejar({ tipo: 'desbloquear', datos: { masterPassword: PANEL, salt, parametros: PARAMS } });
+    await nueva.manejar({
+      tipo: 'abrirDEK',
+      datos: { envoltura: r.envolturas[0].envoltura, contexto: CONTEXTO_DEK },
+    });
+    const descifrado = await nueva.manejar({
+      tipo: 'descifrarItem',
+      datos: { envoltura: creada.envoltura, contextoItem: CONTEXTO_ITEM },
+    });
+    assert.deepEqual(await nueva.manejar({ tipo: 'deserializarItem', datos: descifrado }), ITEM);
   });
 });

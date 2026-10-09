@@ -445,6 +445,149 @@ export function crearServicioBoveda() {
       }
     },
 
+    // -----------------------------------------------------------------------
+    // §11 — KEK por usuario (contraseña de panel).
+    //
+    // La DEK de la bóveda sigue siendo una sola; lo que cambia es QUIÉN la
+    // envuelve: cada usuario guarda SU envoltura bajo
+    // Argon2id(SU contraseña de panel, kdf_salt de la bóveda). El AAD de la
+    // envoltura no cambia (§7): una fila legado (fuente='maestra') y una
+    // propia (fuente='usuario') sólo se distinguen con qué KEK se abren, y
+    // el salt NUNCA rota aquí — lo comparten el resto de la bóveda.
+    //
+    // Estos tres métodos son los ÚNICOS sitios donde se deriva una KEK que
+    // no es la vigente; igual que en Fase 4, sólo salen envolturas cifradas
+    // y el material temporal se sobreescribe (§15.1 R51).
+    // -----------------------------------------------------------------------
+
+    /**
+     * Migración (una sola vez): la bóveda acaba de abrirse con la maestra
+     * LEGADO y aquí la DEK ya abierta se reenvuelve bajo la contraseña de
+     * panel del usuario. Al terminar, el material del worker pasa a ser el
+     * de la contraseña de usuario, así que el step-up (§13) y las
+     * operaciones siguientes ya no piden la maestra.
+     *
+     * La corrección de `passwordUsuario` contra el panel NO se comprueba
+     * aquí (no hay red en el worker): la valida el caller con
+     * `POST /auth/verify-password` ANTES de llamar y R120 comprueba la
+     * re-envoltura ANTES de que la fila se guarde.
+     */
+    async migrarClaveUsuario({ passwordUsuario }) {
+      const actual = exigirDesbloqueada();
+      const dek = exigirDEK();
+      validarMasterPassword(passwordUsuario);
+      const contexto = { ...dek.contexto, proposito: PROPOSITOS.dek };
+      let nuevo = null;
+      try {
+        nuevo = derivarMaterialMaestro(passwordUsuario, actual.salt, actual.parametros);
+        const envoltura = await envolverClave(nuevo.kek, dek.clave, contexto);
+
+        // R120 — si la muestra no re-abre, no se devuelve nada.
+        const reabierta = await desenvolverClave(nuevo.kek, envoltura, contexto);
+        const coincide = igualdadConstante(reabierta, dek.clave);
+        borrar(reabierta);
+        if (!coincide) {
+          throw new ErrorBoveda(
+            'Verificación post-migración de la clave de usuario fallida (R120)',
+            CODIGOS.masterIncorrecta,
+          );
+        }
+
+        // El material vigente pasa a la contraseña de usuario: la maestra
+        // legado ya no se pide en esta sesión.
+        borrarMaterial(actual);
+        material = nuevo;
+        nuevo = null;
+        return { envoltura, contexto: { ...dek.contexto } };
+      } finally {
+        if (nuevo) borrarMaterial(nuevo);
+      }
+    },
+
+    /**
+     * Reenvuelve la envoltura de la DEK bajo OTRA contraseña de panel con
+     * el MISMO salt y parámetros. NO exige bóveda desbloqueada: abre con
+     * `passwordActual` y devuelve la envoltura nueva (R120 verificada).
+     *
+     * Lo usa el cambio de contraseña del panel (ChangePasswordPage): si la
+     * contraseña actual no abre la envoltura, falla ANTES de tocar nada.
+     */
+    async reenvolverConPassword({ passwordActual, passwordNueva, salt, parametros, envoltura, contexto }) {
+      validarMasterPassword(passwordActual);
+      validarMasterPassword(passwordNueva);
+      const bytesSalt = aBytes(salt, 'salt');
+      const kekActual = derivarMaterialMaestro(passwordActual, bytesSalt, parametros);
+      const kekNueva = derivarMaterialMaestro(passwordNueva, bytesSalt, parametros);
+      const aad = { ...contexto, proposito: PROPOSITOS.dek };
+      let dek = null;
+      try {
+        dek = await desenvolverClave(kekActual.kek, envoltura, aad);
+        const nueva = await envolverClave(kekNueva.kek, dek, aad);
+
+        // R120 — si la muestra no re-abre con la KEK nueva, no se devuelve.
+        const reabierta = await desenvolverClave(kekNueva.kek, nueva, aad);
+        const coincide = igualdadConstante(reabierta, dek);
+        borrar(reabierta);
+        if (!coincide) {
+          throw new ErrorBoveda(
+            'Verificación post-re-envoltura fallida (R120)',
+            CODIGOS.masterIncorrecta,
+          );
+        }
+        return { envoltura: nueva };
+      } finally {
+        if (dek) borrar(dek);
+        borrarMaterial(kekActual);
+        borrarMaterial(kekNueva);
+      }
+    },
+
+    /**
+     * §25 + §11 — recuperar con la recovery key: abre las DEKs con la KEK
+     * de recuperación y las reenvuelve bajo la contraseña de panel con el
+     * MISMO salt (no rota: el resto de usuarios de la bóveda siguen
+     * derivando con él). NO exige desbloqueo — es lo que corre cuando la
+     * contraseña de panel se olvidó — y NO rota nada más: el caller sólo
+     * guarda/actualiza SU fila `fuente='usuario'`.
+     */
+    async reenvolverDesdeRecuperacion({ recoveryKey, salt, vaultId, passwordUsuario, parametros, envolturas }) {
+      validarMasterPassword(passwordUsuario);
+      const bytesSalt = aBytes(salt, 'salt');
+      const kekRec = derivarKEKRecuperacion(aBytes(recoveryKey, 'recoveryKey'), bytesSalt);
+      const kekUsuario = derivarMaterialMaestro(passwordUsuario, bytesSalt, parametros);
+      let abiertas = [];
+      try {
+        abiertas = await desenvolverDEKsDeRecuperacion(
+          kekRec,
+          envolturas.map((c) => ({ keyVersion: c.keyVersion, envoltura: c.envoltura })),
+          vaultId,
+        );
+
+        const salida = [];
+        for (const { keyVersion, dek } of abiertas) {
+          const aad = { vaultId, keyVersion, proposito: PROPOSITOS.dek };
+          const envoltura = await envolverClave(kekUsuario.kek, dek, aad);
+
+          // R120 — muestra completa ANTES de que nadie escriba en servidor.
+          const reabierta = await desenvolverClave(kekUsuario.kek, envoltura, aad);
+          const coincide = igualdadConstante(reabierta, dek);
+          borrar(reabierta);
+          if (!coincide) {
+            throw new ErrorBoveda(
+              'Verificación post-recuperación de la clave de usuario fallida (R120)',
+              CODIGOS.masterIncorrecta,
+            );
+          }
+          salida.push({ keyVersion, envoltura });
+        }
+        return { envolturas: salida };
+      } finally {
+        borrar(kekRec);
+        borrarMaterial(kekUsuario);
+        abiertas.forEach(({ dek }) => borrar(dek));
+      }
+    },
+
     /**
      * §28 — el Argon2id del export bloquea ~1,3 s, así que corre aquí y no
      * en el hilo principal (§15.1 R52). El passphrase de export nunca se
@@ -584,6 +727,10 @@ export function crearServicioBoveda() {
         deserializarItem: this.deserializarItem,
         reconstruirAAD: this.reconstruirAAD,
         reconstruirAADEnvoltura: this.reconstruirAADEnvoltura,
+        // --- §11 KEK por usuario (contraseña de panel) ---
+        migrarClaveUsuario: this.migrarClaveUsuario,
+        reenvolverConPassword: this.reenvolverConPassword,
+        reenvolverDesdeRecuperacion: this.reenvolverDesdeRecuperacion,
         cambiarMasterPassword: this.cambiarMasterPassword,
         activarRecuperacion: this.activarRecuperacion,
         usarRecuperacion: this.usarRecuperacion,

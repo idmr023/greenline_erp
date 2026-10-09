@@ -117,7 +117,12 @@ export async function obtenerOwnerId() {
  * `dek_previa` de §27 R117, que sólo existen durante la ventana de
  * migración tras un cambio de maestra.
  *
- * @returns {Promise<{boveda:object, propiaSinClave:boolean, propiaId:string|null, propiaReparable:boolean, clave:object|null, claves:Array, clavesPrevias:Array, items:Array, salt:Uint8Array|null}>}
+ * §11 — con la KEK por usuario cada quién guarda SU envoltura:
+ * `clave` es la que abre para MÍ (propia si existe; si no, la maestra
+ * legado), `clavePropia` es la mía bajo mi contraseña de panel y
+ * `migracionPendiente` avisa de que todavía no la tengo (modo migración).
+ *
+ * @returns {Promise<{boveda:object, propiaSinClave:boolean, propiaId:string|null, propiaReparable:boolean, clave:object|null, clavePropia:object|null, migracionPendiente:boolean, claves:Array, clavesPrevias:Array, items:Array, salt:Uint8Array|null}>}
  */
 export async function cargarBoveda() {
   // Con bóvedas de equipo el RLS devuelve varias filas (la propia y las
@@ -183,7 +188,32 @@ export async function cargarBoveda() {
     envoltura: envolturaDeFila(fila),
     contexto: { vaultId: fila.vault_id, keyVersion: fila.key_version },
   });
-  const clavesVigentes = clavesVisibles.map(aEnvoltura).sort((a, b) => a.keyVersion - b.keyVersion);
+
+  // §11 — con la envoltura POR USUARIO conviven dos familias de fila en la
+  // misma bóveda:
+  //  • PROPIA (user_id == yo, fuente='usuario'): se abre con MI contraseña
+  //    de panel. Es la que desbloquea.
+  //  • LEGADO (fuente='maestra'): la maestra de la bóveda. Sólo se usa en
+  //    el modo de migración (la primera vez que entro) y queda ahí como
+  //    respaldo (p. ej. tras un reset de contraseña de panel).
+  const esPropia = (fila) => fila.user_id === uid && fila.fuente === 'usuario';
+  const mayorVersion = (filas) => filas.slice().sort((a, b) => b.key_version - a.key_version)[0] || null;
+  const propias = clavesVisibles.filter(esPropia);
+  const legado = clavesVisibles.filter((f) => !esPropia(f));
+  const filaPropia = mayorVersion(propias);
+  const filaLegado = mayorVersion(legado);
+  // La que se usa para desbloquear: la propia si existe; si no, el legado.
+  const filaClave = filaPropia || filaLegado;
+
+  // `claves` es el conjunto que se reenvuelve bajo la recovery key (§25):
+  // UNA envoltura por keyVersion (la propia pisa a la legado — envuelven la
+  // MISMA DEK), para no chocar con el índice único de la tabla.
+  const porVersion = new Map();
+  for (const fila of clavesVisibles) {
+    const previa = porVersion.get(fila.key_version);
+    if (!previa || (esPropia(fila) && !esPropia(previa))) porVersion.set(fila.key_version, fila);
+  }
+  const clavesVigentes = [...porVersion.values()].map(aEnvoltura).sort((a, b) => a.keyVersion - b.keyVersion);
   const clavesPrevias = previasVisibles.map(aEnvoltura).sort((a, b) => a.keyVersion - b.keyVersion);
 
   return {
@@ -197,7 +227,13 @@ export async function cargarBoveda() {
     // auth.uid() del que llama. Permite distinguir en UI si la bóveda es
     // suya (rekey §27 y recovery §25 son de propiedad en RLS).
     yo: uid,
-    clave: clavesVigentes[0] || null,
+    clave: filaClave ? aEnvoltura(filaClave) : null,
+    // Mi envoltura bajo MI contraseña de panel (null = todavía no existe).
+    clavePropia: filaPropia ? aEnvoltura(filaPropia) : null,
+    // §11 — true = no tengo envoltura propia y sólo está la maestra legado:
+    // el desbloqueo se ofrece en modo migración (maestra + contraseña de
+    // panel) UNA sola vez; después se guarda la fila propia.
+    migracionPendiente: Boolean(filaLegado) && !filaPropia,
     claves: clavesVigentes,
     clavesPrevias,
     items: itemsVisibles.map((fila) => ({
@@ -291,17 +327,54 @@ export async function crearBoveda({ id, salt, parametros, envolturaClave, keyVer
   return { boveda: creada, bovedaId: creada.id };
 }
 
-/** §7 — guarda una DEK envuelta. `AAD` ya lleva `key_version` (R10). */
-export async function guardarClave(vaultId, keyVersion, envoltura) {
+/** §7 + §11 — guarda una DEK envuelta. `AAD` ya lleva `key_version` (R10). */
+export async function guardarClave(vaultId, keyVersion, envoltura, { fuente = 'usuario' } = {}) {
   const fila = {
     vault_id: vaultId,
     key_version: keyVersion,
     proposito: 'dek',
+    // §11 — por defecto, envuelta bajo la contraseña de PANEL del que
+    // inserta (user_id es DEFAULT auth.uid()). `fuente='maestra'` sólo lo
+    // escriben las migraciones legado.
+    fuente,
     ...filaDeEnvoltura(envoltura),
   };
   return consultar(TABLAS.claves, () =>
     supabase.from(TABLAS.claves).insert(fila).select().single(),
   );
+}
+
+/**
+ * §11 — guarda (o ACTUALIZA) la envoltura PROPIA de la DEK: la envuelta
+ * bajo MI contraseña de panel.
+ *
+ * Es un upsert sobre el índice único (vault_id, user_id, key_version,
+ * proposito): si ya existía mi fila (cambio de contraseña o recuperación)
+ * se reemplaza el envoltorio; si no (migración, primera vez), se inserta.
+ * `user_id` sale del DEFAULT auth.uid() y el RLS de miembro sólo admite
+ * filas con `user_id = auth.uid()` y `proposito='dek'`.
+ *
+ * @param {object} args
+ * @param {string} args.vaultId
+ * @param {number} args.keyVersion
+ * @param {object} args.envoltura
+ */
+export async function guardarClavePropia({ vaultId, keyVersion, envoltura }) {
+  if (!vaultId || !Number.isInteger(keyVersion)) {
+    throw new Error('guardarClavePropia: faltan vaultId o keyVersion');
+  }
+  const fila = {
+    vault_id: vaultId,
+    key_version: keyVersion,
+    proposito: 'dek',
+    fuente: 'usuario',
+    ...filaDeEnvoltura(envoltura),
+  };
+  const { error } = await supabase
+    .from(TABLAS.claves)
+    .upsert(fila, { onConflict: 'vault_id,user_id,key_version,proposito' });
+  if (error) throw traducir(error, TABLAS.claves);
+  return true;
 }
 
 /** §10 — alta de item cifrado. */

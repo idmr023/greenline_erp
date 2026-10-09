@@ -64,7 +64,7 @@ export function useStepUp({ proposito, itemRef = null, transporte = null } = {})
       try {
         const correcta = await verificarMaster(masterPassword);
         if (!correcta) {
-          setError('La contraseña maestra no es correcta.');
+          setError('La contraseña de usuario no es correcta.');
           setUltimoOk(false);
           return false;
         }

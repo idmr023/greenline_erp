@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useVault } from '../contexts/VaultContext';
 import { authAPI } from '../lib/api';
 import { PasswordSchema } from '../lib/password';
 import PasswordStrength from '../components/auth/PasswordStrength';
 import { linkSupabase } from '../lib/supabaseLink';
+import { cargarBoveda, guardarClavePropia } from '../lib/vault/api';
 import { Lock, AlertCircle, Loader2 } from '../lib/icons';
 
 export default function ChangePasswordPage() {
   const { user, accessToken, saveSession } = useAuth();
+  const { obtenerCliente } = useVault();
   const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -32,9 +35,76 @@ export default function ChangePasswordPage() {
     }
     setLoading(true);
     setError('');
+
+    // §11 — la bóveda se desbloquea con la contraseña de PANEL, así que al
+    // cambiarla hay que re-envolver la DEK con la nueva ANTES de que el
+    // backend la acepte (save-first): si el re-envoltorio falla, NADA ha
+    // cambiado todavía; si el backend falla después, se revierte la fila.
+    let clave = null; // fila propia cargada antes de re-envolver
+    let reenvuelta = null; // envoltura bajo la contraseña NUEVA
+    let salt = null; // salt de bóveda (no rota con el cambio de panel)
+    let parametros = null; // snapshot KDF de la bóveda
+    try {
+      const b = await cargarBoveda();
+      clave = b?.bovedaId ? b.clavePropia : null;
+      if (clave) {
+        salt = b.salt;
+        parametros = b.parametros;
+        let abrir;
+        try {
+          abrir = await obtenerCliente().reenvolverConPassword({
+            passwordActual: currentPassword,
+            passwordNueva: newPassword,
+            salt,
+            parametros,
+            envoltura: clave.envoltura,
+            contexto: clave.contexto,
+          });
+        } catch {
+          // Abrir con la contraseña vieja falló: o la contraseña actual es
+          // incorrecta o la muestra R120 no cuadra — en cualquier caso NO
+          // se toca nada (ni servidor ni fila).
+          setLoading(false);
+          setError('La contraseña actual no es correcta.');
+          return;
+        }
+        reenvuelta = abrir.envoltura;
+        await guardarClavePropia({
+          vaultId: clave.contexto.vaultId,
+          keyVersion: clave.contexto.keyVersion,
+          envoltura: reenvuelta,
+        });
+      }
+    } catch (err) {
+      setLoading(false);
+      setError(
+        `No se pudo re-envolver la clave de la bóveda: ${err?.message || 'error guardándola'}`,
+      );
+      return;
+    }
+
     try {
       await authAPI.changePassword(currentPassword, newPassword, accessToken);
     } catch (err) {
+      // El backend no aceptó el cambio: la fila ya está bajo la contraseña
+      // nueva, así que se revierte para que siga cuadrando con el panel.
+      if (clave && reenvuelta) {
+        try {
+          const { envoltura } = await obtenerCliente().reenvolverConPassword({
+            passwordActual: newPassword,
+            passwordNueva: currentPassword,
+            salt,
+            parametros,
+            envoltura: reenvuelta,
+            contexto: clave.contexto,
+          });
+          await guardarClavePropia({
+            vaultId: clave.contexto.vaultId,
+            keyVersion: clave.contexto.keyVersion,
+            envoltura,
+          });
+        } catch { /* el error real es el del backend */ }
+      }
       const detalle = Array.isArray(err?.details?.body) ? err.details.body[0] : null;
       setError(detalle || err?.error || err?.message || 'No se pudo cambiar la contraseña');
       setLoading(false);
@@ -66,6 +136,10 @@ export default function ChangePasswordPage() {
           <h1 className="text-xl font-bold text-gray-900">Cambia tu contraseña</h1>
           <p className="text-sm text-gray-500 mt-1">
             Por seguridad, debes reemplazar la contraseña temporal antes de continuar.
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Si usas la bóveda segura, su clave se re-envuelve con la contraseña nueva en tu
+            navegador — después desbloquearás con ella.
           </p>
         </div>
         {error && (

@@ -15,6 +15,12 @@ greenline_erp/
 │   ├── package.json   dependencias y scripts del panel
 │   └── vite.config.js alias '@' -> src; fs.allow para imports ?raw de docs/
 ├── scripts/           utilidades del ERP (ver §4)
+├── dashboard/         Dashboard Python (Flask) conectado a Google Sheets (ver §4)
+│   ├── config/        fuentes.yaml — ENLACES de las hojas (cambiar URL = cambiar fuente)
+│   ├── services/      sheets.py — lector de Google Sheets públicos (CSV)
+│   ├── app.py         rutas Flask del dashboard
+│   ├── templates/     páginas Jinja2 (index, ejemplo KPIs/Chart.js, error)
+│   └── README.md      guía para crear dashboards propios sobre la base
 ├── docs/              documentación, sprints y propuestas del ERP
 └── AGENTS.md          este documento
 ```
@@ -50,15 +56,27 @@ Los scripts de este repo cuyos datos o workflows viven en el sitio lo indican ex
 ### Raíz del repo (este repo)
 | Comando | Qué hace |
 |---|---|
-| `npm run dev` | Dev server Vite del panel |
+| `npm run dev` | Dev server Vite del panel (sólo localhost) |
+| `npm run all` | ERP (Vite `--host`) + dashboard Flask (0.0.0.0:5000) para verlo desde la red Wi-Fi con la IP LAN (`ipconfig`) |
 | `npm run build` | Build de producción (`frontend/dist/`) |
 | `npm run preview` | Vista previa del build servida por Vite |
 | `npm run lint` | Oxlint sobre `frontend/src` + `scripts/auditar-sinks-html.mjs` (falla si hay un `innerHTML` sin `sanitizeHtml`) |
 | `npm run lint:html` | Sólo la auditoría de sinks de HTML |
-| `npm test` | `node --test` sobre `frontend/src/**/*.test.js` (suite de criptografía de la bóveda, V5) |
+| `npm test` | `node --test` sobre `frontend/src/lib/*.test.js` + `frontend/src/lib/vault/*.test.js` (suite de criptografía de la bóveda, V5; sin `**`: no expande en `sh`/Node 20) |
 | `npm run pdf:ceo` | Regenera `docs/Propuesta_CEO/presentacion-ceo.pdf` (requiere `npm i -D puppeteer` local) |
 | `npm run emails:limpiar` | `scripts/limpiar-emails.mjs` — limpia/deduplica CSVs de `docs/emails/` |
 | `npm run emails:lote` | `scripts/gen-lote-n8n.mjs` — genera la lista embebida del workflow n8n |
+
+### dashboard/ (Python + Flask, Google Sheets)
+| Comando (desde `dashboard/`) | Qué hace |
+|---|---|
+| `py -m venv .venv` | Crea el entorno virtual (una sola vez; Python 3.13+ vía winget) |
+| `.venv\Scripts\python -m pip install -r requirements.txt` | Instala dependencias (flask, requests, pyyaml, pandas) |
+| `.venv\Scripts\python app.py` | Arranca el dashboard en http://127.0.0.1:5000 |
+
+Las fuentes de datos se editan en `dashboard/config/fuentes.yaml` (enlaces de
+Google Sheets compartidos como «Cualquier persona con el enlace puede ver»).
+Guía de dashboards propios: `dashboard/README.md`.
 
 ### scripts/ (o `node scripts/<archivo>` desde la raíz)
 | Script | Qué hace |
@@ -72,8 +90,9 @@ Los scripts de este repo cuyos datos o workflows viven en el sitio lo indican ex
 | Comando | Qué hace |
 |---|---|
 | `npm run lint` / `npm run build` | Oxlint + build del sitio |
-| `npm run security-smoke` | Humo de seguridad del backend (sin BD) |
+| `npm run security-smoke` | Humo de seguridad del backend. El paso de RLS (`backend/scripts/rls-smoke.mjs`) necesita BD: si no la hay se omite y avisa. `SMOKE_RLS_STRICT=1` lo convierte en fallo. |
 | `npm test` (en `backend/`) | Vitest del backend |
+| `npm run rbac:check` (en `backend/`) | Paridad BD ↔ catálogo de permisos (sólo lectura; sale con 1 si falta algo) |
 | `npm run apply-audit-rls` | Audit triggers + RLS de auth |
 
 ## 5. Control de Calidad y Verificación
@@ -82,11 +101,12 @@ Los scripts de este repo cuyos datos o workflows viven en el sitio lo indican ex
   - `npm test` — suite de criptografía de `frontend/src/lib/vault/` en verde.
   - `npm run build` (frontend del panel) — debe compilar sin errores.
   - Smoke del SPA: `npm run preview` y comprobar que `/`, `/login`, `/admin` y `/fase-2-implementacion` montan sin errores de runtime.
+  - Si se toca `dashboard/`: arrancar `.venv\Scripts\python app.py` y comprobar `/` y `/api/datos/<id>` con una hoja pública.
   - Si se toca lógica que depende del backend/RLS, verificar también en el repo hermano `greenline`: `npm run lint`, `npm run security-smoke`, `npm test` (en `backend/`).
 - Mantener la concisión y la precisión técnica en las respuestas y documentación.
 
 ## 6. Despliegue
-- **El panel es una SPA propia:** build `npm run build`, salida `frontend/dist/`, `noindex,nofollow` en `index.html`.
+- **El panel es una SPA propia:** build `npm run build`, salida `frontend/dist/`, `noindex,nofollow` en `index.html`. Desplegada en **Vercel**.
+- **Dashboard Flask:** función Python serverless en el mismo proyecto Vercel, bajo `/dash` (`api/index.py` + `requirements.txt` raíz + rewrites en `vercel.json`). El ERP lo embebe same-origin con `<iframe src="/dash/">`. En local usa `http://127.0.0.1:5000` (ver `dashboard/README.md` §8).
 - **Backend (Render)** en el repo hermano; el frontend lo apunta con `VITE_API_URL` (ver `frontend/.env.example`).
-- El hosting definitivo del ERP está por definir; en local se sirve con `npm run dev`.
 - Rotar cualquier secreto que haya llegado a quedar expuesto antes de publicar.

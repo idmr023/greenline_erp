@@ -1,0 +1,56 @@
+# ============================================================
+# Fuentes de datos del dashboard (Google Sheets)
+# ============================================================
+# AQUÍ SE COLOCAN LOS ENLACES. Cambiar la `url` cambia la fuente
+# de datos del dashboard — no hace falta tocar código.
+#
+# Cada fuente necesita:
+#   id:      nombre corto SIN espacios ni acentos (se usa en la URL
+#            del dashboard, p. ej. /dashboard/inventario)
+#   nombre:  etiqueta que se ve en el selector de la página
+#   url:     enlace completo del Google Sheet (compartido como
+#            "Cualquier persona con el enlace puede ver")
+#   hojas:   QUÉ pestañas leer. Tres formas:
+#              hojas: "*"              → TODAS las pestañas (auto-descubre
+#                                        vía GOOGLE_SHEETS_API_KEY; cada fila
+#                                        lleva una columna extra `_pestaña`)
+#              hojas: ["PestañaA", "B"] → SOLO esas pestañas (lista explícita)
+#              hoja: "Pestaña"          → UNA sola pestaña (sin columna extra)
+#            Si no se define ninguna, se lee la primera pestaña.
+#   activa:  true/false — false oculta la fuente sin borrarla
+#
+# IMPORTANTE: la hoja debe estar compartida públicamente
+# (Archivo → Compartir → "Cualquier persona con el enlace puede ver").
+# Para `hojas: "*"`, además se necesita GOOGLE_SHEETS_API_KEY en .env / env vars.
+# ============================================================
+
+fuentes:
+  - id: evaluacion-armadores
+    nombre: "Evaluación Armadores (Cierre de Mes)"
+    url: "https://docs.google.com/spreadsheets/d/1HD0Kvvcv07C72OIP4oTN46nnB8boyczDOOsV12s_nIY/edit?usp=sharing"
+    hojas: "*"
+    activa: true
+
+  - id: servicio-tecnico
+    nombre: "Servicio Técnico por Sede"
+    url: "https://docs.google.com/spreadsheets/d/11ICzmdhDtUSMQ79DKJMLkxwCFrjfjynv_EzcwOyfqNU/edit?usp=sharing"
+    hojas: "*"
+    activa: true
+
+  - id: garantias
+    nombre: "Registro de Garantías"
+    url: "https://docs.google.com/spreadsheets/d/1QOVC7a2OObCoArFScjfyJDwgjHVdhl46cuw4iP5dLkw/edit"
+    hojas: "*"
+    activa: true
+
+  - id: evaluacion-emp
+    nombre: "Evaluación Mensual Armados"
+    url: "https://docs.google.com/spreadsheets/d/1siYce_vZU_fRvORUWLymk25DxajUQFoUBhWti-PFIOE/edit?usp=sharing"
+    hojas: "*"
+    activa: true
+
+  - id: armado-despacho
+    nombre: "Registro Armado y Despacho"
+    url: "https://docs.google.com/spreadsheets/d/1Ro2UChVGcXzxQ972g8Hn7Q2dNHqASV4Hx3hdd7G663s/edit"
+    hojas: "*"
+    activa: true

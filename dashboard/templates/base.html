@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Dashboard GreenLine{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+  {% block cabeza %}{% endblock %}
+</head>
+<body>
+  <header class="barra">
+    <a class="marca" href="{{ url_for('index') }}">GreenLine · Dashboard</a>
+    <nav>
+      <a href="{{ url_for('index') }}">Datos</a>
+    </nav>
+  </header>
+  <main class="contenedor">
+    {% block contenido %}{% endblock %}
+  </main>
+  <footer class="pie">
+    Fuentes configuradas en <code>config/fuentes.yaml</code>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

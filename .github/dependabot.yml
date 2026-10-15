@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: America/Lima
+    # 0 = no abre PRs (pausado); subir a 5 para reactivar
+    open-pull-requests-limit: 0
+    labels: [dependencies]
+    commit-message:
+      prefix: chore
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: America/Lima
+    # 0 = no abre PRs (pausado); quitar la línea para reactivar
+    open-pull-requests-limit: 0
+    labels: dependencies
+    commit-message:
+      prefix: ci

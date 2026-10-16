@@ -21,6 +21,6 @@ updates:
       timezone: America/Lima
     # 0 = no abre PRs (pausado); quitar la línea para reactivar
     open-pull-requests-limit: 0
-    labels: dependencies
+    labels: [dependencies]
     commit-message:
       prefix: ci

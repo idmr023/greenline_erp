@@ -7,6 +7,7 @@
 import { supabase } from './supabase';
 import { versionarImagen, versionarImagenAltaResolucion } from './images';
 import { normalizeColorName } from './colores';
+import { cacheGet, cacheSet, cacheClear } from './cache';
 
 const supabaseConfigured = !!(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -18,7 +19,11 @@ const supabaseConfigured = !!(
 
 let _productosCache = null;
 let _productosCacheTs = 0;
+// En memoria: corto, para la sesión activa. En localStorage: 30 min, para
+// que las recargas de la SPA no vuelvan a golpear PostgREST (egress).
 const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_PERSIST_MS = 30 * 60_000;
+const CACHE_KEY = 'productos';
 
 export async function fetchProductos({ force = false } = {}) {
   if (!force && _productosCache && Date.now() - _productosCacheTs < CACHE_TTL_MS) {
@@ -32,11 +37,24 @@ export async function fetchProductos({ force = false } = {}) {
     return _productosCache;
   }
 
+  if (!force) {
+    const persistido = cacheGet(CACHE_KEY, CACHE_TTL_PERSIST_MS);
+    if (persistido) {
+      _productosCache = persistido;
+      _productosCacheTs = Date.now();
+      return _productosCache;
+    }
+  }
+
   try {
     _productosCache = await fetchFromSupabase();
+    cacheSet(CACHE_KEY, _productosCache);
   } catch (err) {
     console.warn('Supabase fetch failed:', err.message);
-    _productosCache = [];
+    // Stale de respaldo: si falla la red, sirve el último catálogo conocido
+    // aunque haya vencido, en vez de vaciar la tienda. No se persiste el
+    // fallo: un error transitorio no debe envenenar la caché.
+    _productosCache = cacheGet(CACHE_KEY, Number.MAX_SAFE_INTEGER) || [];
   }
   _productosCacheTs = Date.now();
   return _productosCache;
@@ -45,6 +63,7 @@ export async function fetchProductos({ force = false } = {}) {
 export function clearCache() {
   _productosCache = null;
   _productosCacheTs = 0;
+  cacheClear(CACHE_KEY);
 }
 
 // ============================================================

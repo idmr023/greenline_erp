@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block titulo %}Servicio Técnico · Dashboard GreenLine{% endblock %}
+{% block cabeza %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+{% block contenido %}
+  <h1>Servicio Técnico por Sede</h1>
+  <p class="sutil">Generado el {{ generado }} · <a href="{{ url_for('index') }}">volver al selector</a></p>
+
+  {# ============ KPIs GENERALES ============ #}
+  <div class="tarjetas">
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Total Servicios</span>
+      <span class="kpi-valor">{{ totales.get('servicios', 0) }}</span>
+    </div>
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Técnicos</span>
+      <span class="kpi-valor">{{ totales.get('tecnicos', 0) }}</span>
+    </div>
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Prod. Promedio</span>
+      <span class="kpi-valor">{{ totales.get('prod', 0) }}</span>
+    </div>
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">MTTR (días)</span>
+      <span class="kpi-valor">{{ totales.get('mttr', 0) }}</span>
+    </div>
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Tasa FTF</span>
+      <span class="kpi-valor">{{ '%.1f' | format(totales.get('ftf', 0)) }}%</span>
+    </div>
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Cumplimiento Meta</span>
+      <span class="kpi-valor">{{ '%.1f' | format(totales.get('cumplimiento', 0)) }}%</span>
+    </div>
+  </div>
+
+  {# ============ GRÁFICO 1: SERVICIOS POR SEDE ============ #}
+  <div class="tarjeta">
+    <h2>Servicios por sede</h2>
+    <canvas id="chart-servicios" height="90"></canvas>
+  </div>
+
+  {# ============ GRÁFICO 2: CUMPLIMIENTO DE META (salud de la tienda) ============ #}
+  <div class="tarjeta">
+    <h2>Cumplimiento de meta por sede</h2>
+    <p class="sutil" style="margin-top:-0.4rem">Verde ≥ 90% · Amarillo 80–89% · Rojo &lt; 80%</p>
+    <canvas id="chart-cumplimiento" height="90"></canvas>
+  </div>
+
+  {# ============ GRÁFICO 3: PRODUCTIVIDAD POR SEDE ============ #}
+  <div class="tarjeta">
+    <h2>Productividad por sede (OTs / técnico / día)</h2>
+    <canvas id="chart-productividad" height="90"></canvas>
+  </div>
+
+  {# ============ TABLA 1: RENDIMIENTO POR SEDE ============ #}
+  <div class="tarjeta tabla-caja">
+    <h2>Rendimiento por sede</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Sede</th>
+          <th>Técnicos</th>
+          <th>Servicios</th>
+          <th>Prod. Prom.</th>
+          <th>MTTR (días)</th>
+          <th>FTF %</th>
+          <th>Cumplimiento</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sedes %}
+        <tr>
+          <td>{{ s.sede }}</td>
+          <td>{{ s.tecnicos }}</td>
+          <td>{{ s.servicios }}</td>
+          <td>{{ s.prod }}</td>
+          <td>{{ s.mttr }}</td>
+          <td>{{ s.ftf }}%</td>
+          <td>
+            {% if s.cumplimiento >= 90 %}
+            <span class="badge verde">{{ s.cumplimiento }}%</span>
+            {% elif s.cumplimiento >= 80 %}
+            <span class="badge amarillo">{{ s.cumplimiento }}%</span>
+            {% else %}
+            <span class="badge rojo">{{ s.cumplimiento }}%</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.cumplimiento >= 100 %}
+            <span class="badge verde">Sobresaliente</span>
+            {% elif s.cumplimiento >= 90 %}
+            <span class="badge verde">En meta</span>
+            {% elif s.cumplimiento >= 80 %}
+            <span class="badge amarillo">En observación</span>
+            {% else %}
+            <span class="badge rojo">Requiere atención</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ============ TABLA 2: RENDIMIENTO POR TÉCNICO ============ #}
+  <div class="tarjeta tabla-caja">
+    <h2>Rendimiento por técnico</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Sede</th>
+          <th>Técnico</th>
+          <th>Nivel</th>
+          <th>OTs</th>
+          <th>Prod./día</th>
+          <th>MTTR</th>
+          <th>FTF %</th>
+          <th>CSAT</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tecnicos %}
+        <tr>
+          <td>{{ t.sede }}</td>
+          <td>{{ t.nombre }}</td>
+          <td>{{ t.nivel }}</td>
+          <td>{{ t.ots }}</td>
+          <td>{{ t.prod_dia }}</td>
+          <td>{{ t.mttr }}</td>
+          <td>{{ t.ftf }}%</td>
+          <td>{{ t.csat }}</td>
+          <td>
+            {% if 'Excelente' in t.estado or 'Sobresaliente' in t.estado %}
+            <span class="badge verde">{{ t.estado }}</span>
+            {% elif 'Meta' in t.estado %}
+            <span class="badge azul">{{ t.estado }}</span>
+            {% elif 'Requiere' in t.estado or 'mejorar' in t.estado %}
+            <span class="badge amarillo">{{ t.estado }}</span>
+            {% else %}
+            <span class="badge">{{ t.estado }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const sedes = {{ sedes | tojson }};
+  const etiquetas = sedes.map(s => s.sede.replace(/^\d+-/, ''));
+  const coloresSede = ['#2e7d32', '#1565c0', '#ef6c00', '#6a1b9a', '#c62828', '#00838f', '#4e342e'];
+
+  // Gráfico 1: Servicios por sede
+  new Chart(document.getElementById('chart-servicios'), {
+    type: 'bar',
+    data: {
+      labels: etiquetas,
+      datasets: [{
+        label: 'Servicios',
+        data: sedes.map(s => s.servicios),
+        backgroundColor: coloresSede
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  // Gráfico 2: Cumplimiento de meta (con colores semáforo)
+  new Chart(document.getElementById('chart-cumplimiento'), {
+    type: 'bar',
+    data: {
+      labels: etiquetas,
+      datasets: [{
+        label: 'Cumplimiento %',
+        data: sedes.map(s => s.cumplimiento),
+        backgroundColor: sedes.map(s => s.cumplimiento >= 90 ? '#2e7d32' : s.cumplimiento >= 80 ? '#f9a825' : '#c62828')
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, max: 120 } }
+    }
+  });
+
+  // Gráfico 3: Productividad por sede
+  new Chart(document.getElementById('chart-productividad'), {
+    type: 'bar',
+    data: {
+      labels: etiquetas,
+      datasets: [{
+        label: 'OTs/técnico/día',
+        data: sedes.map(s => s.prod),
+        backgroundColor: '#1565c0'
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+</script>
+{% endblock %}

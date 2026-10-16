@@ -74,6 +74,19 @@ function construirCSP(env, esDev) {
   // en dev; en build no debe existir ninguno (se verifica en CI).
   const script = esDev ? new Set(["'self'", "'unsafe-inline'"]) : new Set(["'self'"]);
 
+  // Iframes: sólo el dashboard Flask embebido (/admin/dashboard-embed).
+  // En dev es el servidor local (127.0.0.1:5000); en producción es
+  // same-origin (/dash, ver vercel.json), salvo que VITE_DASHBOARD_URL
+  // apunte a un servicio externo. Sin esto el navegador bloquea el
+  // <iframe> con "violates frame-src".
+  // NOTA: `frame-ancestors` NO va aquí: los navegadores lo ignoran cuando
+  // llega por <meta> (aviso en consola) y la protección real del panel vive
+  // en las cabeceras de vercel.json (X-Frame-Options).
+  const frame = new Set(["'self'"]);
+  if (esDev) frame.add('http://127.0.0.1:5000').add('http://localhost:5000');
+  const dashboard = origen(env.VITE_DASHBOARD_URL);
+  if (dashboard) frame.add(dashboard);
+
   return [
     `default-src 'self'`,
     `script-src ${[...script].join(' ')}`,
@@ -83,13 +96,12 @@ function construirCSP(env, esDev) {
     `connect-src ${[...connect].join(' ')}`,
     `media-src 'self'`,
     `object-src 'none'`,
-    `frame-src 'none'`,
+    `frame-src ${[...frame].join(' ')}`,
     `base-uri 'self'`,
     `form-action 'self'`,
     // Web Worker dedicado a Argon2id/HKDF/AES (V5 §5.1, §15.1).
     `worker-src 'self' blob:`,
     `manifest-src 'self'`,
-    `frame-ancestors 'none'`,
   ].join('; ');
 }
 

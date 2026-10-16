@@ -272,6 +272,46 @@ export const usuariosAPI = {
 
 };
 
+/**
+ * Catálogo de roles editable desde el panel (`/api/auth/roles`, RBAC
+ * `usuarios:manage-roles`). Devuelve además `permisos` (clave → grupo/orden)
+ * para pintar la matriz de permisos sin copiar el catálogo del backend.
+ *
+ * NOTA de alcance: el RLS compara por NOMBRE de rol, así que un rol creado
+ * aquí gobierna CASL/app pero no las políticas de Postgres (F3 no las toca).
+ */
+export const rolesAPI = {
+  listar: (accessToken) =>
+    request('/auth/roles', { headers: authHeaders(accessToken) }),
+
+  crear: (payload, accessToken) =>
+    request('/auth/roles', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  actualizar: (rol, payload, accessToken) =>
+    request(`/auth/roles/${encodeURIComponent(rol)}`, {
+      method: 'PATCH',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  setPermisos: (rol, permisos, accessToken) =>
+    request(`/auth/roles/${encodeURIComponent(rol)}/permisos`, {
+      method: 'PUT',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ permisos }),
+    }),
+
+  eliminar: (rol, accessToken) =>
+    request(`/auth/roles/${encodeURIComponent(rol)}`, {
+      method: 'DELETE',
+      headers: authHeaders(accessToken),
+    }),
+};
+
 export const contactAPI = {
   send: (payload) =>
     request('/contact', { method: 'POST', body: JSON.stringify(payload) }),
@@ -369,6 +409,33 @@ export const citasAPI = {
 
   desactivarDestinatario: (id, accessToken) =>
     request(`/citas/destinatarios/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(accessToken),
+    }),
+};
+
+// ============================================================
+// Ajustes del SITIO PÚBLICO (greenline)
+//
+// El panel escribe aquí lo que el sitio público debe mostrar sin redeploy:
+// temas temporales (Halloween), banners, etc. Se lee con GET y se escribe
+// con PUT (staff con permiso config:update).
+// ============================================================
+export const siteConfigAPI = {
+  obtener: (clave, accessToken) =>
+    request(`/site-config/${encodeURIComponent(clave)}`, {
+      headers: authHeaders(accessToken),
+    }),
+
+  guardar: (clave, valor, accessToken) =>
+    request(`/site-config/${encodeURIComponent(clave)}`, {
+      method: 'PUT',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ valor }),
+    }),
+
+  borrar: (clave, accessToken) =>
+    request(`/site-config/${encodeURIComponent(clave)}`, {
       method: 'DELETE',
       headers: authHeaders(accessToken),
     }),

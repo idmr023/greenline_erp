@@ -10,7 +10,8 @@
  *
  * Aquí sólo queda lo que es de naturaleza de ROL:
  *
- *   PANEL_ROLES    → quién entra en /admin (guard de ProtectedRoute).
+ *   PANEL_ROLES    → lista de referencia del bloque «Acceso al panel» del
+ *                    sidebar (el GUARD de /admin ya es por permisos, F2).
  *   ADMIN_ROLES    → quién entra con autoridad máxima en /fase-2-implementacion
  *                    y en las vistas que el propio router exige.
  *   STAFF_ROLES    → quién es equipo por debajo (AuthContext.isStaff).
@@ -31,14 +32,43 @@ export const ADMIN_ROLES = ['ADMIN', 'DESARROLLADOR_WEB', 'EDITORA_BLOG', 'DISTR
 /** Colaboradores por debajo: acceso al panel limitado por sección (§40). */
 export const STAFF_ROLES = [
   'EDITORA_BLOG', 'DISTRIBUCION', 'GERENTE_TIENDA', 'COLABORADOR_TIENDA',
-  'GERENTE_ALMACEN', 'COLABORADOR_ALMACEN', 'REDES_SOCIALES',
+  'GERENTE_ALMACEN', 'JEFE_DE_ALMACEN', 'COLABORADOR_ALMACEN', 'REDES_SOCIALES',
 ];
 
-/** Único guard de la ruta /admin: autoridad máxima + colaboradores. */
+/**
+ * Autoridad máxima para el bloque «Acceso al panel» del sidebar.
+ * DESDE EL F2 YA NO ES EL GUARD DE /admin: esa ruta se decide por permisos
+ * (`puedeEntrarAlPanel`, lib/permissions.js). Sólo queda como lista de
+ * referencia del bloque de grants.
+ */
 export const PANEL_ROLES = [
   'ADMIN', 'DESARROLLADOR_WEB', 'EDITORA_BLOG', 'DISTRIBUCION',
-  'GERENTE_TIENDA', 'COLABORADOR_TIENDA', 'GERENTE_ALMACEN', 'COLABORADOR_ALMACEN',
-  'REDES_SOCIALES',
+  'GERENTE_TIENDA', 'COLABORADOR_TIENDA', 'GERENTE_ALMACEN', 'JEFE_DE_ALMACEN',
+  'COLABORADOR_ALMACEN', 'REDES_SOCIALES',
+];
+
+/**
+ * Lista de RESPALDO del selector de roles del formulario de usuarios.
+ *
+ * No es una segunda matriz de permisos: sólo `nombre` + `etiqueta` para poder
+ * pintar el bloque de roles cuando `GET /auth/roles` no contesta (p. ej. el
+ * endpoint aún no desplegado). El backend sigue validando cada rol en el alta,
+ * así que un rol inventado o caducado aquí acaba en un 400 visible en el
+ * formulario. Mientras el servidor responda se usa SIEMPRE su catálogo.
+ * Etiquetas espejo de `roles` (BD) / `CATALOGO_ROLES` (backend).
+ */
+export const ROLES_RESPALDO = [
+  { nombre: 'ADMIN', etiqueta: 'Administrador', panel: true },
+  { nombre: 'DESARROLLADOR_WEB', etiqueta: 'Desarrollador web', panel: true },
+  { nombre: 'EDITORA_BLOG', etiqueta: 'Editora de blog', panel: true },
+  { nombre: 'DISTRIBUCION', etiqueta: 'Distribución', panel: true },
+  { nombre: 'REDES_SOCIALES', etiqueta: 'Redes sociales', panel: false },
+  { nombre: 'GERENTE_TIENDA', etiqueta: 'Gerente de tienda', panel: true },
+  { nombre: 'COLABORADOR_TIENDA', etiqueta: 'Colaborador de tienda', panel: true },
+  { nombre: 'GERENTE_ALMACEN', etiqueta: 'Gerente de almacén', panel: true },
+  { nombre: 'JEFE_DE_ALMACEN', etiqueta: 'Jefe de almacén', panel: true },
+  { nombre: 'COLABORADOR_ALMACEN', etiqueta: 'Colaborador de almacén', panel: true },
+  { nombre: 'CLIENTE', etiqueta: 'Cliente', panel: false },
 ];
 
 /**

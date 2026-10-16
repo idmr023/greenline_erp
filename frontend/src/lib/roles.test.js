@@ -19,6 +19,7 @@ test('STAFF_ROLES contiene a los colaboradores por debajo y excluye el privilegi
   assert.ok(STAFF_ROLES.includes('GERENTE_TIENDA'));
   assert.ok(STAFF_ROLES.includes('COLABORADOR_TIENDA'));
   assert.ok(STAFF_ROLES.includes('GERENTE_ALMACEN'));
+  assert.ok(STAFF_ROLES.includes('JEFE_DE_ALMACEN'));
   assert.ok(STAFF_ROLES.includes('COLABORADOR_ALMACEN'));
   assert.ok(STAFF_ROLES.includes('REDES_SOCIALES'));
   assert.ok(!STAFF_ROLES.includes('ADMIN'));
@@ -29,7 +30,7 @@ test('PANEL_ROLES es exactamente ADMIN_ROLES ∪ STAFF_ROLES, sin duplicados', (
   const union = [...new Set([...ADMIN_ROLES, ...STAFF_ROLES])].sort();
   assert.deepEqual([...PANEL_ROLES].sort(), union);
   assert.equal(new Set(PANEL_ROLES).size, PANEL_ROLES.length);
-  assert.equal(PANEL_ROLES.length, 9);
+  assert.equal(PANEL_ROLES.length, 10);
 });
 
 test('REDES_SOCIALES entra al panel pero no con privilegio máximo', () => {

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:lan": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
     "pdf:ceo": "node ../scripts/generar-pdf-ceo.mjs"
@@ -33,6 +34,7 @@
     "react-dom": "^19.2.8",
     "react-helmet-async": "^3.0.0",
     "react-router-dom": "^7.18.2",
+    "read-excel-file": "^9.3.12",
     "tailwindcss": "^4.3.3",
     "zod": "^4.6.5"
   },

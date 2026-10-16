@@ -1,0 +1,146 @@
+:root {
+  --verde: #2e7d32;
+  --verde-claro: #e8f5e9;
+  --texto: #1c2b21;
+  --sutil: #5b6b61;
+  --borde: #d7e0d9;
+  --fondo: #f4f7f4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--texto);
+  background: var(--fondo);
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.5rem;
+  background: var(--verde);
+}
+
+.marca {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+
+.barra nav a {
+  color: #eaf5ec;
+  text-decoration: none;
+  margin-left: 1rem;
+}
+
+.contenedor {
+  max-width: 1100px;
+  margin: 1.5rem auto;
+  padding: 0 1.25rem;
+}
+
+h1 { font-size: 1.5rem; margin: 0.25rem 0 0.5rem; }
+h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+
+.sutil { color: var(--sutil); }
+
+.tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.9rem;
+  margin: 1.25rem 0;
+}
+
+.tarjeta {
+  background: #fff;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.kpi { text-align: center; }
+.kpi-etiqueta { display: block; color: var(--sutil); font-size: 0.82rem; }
+.kpi-valor { display: block; font-size: 1.7rem; font-weight: 700; color: var(--verde); }
+
+.herramientas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+
+.herramientas label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; }
+.herramientas select,
+.herramientas input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  min-width: 220px;
+}
+
+.contador { color: var(--sutil); font-size: 0.85rem; }
+
+.tabla-caja { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  background: var(--verde-claro);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+tbody tr:hover { background: #f1f7f2; }
+
+.aviso {
+  background: #fff8e1;
+  border-color: #f0e0a0;
+  color: #6b5b00;
+}
+
+/* Badges de estado (semáforo) */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge.verde { background: #e8f5e9; color: #1b5e20; }
+.badge.amarillo { background: #fff8e1; color: #f57f17; }
+.badge.rojo { background: #ffebee; color: #b71c1c; }
+.badge.azul { background: #e3f2fd; color: #0d47a1; }
+
+.pie {
+  text-align: center;
+  color: var(--sutil);
+  font-size: 0.8rem;
+  padding: 1.5rem;
+}
+
+code {
+  background: var(--verde-claro);
+  padding: 0.1rem 0.35rem;
+  border-radius: 5px;
+  font-size: 0.85em;
+}

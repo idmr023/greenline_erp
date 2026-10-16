@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}{{ fuente.nombre }} · Dashboard GreenLine{% endblock %}
+{% block cabeza %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+{% block contenido %}
+  <h1>{{ fuente.nombre }}</h1>
+  <p class="sutil">Generado el {{ generado }} · <a href="{{ url_for('index') }}">volver al selector</a></p>
+
+  <div class="tarjetas">
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Filas</span>
+      <span class="kpi-valor">{{ kpis.filas }}</span>
+    </div>
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Columnas</span>
+      <span class="kpi-valor">{{ kpis.columnas }}</span>
+    </div>
+    {% for columna, total in kpis.totales.items() %}
+    <div class="tarjeta kpi">
+      <span class="kpi-etiqueta">Suma de {{ columna }}</span>
+      <span class="kpi-valor">{{ total }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if kpis.grafica %}
+  <div class="tarjeta">
+    <h2>{{ kpis.grafica.titulo }}</h2>
+    <canvas id="grafica-ejemplo" height="110"></canvas>
+  </div>
+  {% endif %}
+
+  <div class="tarjeta tabla-caja">
+    <h2>Primeras filas</h2>
+    <table>
+      <thead>
+        <tr>{% for c in columnas %}<th>{{ c }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for fila in filas %}
+        <tr>{% for c in columnas %}<td>{{ fila.get(c, '') }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+{% if kpis.grafica %}
+<script>
+  const etiquetas = {{ kpis.grafica.etiquetas | tojson }};
+  const valores = {{ kpis.grafica.valores | tojson }};
+  new Chart(document.getElementById('grafica-ejemplo'), {
+    type: 'bar',
+    data: {
+      labels: etiquetas,
+      datasets: [{ label: {{ kpis.grafica.titulo | tojson }}, data: valores, backgroundColor: '#2e7d32' }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

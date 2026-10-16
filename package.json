@@ -12,17 +12,21 @@
   ],
   "scripts": {
     "dev": "npm --prefix frontend run dev",
+    "dev:lan": "npm --prefix frontend run dev:lan",
+    "dev:dash": "cd dashboard && .venv/Scripts/python app.py",
+    "all": "concurrently -n erp,dash -c yellow,green \"npm run dev:lan\" \"npm run dev:dash\"",
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",
     "lint": "oxlint frontend/src && node scripts/auditar-sinks-html.mjs",
     "lint:html": "node scripts/auditar-sinks-html.mjs",
-    "test": "node --test \"frontend/src/**/*.test.js\"",
-    "test:vault": "node --test \"frontend/src/lib/vault/*.test.js\"",
+    "test": "node --test frontend/src/lib/*.test.js frontend/src/lib/vault/*.test.js",
+    "test:vault": "node --test frontend/src/lib/vault/*.test.js",
     "pdf:ceo": "node scripts/generar-pdf-ceo.mjs",
     "emails:limpiar": "node scripts/limpiar-emails.mjs",
     "emails:lote": "node scripts/gen-lote-n8n.mjs"
   },
   "devDependencies": {
+    "concurrently": "^10.0.6",
     "oxlint": "^1.75.0"
   },
   "dependencies": {

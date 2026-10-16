@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+# Cancela ejecuciones anteriores del mismo PR/rama al hacer nuevos pushes.
+# En main NO se cancela: el check `verify` es quality gate del auto-merge
+# develop -> main; si se cancela, el PR se queda colgado y Vercel nunca ve
+# el verde.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # Env dummy solo-CI para el build de Vite (los orígenes reales viven en
+    # frontend/.env local y en las Environment Variables de Vercel).
+    # Valores falsos, seguros para commitear.
+    env:
+      VITE_API_URL: http://localhost:3000/api
+      VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+      VITE_SUPABASE_ANON_KEY: ci-dummy-anon-key-0123456789abcdefghijklmnop
+    steps:
+      # Solo develop puede mergear a main: un PR que no sale de develop queda
+      # BLOQUEADO aquí. El pase develop -> main lo hace
+      # auto-pr-develop-main.yml (Auto-PR + auto-merge con squash).
+      - name: Origen del PR (a main sólo desde develop)
+        if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref != 'develop'
+        env:
+          # Por env y no con ${{ }} directo: github.head_ref es controlado
+          # por quien abre el PR y no debe interpolarse en el shell.
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          echo "::error::Los PRs contra main deben salir de develop; llegó la rama '$HEAD_REF'. Crea la rama sobre develop y deja que auto-pr-develop-main.yml haga el merge a main."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests (bóveda V5)
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Audit prod deps
+        # Advisory (no bloquea): hay vulnerabilidades transitivas conocidas.
+        # Dependabot propone los fixes; este paso las hace visibles.
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: dashboard/requirements.txt
+
+      - name: Install (dashboard)
+        run: pip install -r dashboard/requirements.txt
+
+      - name: Dashboard smoke
+        working-directory: dashboard
+        run: python smoke.py

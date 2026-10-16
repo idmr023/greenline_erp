@@ -83,7 +83,7 @@ greenline/
 ```
 Usuario → React SPA → Supabase (lectura directa)
                    ↘ Backend Express → Prisma → Supabase
-                   ↘ BullMQ → Redis → Worker → SMTP
+                   ↘ BullMQ → Redis → Worker → Gmail API (fallback SMTP solo con aviso)
 ```
 
 - **Lecturas de productos/tiendas:** Directas desde Supabase (sin backend)
@@ -317,7 +317,9 @@ React Router renderiza: ProductPage.jsx
 | `DATABASE_URL` | Conexión Prisma (backend) |
 | `JWT_SECRET` | Secretos JWT |
 | `REDIS_URL` | Cola BullMQ |
-| `SMTP_USER/PASS` | Envío de emails |
+| `GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN` | Gmail API: transporte real del correo (Render free bloquea 25/465/587) |
+| `SMTP_USER/PASS` | Fallback SMTP (solo se usa si la Gmail API no está configurada) |
+| `RECLAMACIONES_EMAIL_FROM` / `RECLAMACIONES_REPLY_TO` | Remitente visible de reclamaciones y Reply-To (bandeja de reclamaciones) |
 
 ---
 

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block contenido %}
+  <h1>Datos de Google Sheets</h1>
+  <p class="sutil">Elige una fuente para ver sus filas. Las fuentes se administran en
+    <code>config/fuentes.yaml</code>.</p>
+
+  {% if not fuentes %}
+    <div class="tarjeta aviso">
+      No hay fuentes activas. Edita <code>config/fuentes.yaml</code> y pega el enlace de tu Google Sheet.
+    </div>
+  {% else %}
+    <div class="herramientas">
+      <label>
+        Fuente
+        <select id="selector-fuente">
+          {% for f in fuentes %}
+            <option value="{{ f.id }}">{{ f.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="busqueda">
+        Buscar
+        <input type="search" id="buscador" placeholder="filtrar filas…">
+      </label>
+      <span class="contador" id="contador"></span>
+    </div>
+
+    <div class="tarjeta tabla-caja">
+      <table id="tabla-datos">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <p class="sutil">
+      Ejemplo de dashboard con KPIs y gráfica:
+      <a id="enlace-ejemplo" href="#">ver dashboard de esta fuente</a>
+    </p>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const selector = document.getElementById('selector-fuente');
+const buscador = document.getElementById('buscador');
+const tabla = document.getElementById('tabla-datos');
+const contador = document.getElementById('contador');
+const enlaceEjemplo = document.getElementById('enlace-ejemplo');
+let columnas = [];
+let filas = [];
+
+function pintar() {
+  const texto = (buscador.value || '').toLowerCase();
+  const visibles = texto
+    ? filas.filter(f => columnas.some(c => String(f[c] ?? '').toLowerCase().includes(texto)))
+    : filas;
+  tabla.querySelector('thead').innerHTML =
+    '<tr>' + columnas.map(c => `<th>${c}</th>`).join('') + '</tr>';
+  tabla.querySelector('tbody').innerHTML = visibles.map(f =>
+    '<tr>' + columnas.map(c => `<td>${f[c] ?? ''}</td>`).join('') + '</tr>'
+  ).join('');
+  contador.textContent = `${visibles.length} de ${filas.length} filas`;
+}
+
+async function cargar(idFuente) {
+  contador.textContent = 'Cargando…';
+  const resp = await fetch(`/api/datos/${encodeURIComponent(idFuente)}`);
+  const datos = await resp.json();
+  if (!resp.ok) {
+    tabla.querySelector('tbody').innerHTML =
+      `<tr><td class="aviso">${datos.error || 'Error al leer la fuente'}</td></tr>`;
+    contador.textContent = '';
+    return;
+  }
+  columnas = datos.columnas;
+  filas = datos.filas;
+  enlaceEjemplo.href = `/dashboard/${encodeURIComponent(idFuente)}`;
+  pintar();
+}
+
+selector.addEventListener('change', () => cargar(selector.value));
+buscador.addEventListener('input', pintar);
+cargar(selector.value);
+</script>
+{% endblock %}

@@ -1,0 +1,368 @@
+name: Auto-PR develop -> main
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: auto-pr-develop-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  # El bloque explícito pone en "none" todo lo no listado: sin `checks` el
+  # fallback a GITHUB_TOKEN moría con 403 "Resource not accessible by
+  # integration" al leer los check-runs "verify".
+  checks: read
+  statuses: read
+  issues: write
+  repository-projects: read
+
+jobs:
+  auto-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check diff develop..main
+        id: diff
+        run: |
+          git fetch origin develop main
+          # Diff por CONTENIDO: tras squash, rev-list siempre ve develop "ahead"
+          # aunque el árbol sea idéntico → PRs vacíos y carreras innecesarias.
+          if git diff --quiet origin/main origin/develop; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "Sin cambios de contenido develop vs main. Skip."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Hay cambios de contenido:"
+            git diff --stat origin/main origin/develop | tail -20
+          fi
+
+      # El PAT sólo sirve si puede leer PRs (REST/GraphQL) Y los check-runs
+      # "verify" (REST); si le falta algo, `gh` responde 403 "Resource not
+      # accessible" y el job entero se caía sin decir por qué. Aquí se valida
+      # el PAT probe a probe (imprimiendo el permiso exacto que falta vía
+      # X-Accepted-GitHub-Permissions) y, si no está completo, se comprueba el
+      # fallback GITHUB_TOKEN antes de usarlo.
+      - name: Resolver token de GitHub
+        id: token
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          AUTO_MERGE_PAT: ${{ secrets.AUTO_MERGE_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          OWNER="${REPO%%/*}"
+          NAME="${REPO##*/}"
+          SHA="${{ github.sha }}"
+          CHECKS_PATH="repos/$REPO/commits/$SHA/check-runs?check_name=verify&per_page=20"
+          GQL_LIST='query($o:String!,$n:String!){repository(owner:$o,name:$n){pullRequests(first:1){nodes{number}}}}'
+
+          # $1=etiqueta, $2=token, resto=comando gh. En fallo imprime stderr.
+          probe() {
+            local label="$1" tok="$2"; shift 2
+            local out
+            if out=$(GH_TOKEN="$tok" "$@" 2>&1 >/dev/null); then
+              echo "  [ok]   $label"
+              return 0
+            fi
+            echo "  [FAIL] $label: $(printf '%s' "$out" | tr '\n' ' ')"
+            return 1
+          }
+
+          # Igual que probe pero para `gh api` REST: en 403 repite la llamada
+          # con -i y muestra X-Accepted-GitHub-Permissions (permiso requerido).
+          probe_api() {
+            local label="$1" tok="$2"; shift 2
+            local out
+            if out=$(GH_TOKEN="$tok" gh api "$@" 2>&1 >/dev/null); then
+              echo "  [ok]   $label"
+              return 0
+            fi
+            local hdr=""
+            hdr=$(GH_TOKEN="$tok" gh api -i "$@" 2>&1 \
+              | grep -i '^x-accepted-github-permissions:' | tr -d '\r' || true)
+            echo "  [FAIL] $label: $(printf '%s' "$out" | tr '\n' ' ')${hdr:+ | permiso requerido →$hdr}"
+            return 1
+          }
+
+          if [ -z "${AUTO_MERGE_PAT:-}" ]; then
+            echo "No hay AUTO_MERGE_PAT: usaré GITHUB_TOKEN (el merge NO disparará CI/Render)."
+            echo "token=github" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Validando AUTO_MERGE_PAT:"
+          pat_ok=1
+          probe "pr list" "$AUTO_MERGE_PAT" \
+            gh pr list --base main --head develop --json number --jq '.[0].number // empty' || pat_ok=0
+          PAT_PR=$(GH_TOKEN="$AUTO_MERGE_PAT" gh pr list --base main --head develop \
+            --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$PAT_PR" ]; then
+            probe "pr view #$PAT_PR mergeable" "$AUTO_MERGE_PAT" \
+              gh pr view "$PAT_PR" --json mergeable --jq .mergeable || pat_ok=0
+          fi
+          probe "graphql pullRequests" "$AUTO_MERGE_PAT" gh api graphql \
+            -f query="$GQL_LIST" -f o="$OWNER" -f n="$NAME" || pat_ok=0
+          probe_api "check-runs verify (checks:read)" "$AUTO_MERGE_PAT" "$CHECKS_PATH" || pat_ok=0
+
+          if [ "$pat_ok" -eq 1 ]; then
+            echo "token=pat" >> "$GITHUB_OUTPUT"
+            echo "AUTO_MERGE_PAT OK (se usará para que el merge dispare CI/Render)."
+            exit 0
+          fi
+
+          echo "::warning::AUTO_MERGE_PAT incompleto o caducado (fijate en los [FAIL] de arriba; si es 'check-runs' le falta Checks al PAT). Continúo con GITHUB_TOKEN: el merge a main NO disparará CI/Render; renueva el PAT (clásico: scopes repo + workflow / fine-grained: Contents, Pull requests y Checks en RW/lectura sobre este repo)."
+
+          echo "Validando GITHUB_TOKEN (fallback):"
+          fb_ok=1
+          probe "pr list" "$GH_TOKEN" \
+            gh pr list --base main --head develop --json number --jq '.[0].number // empty' || fb_ok=0
+          probe "graphql pullRequests" "$GH_TOKEN" gh api graphql \
+            -f query="$GQL_LIST" -f o="$OWNER" -f n="$NAME" || fb_ok=0
+          probe_api "check-runs verify (checks:read)" "$GH_TOKEN" "$CHECKS_PATH" || fb_ok=0
+
+          if [ "$fb_ok" -eq 1 ]; then
+            echo "token=github" >> "$GITHUB_OUTPUT"
+            echo "GITHUB_TOKEN OK para PRs y check-runs."
+            exit 0
+          fi
+
+          echo "::error::Ni AUTO_MERGE_PAT ni GITHUB_TOKEN leen los check-runs 'verify'. Revisa el bloque permissions: de este workflow (checks: read) y el PAT."
+          exit 1
+
+      - name: Create PR, wait for verify, merge (squash)
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          AUTO_MERGE_PAT: ${{ secrets.AUTO_MERGE_PAT }}
+          # Fallback documentado: sin PAT el merge lo hace GITHUB_TOKEN (no
+          # dispara workflows), pero el job termina en verde.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # "ours" = al haber conflicto, develop (los cambios que se están
+          # enviando) gana sobre main. Cualquier otro valor recupera el
+          # comportamiento de siempre: comentar el conflicto y fallar.
+          CONFLICT_STRATEGY: ours
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          if [ "${{ steps.token.outputs.token }}" = "pat" ]; then
+            export GH_TOKEN="$AUTO_MERGE_PAT"
+          fi
+
+          # $1 = sha del head del PR. Comenta el PR listando los archivos en
+          # conflicto (git merge-tree, sin tocar el árbol de trabajo) y corta
+          # el job con un error claro.
+          fail_conflict() {
+            local sha="$1" files
+            git fetch origin main --quiet 2>/dev/null || true
+            files=$(git merge-tree --write-tree --name-only origin/main "$sha" 2>/dev/null \
+              | awk 'NR > 1 && /^$/{exit} NR > 1{print}' || true)
+            {
+              echo "⚠️ Conflictos con \`main\`:"
+              echo
+              echo '```'
+              printf '%s\n' "$files"
+              echo '```'
+              echo
+              echo "Fusiona \`main\` en \`develop\` y pushea para poder mergear."
+            } > /tmp/conflicto.md
+            gh pr comment "$PR" --body-file /tmp/conflicto.md || true
+            echo "::error::PR #$PR tiene conflictos con main (ver archivos en el comentario del PR). Fusiona main en develop y pushea."
+            exit 1
+          }
+
+          # $1 = sha del head del PR. Fusiona `main` en `develop` favoreciendo
+          # OURS (develop = los cambios que se están enviando), pushea y corta
+          # con éxito: el push dispara CI (`verify`) + este workflow, que
+          # reutiliza el PR y continúa con el squash.
+          #
+          # El push DEBE ir con AUTO_MERGE_PAT: un push con GITHUB_TOKEN no
+          # dispara `on: push` (mismo motivo documentado en el paso "Resolver
+          # token de GitHub"), así que no correría `ci.yml` (el check `verify`
+          # que exige la ruleset `merge_verfication`) ni este workflow, y el
+          # PR se quedaría colgado hasta el timeout de 15 min.
+          #
+          # Si algo no se puede resolver (PAT ausente, conflicto que `-X ours`
+          # no cubre, push rechazado) se vuelve a `fail_conflict`: se comenta
+          # el conflicto y el job falla, como siempre.
+          auto_merge_ours() {
+            local sha="$1" files pendientes f
+            if [ "${CONFLICT_STRATEGY:-ours}" != "ours" ]; then
+              fail_conflict "$sha"
+            fi
+            if [ -z "${AUTO_MERGE_PAT:-}" ]; then
+              echo "::warning::Sin AUTO_MERGE_PAT no puedo auto-mergear (un push con GITHUB_TOKEN no dispararía verify ni este workflow)."
+              fail_conflict "$sha"
+            fi
+            git fetch origin main develop --quiet 2>/dev/null || true
+            # Carrera: si develop avanzó mientras comprobábamos, no se mezcla
+            # sobre un árbol viejo; lo resuelve la siguiente ejecución.
+            if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/develop)" ]; then
+              echo "::notice::develop avanzó mientras comprobábamos conflictos; lo resuelve la siguiente ejecución."
+              exit 0
+            fi
+            files=$(git merge-tree --write-tree --name-only origin/main "$sha" 2>/dev/null \
+              | awk 'NR > 1 && /^$/{exit} NR > 1{print}' || true)
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if ! git merge --no-edit --strategy-option ours origin/main; then
+              # `-X ours` sólo resuelve conflictos de CONTENIDO: lo que quede
+              # (modify/delete, add/add…) se fuerza también hacia OURS.
+              pendientes=$(git diff --name-only --diff-filter=U || true)
+              if [ -n "$pendientes" ]; then
+                while IFS= read -r f; do
+                  if [ -z "$f" ]; then continue; fi
+                  # ¿OURS (develop) tiene el archivo? Mira la etapa 2 del
+                  # índice, no HEAD: el borrado puede estar sólo en el índice.
+                  if git ls-files --stage -- "$f" | awk '{print $3}' | grep -qx 2; then
+                    # Lo tenía develop: nos quedamos con SU versión.
+                    git checkout --ours -- "$f" 2>/dev/null \
+                      || git restore --source=HEAD --worktree -- "$f" 2>/dev/null \
+                      || true
+                    git add -- "$f" 2>/dev/null || true
+                  else
+                    # Sólo lo tenía main: gana develop, que lo había borrado.
+                    git rm -f -- "$f" 2>/dev/null \
+                      || git update-index --force-remove -- "$f" 2>/dev/null \
+                      || true
+                    rm -f -- "$f" 2>/dev/null || true
+                  fi
+                done <<< "$pendientes"
+              fi
+              if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+                git merge --abort 2>/dev/null || git reset --hard HEAD
+                fail_conflict "$sha"
+              fi
+              if ! git commit --no-edit --no-verify; then
+                git merge --abort 2>/dev/null || git reset --hard HEAD
+                fail_conflict "$sha"
+              fi
+            fi
+            if ! git push "https://x-access-token:${AUTO_MERGE_PAT}@github.com/${REPO}.git" HEAD:develop; then
+              echo "::error::Merge local hecho pero el push a develop fue rechazado (permisos o carrera con otro push)."
+              fail_conflict "$sha"
+            fi
+            {
+              echo "🔀 Conflictos resueltos automáticamente en \`develop\` con estrategia \`-X ours\` (ganan los cambios de esta rama):"
+              echo
+              echo '```'
+              printf '%s\n' "$files"
+              echo '```'
+              echo
+              echo "La siguiente ejecución de este workflow continúa con \`verify\` y el squash."
+            } > /tmp/auto-merge.md
+            gh pr comment "$PR" --body-file /tmp/auto-merge.md || true
+            echo "::notice::main fusionado en develop (-X ours) y pusheado: la siguiente ejecución del workflow continúa."
+            exit 0
+          }
+
+          EXISTING=$(gh pr list --base main --head develop --json number --jq '.[0].number // empty')
+          if [ -z "$EXISTING" ]; then
+            gh pr create \
+              --base main \
+              --head develop \
+              --title "Auto-PR: develop -> main" \
+              --body "PR automático develop -> main. Merge (squash) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml"
+            PR=$(gh pr list --base main --head develop --json number --jq '.[0].number')
+          else
+            PR="$EXISTING"
+            echo "Reusing existing PR #$PR"
+          fi
+
+          # `mergeable` se calcula en background: recién creado el PR GitHub
+          # devuelve UNKNOWN, el primer chequeo no ve los conflictos y el job
+          # fallaba más tarde con un mensaje engañoso. Esperamos a que deje de
+          # ser UNKNOWN antes de decidir.
+          MERGEABLE=UNKNOWN
+          for i in $(seq 1 12); do
+            MERGEABLE=$(gh pr view "$PR" --json mergeable --jq '.mergeable')
+            if [ "$MERGEABLE" != "UNKNOWN" ]; then
+              break
+            fi
+            echo "mergeable=UNKNOWN (cálculo en background), reintento $i/12..."
+            sleep 5
+          done
+          if [ "$MERGEABLE" = "CONFLICTING" ]; then
+            auto_merge_ours "$(git rev-parse HEAD)"
+          fi
+
+          # Espera a que TODOS los check-runs "verify" del head estén completos.
+          # Hay dos (push + pull_request): si solo miramos uno, GraphQL rechaza
+          # el merge con "Required status check verify is in progress".
+          # No usamos gh pr merge --auto: GitHub rechaza auto-merge si el PR está
+          # UNSTABLE (e2e/lighthouse en rojo aunque no sean required).
+          REPO="${{ github.repository }}"
+          for i in $(seq 1 60); do
+            HEAD=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+            # "pending" si aún corre alguno; "success" si TODOS completed+success;
+            # si alguno falló → conclusion de ese (failure/cancelled/timed_out)
+            CONC=$(gh api "repos/$REPO/commits/$HEAD/check-runs?check_name=verify&per_page=20" \
+              --jq '
+                [.check_runs[] | select(.name == "verify")] as $r
+                | if ($r | length) == 0 then "pending"
+                  elif ([$r[] | select(.status != "completed")] | length) > 0 then "pending"
+                  elif ([$r[] | select(.conclusion != "success")] | length) > 0 then
+                    ([$r[] | select(.conclusion != "success") | .conclusion] | first)
+                  else "success"
+                  end')
+            echo "[$i] head=$HEAD verify=$CONC"
+            if [ "$CONC" = "success" ]; then
+              # Reconfirma head y mergeable por si hubo push nuevo
+              MERGEABLE=$(gh pr view "$PR" --json mergeable --jq '.mergeable')
+              if [ "$MERGEABLE" = "CONFLICTING" ]; then
+                auto_merge_ours "$HEAD"
+              fi
+              if [ "$MERGEABLE" = "UNKNOWN" ]; then
+                # Cálculo en background: no intento merge con estado dudoso.
+                echo "mergeable=UNKNOWN aún (cálculo en background); reintento en 15s."
+                sleep 15
+                continue
+              fi
+              echo "verify verde → squash merge PR #$PR (--admin + retry: ruleset puede ver verify aún queued)"
+              # --admin: la ruleset merge_verfication bloquea al PAT fine-grained.
+              # Retry: al crear el PR, GitHub puede encolar un verify nuevo y el
+              # primer intento falla con "verify is in progress/queued".
+              MERGED=0
+              for attempt in 1 2 3 4 5; do
+                if gh pr merge "$PR" --squash --admin; then
+                  MERGED=1
+                  break
+                fi
+                echo "merge attempt $attempt falló; re-verifico verify (15s)..."
+                sleep 15
+                HEAD=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+                CONC=$(gh api "repos/$REPO/commits/$HEAD/check-runs?check_name=verify&per_page=20" \
+                  --jq '
+                    [.check_runs[] | select(.name == "verify")] as $r
+                    | if ($r | length) == 0 then "pending"
+                      elif ([$r[] | select(.status != "completed")] | length) > 0 then "pending"
+                      elif ([$r[] | select(.conclusion != "success")] | length) > 0 then
+                        ([$r[] | select(.conclusion != "success") | .conclusion] | first)
+                      else "success"
+                      end')
+                if [ "$CONC" != "success" ]; then
+                  echo "verify ya no está en success ($CONC); aborto retry."
+                  break
+                fi
+              done
+              if [ "$MERGED" -eq 1 ]; then
+                exit 0
+              fi
+              echo "::error::No se pudo mergear PR #$PR tras reintentos."
+              exit 1
+            fi
+            if [ "$CONC" = "failure" ] || [ "$CONC" = "cancelled" ] || [ "$CONC" = "timed_out" ]; then
+              echo "::error::verify falló en PR #$PR ($CONC). No se mergea."
+              gh pr comment "$PR" --body "⛔ \`verify\` terminó en \`${CONC}\`: no hago merge. Arregla develop y vuelve a pushear."
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "::error::Timeout esperando verify en PR #$PR (15 min)."
+          exit 1

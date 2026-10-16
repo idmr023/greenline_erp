@@ -1,10 +1,11 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { AbilityProvider } from '@casl/react';
+import { AbilityProvider, useAbility } from '@casl/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { VaultProvider } from './contexts/VaultContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import { ADMIN_ROLES, PANEL_ROLES, rolesDe, tieneRol } from './lib/roles';
+import { ADMIN_ROLES, rolesDe, tieneRol } from './lib/roles';
+import { puedeEntrarAlPanel } from './lib/permissions';
 import SEOHead from './components/SEOHead';
 import LoginPage from './pages/LoginPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
@@ -12,7 +13,7 @@ import PageLoader from './PageLoader';
 
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
 const Fase2Implementacion = lazy(() => import('./pages/Fase2Implementacion'));
-// Link de invitación (`<ERP_URL>/activar?token=…`): pública, sin sesión.
+// Link de invitaci��n (`<ERP_URL>/activar?token=�?�`): pǧblica, sin sesi��n.
 const ActivarPage = lazy(() => import('./pages/ActivarPage'));
 
 /**
@@ -30,12 +31,17 @@ const ActivarPage = lazy(() => import('./pages/ActivarPage'));
  */
 function RootPortal() {
   const { user, loading } = useAuth();
+  const ability = useAbility();
   const navigate = useNavigate();
 
   if (loading) return <PageLoader />;
   if (user?.mustChangePassword) return <Navigate to="/change-password" replace />;
-  // Multi-rol: con cualquier rol efectivo de equipo se entra al panel.
-  if (user && !tieneRol(['CLIENTE'], rolesDe(user))) return <Navigate to="/admin" replace />;
+  // Multi-rol: con cualquier rol efectivo de equipo que el servidor dé por
+  // visible (algún `menu:*:read`) se entra al panel. Sin ninguna sección
+  // visible no se redirige, para no entrar en bucle con el guard de /admin.
+  if (user && !tieneRol(['CLIENTE'], rolesDe(user)) && puedeEntrarAlPanel(ability)) {
+    return <Navigate to="/admin" replace />;
+  }
 
   const esCliente = Boolean(user);
 
@@ -119,22 +125,29 @@ export default function App() {
                   </Suspense>
                 }
               />
-              <Route
-                path="/admin/*"
-                element={
-                  <ProtectedRoute requiredRoles={PANEL_ROLES}>
-                    <Suspense fallback={<PageLoader />}>
-                      <AdminPanel />
-                    </Suspense>
-                  </ProtectedRoute>
-                }
-              />
+              {/* Excepción documentada: vista heredada que sigue resolviéndose
+                  por rol (ADMIN_ROLES), no por permisos. */}
               <Route
                 path="/fase-2-implementacion"
                 element={
                   <ProtectedRoute requiredRoles={ADMIN_ROLES}>
                     <Suspense fallback={<PageLoader />}>
                       <Fase2Implementacion />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              {/* Guard por PERMISOS: el servidor decide qué secciones ve cada
+                  sesión; no hay lista de roles que mantener en el cliente.
+                  NOTA: no hay ruta separada para /admin/dashboard-embed: esas
+                  URLs las resuelve AdminPanel (con sidebar) vía getInitialView,
+                  que distingue Dashboard y Servicio Técnico por el ?slug=. */}
+              <Route
+                path="/admin/*"
+                element={
+                  <ProtectedRoute guardia={puedeEntrarAlPanel}>
+                    <Suspense fallback={<PageLoader />}>
+                      <AdminPanel />
                     </Suspense>
                   </ProtectedRoute>
                 }

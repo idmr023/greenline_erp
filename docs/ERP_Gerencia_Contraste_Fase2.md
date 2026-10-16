@@ -39,7 +39,7 @@ Hoy existe **ese ERP de la empresa**: Frappe 15 + ERPNext 15 + app `pos_next` 1.
 |---|---|---|
 | **2.1 Base operacional** | levantamiento, matriz usuarios/roles/tiendas, auditoría, permisos, endpoints, paginación, healthcheck, QR | 🟡 **parcialmente hecho por el ERP** (roles/auditoría/estructura ya existen allá) + esta exploración avanza el «levantamiento». Queda: matriz de responsables **validada por gerencia**, nuestro estándar API/paginación, healthcheck web, **QR**. |
 | **2.2 Inventario y movimiento** | stock general/tienda, movimientos, aprobaciones, kardex | 🔴→🟢 **trasladado al ERP** (estructura lista, operación en 0). Nuestro trabajo: **habilitar operación** (capacitar, migrar registro manual de Drive), no reescribir stock en Supabase. |
-| **2.3 Pedidos y entregas** | estados, validación de stock, entregas, correos | 🟡 **integración**: web → `Sales Order` ERP. Correos transaccionales: decidir si ERP (nativo) o nuestro `enqueueEmail` (ya operativo con SMTP). |
+| **2.3 Pedidos y entregas** | estados, validación de stock, entregas, correos | 🟡 **integración**: web → `Sales Order` ERP. Correos transaccionales: decidir si ERP (nativo) o nuestro `enqueueEmail` (ya operativo con Gmail API). |
 | **2.4 Dashboard y notificaciones** | KPIs, filtros por sede, bandeja, alertas | 🟢 KPIs de negocio → ERP. 🔴 Web/citas/reclamaciones + bandeja topbar → nosotros. |
 | **2.5 Comunidad y fidelización** | consentimiento, segmentos, campañas, referidos | 🔴 **100% web** (nada de esto en el ERP; el email marketing por campaña ya lo tenemos en n8n). |
 | **2.6 Base de citas** | modelo, catálogo, estados, formulario, vista central, auditoría | 🟡 **decisión de sede** (ver §5 de este doc): Supabase `citas` (plan §10) vs DocType `pos_next`. |
@@ -81,7 +81,7 @@ Hoy existe **ese ERP de la empresa**: Frappe 15 + ERPNext 15 + app `pos_next` 1.
 3. **Habilitar operación transaccional** en el ERP (POS, stock, pedidos) — está diseñado pero en 0.
 4. **E-facturación** (interruptor fail-closed, aprobación del propietario) y **portal de distribuidores** (gateado) — no tocar sin su visto bueno.
 5. **Rol para mi cuenta** (`roles: []`) para exploración/capacitación completa.
-6. **Correos transaccionales:** motor ERP vs nuestro SMTP (ya verificado en prod).
+6. **Correos transaccionales:** motor ERP vs nuestro Gmail API (ya verificado en prod; el SMTP está bloqueado en Render free).
 
 ## 8. Recomendación de secuencia
 

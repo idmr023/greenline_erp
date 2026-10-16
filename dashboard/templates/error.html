@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block titulo %}Error · Dashboard GreenLine{% endblock %}
+{% block contenido %}
+  <h1>No se pudo cargar la fuente</h1>
+  <div class="tarjeta aviso">{{ mensaje }}</div>
+  <p><a href="{{ url_for('index') }}">Volver al selector</a></p>
+{% endblock %}

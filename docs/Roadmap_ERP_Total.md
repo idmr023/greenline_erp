@@ -80,7 +80,7 @@
 
 |---|---|---|---|
 
-| ****R2.1**** | ****Pedidos web → ERP**** | Checkout \`POST /api/pedidos\` → \`Sales Order\` vía adaptador; espejo local + reintentos; mapeo de estados §4.5 ↔ estados Frappe (Draft/Submitted/Cancelled); correos transaccionales con SMTP | R0.2, R1.2 |
+| ****R2.1**** | ****Pedidos web → ERP**** | Checkout \`POST /api/pedidos\` → \`Sales Order\` vía adaptador; espejo local + reintentos; mapeo de estados §4.5 ↔ estados Frappe (Draft/Submitted/Cancelled); correos transaccionales con Gmail API | R0.2, R1.2 |
 
 | ****R2.2**** | ****Maestros como fuente de verdad**** | El front web ****lee**** items/precios/tiendas del ERP (API o sync programada); se apaga la edición duplicada en el panel web | R1.2, R0.1 |
 

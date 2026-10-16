@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parsePermiso, abilityDe, ABILITY_VACIA } from './permissions.js';
+import { parsePermiso, abilityDe, ABILITY_VACIA, puedeEntrarAlPanel } from './permissions.js';
 
 test('parsePermiso parte el sujeto y la acción como el backend', () => {
   assert.deepEqual(parsePermiso('usuarios:read'), { action: 'read', subject: 'usuarios' });
@@ -58,4 +58,36 @@ test('coincidencia exacta de sujetos: no se cuela un sujeto parecido', () => {
   assert.equal(ability.can('write', 'stock:tienda'), false);
   assert.equal(ability.can('write', 'stock'), false);
   assert.equal(ability.can('read', 'stock:almacen'), false);
+});
+
+test('puedeEntrarAlPanel: exige al menos un menú legible', () => {
+  // Sesión todavía sin permisos cargados → no se abre el panel.
+  assert.equal(puedeEntrarAlPanel(ABILITY_VACIA), false);
+  assert.equal(puedeEntrarAlPanel(null), false);
+  assert.equal(puedeEntrarAlPanel(undefined), false);
+
+  // Permisos de recurso pero ningún menú: no hay sección que mostrar.
+  assert.equal(puedeEntrarAlPanel(abilityDe(['productos:read', 'usuarios:read'])), false);
+
+  // Cualquier sección legible basta (dashboard, blog, roles…).
+  assert.equal(puedeEntrarAlPanel(abilityDe(['menu:dashboard:read'])), true);
+  assert.equal(puedeEntrarAlPanel(abilityDe(['menu:blog:read'])), true);
+  assert.equal(puedeEntrarAlPanel(abilityDe(['productos:read', 'menu:roles:read'])), true);
+});
+
+test('puedeEntrarAlPanel no mira la escritura: un editor de blog entra', () => {
+  // EDITORA_BLOG sólo tiene lectura de menú: no puede gestionar usuarios ni
+  // roles, pero /admin es su panel.
+  const ability = abilityDe(['menu:blog:read', 'blog:update', 'menu:boveda:read']);
+  assert.equal(puedeEntrarAlPanel(ability), true);
+  assert.equal(ability.can('manage-roles', 'usuarios'), false);
+});
+
+test('puedeEntrarAlPanel deja entrar a un rol que el panel creó (sin lista fija)', () => {
+  // Un rol inventado desde la pestaña «Roles» no está en ninguna lista del
+  // cliente: si el servidor le dio un menú, entra.
+  const ability = abilityDe(['menu:dashboard:read', 'productos:read']);
+  assert.equal(puedeEntrarAlPanel(ability), true);
+  // …y un rol con el mismo nombre pero sin menú, no.
+  assert.equal(puedeEntrarAlPanel(abilityDe(['productos:read'])), false);
 });

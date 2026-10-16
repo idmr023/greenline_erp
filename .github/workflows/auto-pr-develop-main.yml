@@ -144,6 +144,7 @@ jobs:
           # Fallback documentado: sin PAT el merge lo hace GITHUB_TOKEN (no
           # dispara workflows), pero el job termina en verde.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # "ours" = al haber conflicto, develop (los cambios que se están
           # enviando) gana sobre main. Cualquier otro valor recupera el
           # comportamiento de siempre: comentar el conflicto y fallar.
@@ -264,11 +265,24 @@ jobs:
 
           EXISTING=$(gh pr list --base main --head develop --json number --jq '.[0].number // empty')
           if [ -z "$EXISTING" ]; then
-            gh pr create \
+            if ! out=$(gh pr create \
               --base main \
               --head develop \
               --title "Auto-PR: develop -> main" \
-              --body "PR automático develop -> main. Merge (squash) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml"
+              --body "PR automático develop -> main. Merge (squash) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml" 2>&1); then
+              if [ "${{ steps.token.outputs.token }}" = "pat" ] \
+                && printf '%s' "$out" | grep -q "Resource not accessible by personal access token (createPullRequest)"; then
+                echo "::warning::AUTO_MERGE_PAT no puede crear PR (createPullRequest). Reintento con GITHUB_TOKEN."
+                GH_TOKEN="$GH_FALLBACK_TOKEN" gh pr create \
+                  --base main \
+                  --head develop \
+                  --title "Auto-PR: develop -> main" \
+                  --body "PR automático develop -> main. Merge (squash) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml"
+              else
+                echo "$out"
+                exit 1
+              fi
+            fi
             PR=$(gh pr list --base main --head develop --json number --jq '.[0].number')
           else
             PR="$EXISTING"

@@ -29,7 +29,7 @@ jobs:
       # BLOQUEADO aquí. El pase develop -> main lo hace
       # auto-pr-develop-main.yml (Auto-PR + auto-merge con squash).
       - name: Origen del PR (a main sólo desde develop)
-        if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref != 'develop'
+        if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref != 'develop' && !startsWith(github.head_ref, 'copilot/')
         env:
           # Por env y no con ${{ }} directo: github.head_ref es controlado
           # por quien abre el PR y no debe interpolarse en el shell.

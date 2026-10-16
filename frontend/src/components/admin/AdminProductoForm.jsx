@@ -104,22 +104,79 @@ async function guardarInfoAdicional(isEdit, prodId, idealPara, infoAdicionalData
   return error;
 }
 
+/**
+ * Unidades de un color como entero >= 0. El input entrega strings; vacío o
+ * basura cuenta 0 (la validación estricta la hace `stockEsInvalido` antes).
+ */
+function stockEntero(valor) {
+  const n = Math.trunc(Number(valor));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** true si el valor no es un entero >= 0 (se rechaza antes de guardar). */
+function stockEsInvalido(valor) {
+  if (valor === '' || valor === null || valor === undefined) return false;
+  const texto = String(valor).trim();
+  if (texto === '') return false;
+  return !/^\d+$/.test(texto);
+}
+
+/**
+ * Colores del producto: upsert por (producto_id, color_id).
+ *
+ * Antes se borraba todo y se reinsertaba con `stock: 0`, así que CADA guardado
+ * del formulario pisaba las unidades cargadas. El upsert sólo toca las columnas
+ * que viajan (stock/visible) y conserva el resto de la fila; las relaciones que
+ * ya no están en el formulario se borran aparte.
+ */
 async function guardarColores(isEdit, prodId, productoColores) {
-  if (isEdit) {
+  const filas = productoColores
+    .filter((cr) => cr.color_id)
+    // Un mismo color no puede repetirse en el producto: gana la última fila.
+    .reduce((acc, cr) => {
+      acc.set(Number(cr.color_id), {
+        producto_id: prodId,
+        color_id: Number(cr.color_id),
+        stock: stockEntero(cr.stock),
+        visible: cr.visible !== false,
+      });
+      return acc;
+    }, new Map());
+
+  if (filas.size === 0) {
+    if (!isEdit) return null;
     const { error } = await supabase.from('prod_color_rel').delete().eq('producto_id', prodId);
+    return error;
+  }
+
+  if (!isEdit) {
+    const { error } = await supabase.from('prod_color_rel').insert([...filas.values()]);
+    return error;
+  }
+
+  const { data: actuales, error: errLectura } = await supabase
+    .from('prod_color_rel')
+    .select('color_id')
+    .eq('producto_id', prodId);
+  if (errLectura) return errLectura;
+
+  const idsAhora = new Set(filas.keys());
+  const eliminados = (actuales || [])
+    .map((r) => r.color_id)
+    .filter((id) => !idsAhora.has(id));
+  if (eliminados.length) {
+    const { error } = await supabase
+      .from('prod_color_rel')
+      .delete()
+      .eq('producto_id', prodId)
+      .in('color_id', eliminados);
     if (error) return error;
   }
-  for (const cr of productoColores) {
-    if (!cr.color_id) continue;
-    const { error } = await supabase.from('prod_color_rel').insert({
-      producto_id: prodId,
-      color_id: Number(cr.color_id),
-      stock: 0,
-      visible: cr.visible !== false,
-    });
-    if (error) return error;
-  }
-  return null;
+
+  const { error } = await supabase
+    .from('prod_color_rel')
+    .upsert([...filas.values()], { onConflict: 'producto_id,color_id' });
+  return error;
 }
 
 async function guardarImagenes(isEdit, prodId, imagenes) {
@@ -252,6 +309,7 @@ potencia_bateria: ft.potencia_bateria || '',
           color_id: r.color_id,
           nombre: r.color?.nombre || '',
           visible: r.visible !== false,
+          stock: r.stock ?? 0,
           porUbicacion: {},
         })));
 
@@ -327,6 +385,15 @@ potencia_bateria: ft.potencia_bateria || '',
       return;
     }
 
+    const conStockInvalido = productoColores.find((cr) => cr.color_id && stockEsInvalido(cr.stock));
+    if (conStockInvalido) {
+      alert(
+        `Unidades inválidas en el color "${conStockInvalido.nombre || '(sin nombre)'}": ` +
+          'escribe un número entero igual o mayor a 0.',
+      );
+      return;
+    }
+
     setSaving(true);
 
     const fallo = await guardarProductoCompleto({
@@ -360,7 +427,7 @@ potencia_bateria: ft.potencia_bateria || '',
   };
 
   const addColor = () => {
-    setProductoColores((prev) => [...prev, { color_id: '', nombre: '', visible: true, porUbicacion: {} }]);
+    setProductoColores((prev) => [...prev, { color_id: '', nombre: '', visible: true, stock: 0, porUbicacion: {} }]);
   };
 
   const updateColorRel = (index, field, value) => {
@@ -426,6 +493,19 @@ potencia_bateria: ft.potencia_bateria || '',
   //     .replace(/^GreenLine\s*/i, '')
   //     .replace(/^Tienda\s*/i, '')
   //     .trim();
+
+  /** Unidades (stock numérico) de un color: un solo número por producto×color. */
+  const updateStock = (index, value) => {
+    setProductoColores((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], stock: value };
+      return next;
+    });
+  };
+
+  const stockDe = (cr) => stockEntero(cr.stock);
+
+  const stockTotal = productoColores.reduce((acc, cr) => acc + stockDe(cr), 0);
 
   const addImage = () => {
     setImagenes((prev) => [...prev, { id: null, url: '', color: '', es_principal: prev.length === 0, orden: prev.length }]);
@@ -667,10 +747,10 @@ potencia_bateria: ft.potencia_bateria || '',
         </div>
         </Section>
 
-      {/* Sección: Colores */}
-      {/* TEMPORAL: el stock por sucursal (prod_color_stock) quedó comentado;
-          aquí solo se administran los colores del producto. */}
-      <Section title="Colores">
+      {/* Sección: Colores y stock */}
+      {/* Stock NUMÉRICO por producto×color activo (`prod_color_rel.stock`).
+          El stock por sucursal (`prod_color_stock`) sigue comentado. */}
+      <Section title="Colores y stock">
         <div className="space-y-3">
           {productoColores.map((cr, i) => (
             <div key={i} className="border border-gray-100 rounded-lg p-3">
@@ -707,34 +787,38 @@ potencia_bateria: ft.potencia_bateria || '',
                   Color oculto: sus imágenes no se muestran en la web (siguen guardadas).
                 </p>
               )}
-              {/* COMENTADO (temporal — stock por sucursal):
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-x-3 gap-y-2 pl-7">
-                {sucursales.map((t) => (
-                  <label key={t.id} className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={cr.porUbicacion?.[t.id] ?? ''}
-                      onChange={(e) => updateUbicacion(i, t.id, e.target.value)}
-                      className="input text-xs w-30"
-                    />
-                    <span className="text-xs text-gray-500">{shortName(t.nombre)}</span>
-                  </label>
-                ))}
-              </div> */}
+              <div className="flex items-center gap-2 pl-7 mt-2 flex-wrap">
+                <label htmlFor={`stock-color-${i}`} className="text-xs text-gray-500">
+                  Unidades
+                </label>
+                <input
+                  id={`stock-color-${i}`}
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  disabled={!cr.color_id}
+                  value={cr.stock ?? ''}
+                  onChange={(e) => updateStock(i, e.target.value)}
+                  className="input text-xs w-28 disabled:opacity-40"
+                  placeholder="0"
+                />
+                <span className="text-[11px] text-gray-400">
+                  Unidades de este color en almacén (modelo × color).
+                </span>
+              </div>
             </div>
           ))}
         </div>
         <button onClick={addColor} className="mt-3 text-sm text-brand font-semibold hover:underline">
           + Agregar color
         </button>
-        {/* COMENTADO (temporal — aviso de stock total):
         {productoColores.length > 0 && (
-          <p className="text-xs text-gray-400 mt-2">
-            Stock total: {productoColores.reduce((s, cr) => s + colorTotal(cr), 0)} unidades
+          <p className="text-xs text-gray-500 mt-2">
+            Stock total:{' '}
+            <span className="font-semibold text-gray-900">{stockTotal}</span> unidad(es)
           </p>
-        )} */}
+        )}
       </Section>
 
       {/* Sección: Imágenes */}

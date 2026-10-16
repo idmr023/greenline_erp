@@ -49,3 +49,20 @@ export function abilityDe(permisos) {
 
 /** Ability "sin permisos": se usa antes de que llegue la respuesta del servidor. */
 export const ABILITY_VACIA = abilityDe([]);
+
+/**
+ * ¿Puede entrar al panel alguien con ésta ability?
+ *
+ * Guard de `/admin` basado en PERMISOS y no en una lista de roles: basta con
+ * que el servidor le haya concedido algún `menu:*:read` (una sección visible).
+ * Así un rol creado desde la pestaña «Roles» entra solo, sin tocar código, y
+ * no hay que mantener PANEL_ROLES a mano.
+ *
+ * Se lee `ability.rules` porque CASL no expone «¿existe alguna regla de
+ * lectura sobre un asunto que empiece por menu:?» de otra forma.
+ * @param {import('@casl/ability').Ability | null | undefined} ability
+ */
+export function puedeEntrarAlPanel(ability) {
+  if (!ability?.rules) return false;
+  return ability.rules.some((r) => r.action === 'read' && String(r.subject).startsWith('menu:'));
+}

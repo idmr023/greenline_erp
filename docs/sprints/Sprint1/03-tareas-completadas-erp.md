@@ -23,4 +23,4 @@ Secciones del detalle técnico del Sprint 1 cuyo desarrollo reside en el ámbito
 - **Almacenamiento en base de datos**: los reclamos se persisten (Supabase) además de enviarse a la hoja de cálculo (`backend/src/routes/reclamaciones.routes.js`).
 - **Vista en `/admin`**: módulo `AdminReclamaciones.jsx` dentro del Admin Panel para gestionar los reclamos registrados.
 - **Aviso legal de plazo**: el correo de confirmación al consumidor indica respuesta en **máximo 15 días hábiles** (aprobado por dirección).
-- **Remitente dedicado**: los correos del Libro de Reclamaciones usan `RECLAMACIONES_EMAIL_FROM` / SMTP dedicados vía `.env` (correo de Mayra como sender principal).
+- **Remitente dedicado**: los correos del Libro de Reclamaciones salen desde la cuenta global por la Gmail API, con `RECLAMACIONES_EMAIL_FROM` (visible) y `RECLAMACIONES_REPLY_TO` (bandeja de reclamaciones). Las `RECLAMACIONES_SMTP_*` quedaron deprecadas: en Render free el SMTP estaba bloqueado y los reclamos morían con `Connection timeout`.

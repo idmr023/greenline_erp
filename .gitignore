@@ -42,3 +42,10 @@ logs/
 Thumbs.db
 .idea/
 *.swp
+
+# Python (dashboard/)
+dashboard/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/

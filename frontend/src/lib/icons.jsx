@@ -87,6 +87,7 @@ import {
   faSquare,
   faGear,
   faVolumeHigh,
+  faVolumeXmark,
   faTowerBroadcast,
   faRecycle,
   faTicket,
@@ -121,6 +122,8 @@ import {
   faShield,
   faFolderOpen,
   faLightbulb,
+  faGlobe,
+  faGhost,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -139,6 +142,8 @@ export default function Icon({ icon, size = 24, className, color, ...rest }) {
   );
 }
 
+export const Ghost = (props) => <Icon icon={faGhost} {...props} />;
+export const Globe = (props) => <Icon icon={faGlobe} {...props} />;
 export const Lightbulb = (props) => <Icon icon={faLightbulb} {...props} />; 
 export const FolderOpen = (props) => <Icon icon={faFolderOpen} {...props} />;
 export const Shield_ = (props) => <Icon icon={faShield} {...props} />;
@@ -277,6 +282,7 @@ export const Upload = (props) => <Icon icon={faUpload} {...props} />;
 export const User = (props) => <Icon icon={faUser} {...props} />;
 export const Users = (props) => <Icon icon={faUsers} {...props} />;
 export const Volume2 = (props) => <Icon icon={faVolumeHigh} {...props} />;
+export const VolumeX = (props) => <Icon icon={faVolumeXmark} {...props} />;
 export const Wallet = (props) => <Icon icon={faWallet} {...props} />;
 export const Weight = (props) => <Icon icon={faWeightHanging} {...props} />;
 export const Wrench = (props) => <Icon icon={faWrench} {...props} />;

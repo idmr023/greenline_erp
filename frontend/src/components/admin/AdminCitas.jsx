@@ -518,6 +518,7 @@ function BotonEstado({ color, children, ...props }) {
 
 function TabDestinatarios({ accessToken, puedeEditar, tiendas }) {
   const [items, setItems] = useState([]);
+  const [fallback, setFallback] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [form, setForm] = useState({ tiendaId: '', nombre: '', email: '' });
@@ -529,6 +530,7 @@ function TabDestinatarios({ accessToken, puedeEditar, tiendas }) {
     try {
       const data = await citasAPI.destinatarios({}, accessToken);
       setItems(data.destinatarios || []);
+      setFallback(data.fallback || '');
     } catch (err) {
       setLoadError(err?.message || 'Error cargando destinatarios');
     } finally {
@@ -568,8 +570,13 @@ function TabDestinatarios({ accessToken, puedeEditar, tiendas }) {
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gray-500 mb-1">
         Cada cita nueva avía por correo a <strong>todos</strong> estos destinatarios (máx. recomendado: 2–3 por tienda).
+      </p>
+      <p className="text-sm text-gray-500 mb-4">
+        {fallback
+          ? <>Una tienda sin correos propios usa el respaldo <span className="font-medium text-gray-700">{fallback}</span>.</>
+          : 'Sin respaldo configurado (CITAS_FALLBACK_EMAIL / MAIL_TO): una tienda sin correos propios no recibe ningún aviso.'}
       </p>
 
       {puedeEditar && (
@@ -625,7 +632,9 @@ function TabDestinatarios({ accessToken, puedeEditar, tiendas }) {
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-6 text-sm">{loadError}</div>
       ) : items.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 p-12 text-center text-sm text-gray-500">
-          Sin destinatarios: las tiendas NO recibirán los correos de citas hasta que agregues al menos uno.
+          {fallback
+            ? `Sin correos por tienda todavía: los avisos de todas las tiendas van al respaldo (${fallback}).`
+            : 'Sin destinatarios: las tiendas NO recibirán los correos de citas hasta que agregues al menos uno.'}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">

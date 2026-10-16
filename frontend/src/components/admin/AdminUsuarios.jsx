@@ -1,25 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
-import { usuariosAPI } from '../../lib/api';
-import { rolesDe } from '../../lib/roles';
+import { rolesAPI, usuariosAPI } from '../../lib/api';
+import { rolesDe, ROLES_RESPALDO } from '../../lib/roles';
 import { Check, Loader2, RefreshCw, Pencil, Plus, Search, ShieldCheck, Trash2, Users, X } from '../../lib/icons';
 
-/** Roles que el backend acepta en POST/PUT /users (zod del users.routes). */
-const ROLES_DISPONIBLES = [
-  ['ADMIN', 'Administrador'],
-  ['DESARROLLADOR_WEB', 'Desarrollador web'],
-  ['EDITORA_BLOG', 'Editora de blog'],
-  ['DISTRIBUCION', 'Distribución'],
-  ['REDES_SOCIALES', 'Redes sociales'],
-  ['GERENTE_TIENDA', 'Gerente de tienda'],
-  ['COLABORADOR_TIENDA', 'Colaborador de tienda'],
-  ['GERENTE_ALMACEN', 'Gerente de almacén'],
-  ['COLABORADOR_ALMACEN', 'Colaborador de almacén'],
-  ['CLIENTE', 'Cliente'],
-];
-
-const ETIQUETA_ROL = Object.fromEntries(ROLES_DISPONIBLES);
 const LIMITE = 20;
 
 const CONTRASENA_ESTANDAR = 'greenline@2026';
@@ -50,6 +35,16 @@ const mensajeDe = (err, porDefecto) => {
   return detalles ? `${base} — ${detalles}` : base;
 };
 
+/**
+ * Detalle del fallo para el aviso del catálogo de roles. `request()` lanza
+ * `{ status, error, details }`; el `status` es lo que permite distinguir un
+ * 404 «endpoint no desplegado» de un 403 «sin permiso» o de un backend caído.
+ */
+const descripcionDeError = (err) => {
+  const detalle = err?.error || err?.message || 'error desconocido';
+  return err?.status ? `HTTP ${err.status} · ${detalle}` : detalle;
+};
+
 export default function AdminUsuarios() {
   const { user, accessToken } = useAuth();
   const ability = useAbility();
@@ -75,6 +70,57 @@ export default function AdminUsuarios() {
   const [form, setForm] = useState(FORM_VACIO);
   const [guardando, setGuardando] = useState(false);
   const [accionando, setAccionando] = useState(null);
+
+  /**
+   * Catálogo de roles del backend (`GET /auth/roles`): el panel puede crear
+   * roles sin desplegar, así que la lista NO se copia aquí. Mientras llega
+   * los selectores quedan vacíos; si la petición FALLA se pinta el error real
+   * (status + mensaje) con botón de reintento y se usan `ROLES_RESPALDO`
+   * sólo para no bloquear el alta de usuarios.
+   */
+  const [catalogoRoles, setCatalogoRoles] = useState([]);
+  /** 'cargando' | 'ok' | 'error' — distingue «todavía llega» de «no llega». */
+  const [catalogoEstado, setCatalogoEstado] = useState('cargando');
+  const [catalogoError, setCatalogoError] = useState(null);
+
+  // Todo el estado se toca DESPUÉS del await: así el effect de carga no
+  // hace setState síncrono (oxlint react set-state-in-effect).
+  const cargarCatalogo = useCallback(async () => {
+    try {
+      const res = await rolesAPI.listar(accessToken);
+      setCatalogoRoles(res?.roles || []);
+      setCatalogoError(null);
+      setCatalogoEstado('ok');
+    } catch (err) {
+      // Sin el detalle real el usuario sólo ve «recarga la página» y no puede
+      // avisar de nada: `request()` trae status + `error` del backend.
+      setCatalogoError(descripcionDeError(err));
+      setCatalogoEstado('error');
+    }
+  }, [accessToken]);
+
+  /** Reintento (botones y al abrir el formulario): sí marca «cargando». */
+  const reintentarCatalogo = useCallback(() => {
+    setCatalogoEstado('cargando');
+    setCatalogoError(null);
+    void cargarCatalogo();
+  }, [cargarCatalogo]);
+
+  useEffect(() => {
+    void cargarCatalogo();
+  }, [cargarCatalogo]);
+
+  /** Lo que pintan el filtro y el bloque de roles del formulario. */
+  const rolesVisibles = useMemo(() => {
+    if (catalogoEstado === 'ok') return catalogoRoles;
+    return catalogoEstado === 'error' ? ROLES_RESPALDO : [];
+  }, [catalogoEstado, catalogoRoles]);
+
+  const etiquetasRoles = useMemo(
+    () => Object.fromEntries(rolesVisibles.map((r) => [r.nombre, r.etiqueta || r.nombre])),
+    [rolesVisibles],
+  );
+  const etiquetaDe = (rol) => etiquetasRoles[rol] || rol;
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -109,6 +155,9 @@ export default function AdminUsuarios() {
     setForm(FORM_VACIO);
     setFormAbierto(true);
     setMensaje(null);
+    // Si el catálogo no llegó la primera vez, reintentarlo al abrir el
+    // formulario: el alta depende de él para pintar los checkboxes.
+    if (catalogoEstado !== 'ok') reintentarCatalogo();
   };
 
   const abrirEdicion = (u) => {
@@ -123,6 +172,7 @@ export default function AdminUsuarios() {
     });
     setFormAbierto(true);
     setMensaje(null);
+    if (catalogoEstado !== 'ok') reintentarCatalogo();
   };
 
   const setCampo = (clave, valor) => setForm((f) => ({ ...f, [clave]: valor }));
@@ -305,8 +355,8 @@ export default function AdminUsuarios() {
           className="input max-w-[220px]"
         >
           <option value="">Todos los roles</option>
-          {ROLES_DISPONIBLES.map(([valor, etiqueta]) => (
-            <option key={valor} value={valor}>{etiqueta}</option>
+          {rolesVisibles.map((r) => (
+            <option key={r.nombre} value={r.nombre}>{r.etiqueta || r.nombre}</option>
           ))}
         </select>
         <button
@@ -332,6 +382,24 @@ export default function AdminUsuarios() {
         </div>
       )}
 
+      {/* El catálogo de roles caído se ve AQUÍ y dentro del formulario (con
+          reintento): antes se tragaba el error y sólo se avisaba de «recarga». */}
+      {catalogoEstado === 'error' && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start justify-between gap-3">
+          <span>
+            No se pudo cargar el catálogo de roles del servidor
+            {catalogoError ? ` (${catalogoError})` : ''}.
+          </span>
+          <button
+            type="button"
+            onClick={reintentarCatalogo}
+            className="shrink-0 font-semibold underline hover:text-amber-900"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
       {/* Listado */}
       {cargando ? (
         <div className="flex items-center gap-2 text-gray-400 text-sm py-8 justify-center">
@@ -351,13 +419,13 @@ export default function AdminUsuarios() {
                     {u.nombre} {u.apellido}
                   </p>
                   <span className="text-[10px] font-semibold text-brand bg-brand/10 px-2 py-0.5 rounded">
-                    {ETIQUETA_ROL[u.rol] || u.rol}
+                    {etiquetaDe(u.rol)}
                   </span>
                   {rolesDe(u)
                     .filter((rol) => rol !== u.rol)
                     .map((rol) => (
                       <span key={rol} className="text-[10px] font-semibold text-brand bg-brand/10 px-2 py-0.5 rounded">
-                        {ETIQUETA_ROL[rol] || rol}
+                        {etiquetaDe(rol)}
                       </span>
                     ))}
                   {!u.activo && (
@@ -456,8 +524,9 @@ export default function AdminUsuarios() {
       )}
 
       <p className="mt-6 text-[11px] text-gray-400">
-        Los permisos de escritura sobre cada sección se conceden por rol en el panel lateral
-        («Acceso al panel»); aquí se asignan los roles de cada cuenta (pueden ser varios).
+        Aquí se asignan los roles de cada cuenta (pueden ser varios). Qué puede hacer
+        cada rol se edita en la sección «Roles»; los accesos de panel por rol siguen en
+        el panel lateral («Acceso al panel»).
       </p>
 
       {/* Formulario crear / editar */}
@@ -561,21 +630,49 @@ export default function AdminUsuarios() {
                   Roles (permisos) *
                 </label>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {ROLES_DISPONIBLES.map(([valor, etiqueta]) => (
+                  {rolesVisibles.map((r) => (
                     <label
-                      key={valor}
+                      key={r.nombre}
                       className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer rounded-lg border border-gray-100 px-2 py-1.5 hover:bg-gray-50"
                     >
                       <input
                         type="checkbox"
-                        checked={(form.roles || []).includes(valor)}
-                        onChange={() => alternarRol(valor)}
+                        checked={(form.roles || []).includes(r.nombre)}
+                        onChange={() => alternarRol(r.nombre)}
                         className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand"
                       />
-                      {etiqueta}
+                      {r.etiqueta || r.nombre}
                     </label>
                   ))}
                 </div>
+                {catalogoEstado === 'cargando' && (
+                  <p className="flex items-center gap-1.5 text-[11px] text-gray-400 mt-1">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Cargando roles del servidor…
+                  </p>
+                )}
+                {catalogoEstado === 'error' && (
+                  <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    <div className="flex items-start justify-between gap-3">
+                      <p>
+                        No se pudo cargar el catálogo de roles del servidor
+                        {catalogoError ? ` (${catalogoError})` : ''}. Se muestran los roles
+                        de respaldo: vuelve a intentarlo antes de guardar.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={reintentarCatalogo}
+                        className="shrink-0 font-semibold underline hover:text-amber-900"
+                      >
+                        Reintentar
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {catalogoEstado === 'ok' && rolesVisibles.length === 0 && (
+                  <p className="text-[11px] text-amber-700 mt-1">
+                    El servidor no devolvió ningún rol: no es posible asignar permisos.
+                  </p>
+                )}
                 <p className="text-[11px] text-gray-400 mt-1">
                   Un usuario puede tener varios roles: los permisos del panel son
                   la unión de todos ellos. «Cliente» no se combina con roles de equipo.

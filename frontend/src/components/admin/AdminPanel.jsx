@@ -3,8 +3,9 @@ import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { authAPI } from '../../lib/api';
-import { PANEL_ROLES } from '../../lib/roles';
+import { PANEL_ROLES, rolesDe, tieneRol } from '../../lib/roles';
 import AdminDashboard from './AdminDashboard';
+import DashboardEmbedded from '../../pages/DashboardEmbedded';
 import AdminProductos from './AdminProductos';
 import AdminProductoForm from './AdminProductoForm';
 import AdminColores from './AdminColores';
@@ -19,11 +20,14 @@ import AdminCitas from './AdminCitas';
 import AdminEmails from './AdminEmails';
 import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench } from '../../lib/icons';
+import AdminRoles from './AdminRoles';
+import AdminAjustes from './AdminAjustes';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
 
 const VIEWS = {
   DASHBOARD: 'dashboard',
+  SERVICIO_TECNICO: 'servicio_tecnico',
   PRODUCTOS: 'productos',
   PRODUCTO_FORM: 'producto_form',
   COLORES: 'colores',
@@ -38,6 +42,8 @@ const VIEWS = {
   EMAILS: 'emails',
   BOVEDA: 'boveda',
   USUARIOS: 'usuarios',
+  ROLES: 'roles',
+  AJUSTES: 'ajustes',
 };
 
 /**
@@ -47,6 +53,10 @@ const VIEWS = {
  */
 const NAV_ITEMS = [
   { key: VIEWS.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard, perm: 'menu:dashboard' },
+  // Servicio Técnico: dashboard Flask embebido con slug fijo. Sin `href` a
+  // propósito: se navega con `navigateTo` para no salir del layout con sidebar
+  // (un `href` + window.location.href recargaría a una ruta sin sidebar).
+  { key: VIEWS.SERVICIO_TECNICO, label: 'Servicio Técnico', icon: Wrench, perm: 'menu:servicio_tecnico' },
   { key: VIEWS.PRODUCTOS, label: 'Productos', icon: Package, perm: 'menu:productos' },
   { key: VIEWS.COLORES, label: 'Colores', icon: Palette, perm: 'menu:colores' },
   { key: VIEWS.BLOG, label: 'Blog', icon: FileText, perm: 'menu:blog' },
@@ -67,24 +77,44 @@ const NAV_ITEMS = [
   // Usuarios (backend /api/users, RBAC usuarios:*): ver y gestionar cuentas,
   // rol (permisos), alta/baja y el correo con el que cada quien fija su clave.
   { key: VIEWS.USUARIOS, label: 'Usuarios', icon: Users, perm: 'menu:usuarios' },
+  // Roles del panel (RBAC): catálogo editable desde la UI. Sólo lo ve quien
+  // tiene menu:roles:read; escribir lo decide además usuarios:manage-roles.
+  { key: VIEWS.ROLES, label: 'Roles', icon: SlidersHorizontal, perm: 'menu:roles' },
+  // Ajustes del SITIO PÚBLICO (site_config): lo que el visitante ve sin
+  // redeploy — tema Halloween, banners. Escribir exige config:update.
+  { key: VIEWS.AJUSTES, label: 'Ajustes del sitio', icon: Settings, perm: 'menu:ajustes' },
 ];
 
 /**
  * Secciones visibles para la ability de ESTA sesión. La unión multi-rol ya
  * la resolvió el servidor al construir la matriz; el cliente sólo filtra.
  */
-function navVisibleDe(ability) {
-  return NAV_ITEMS.filter((i) => ability.can('read', i.perm));
+/**
+ * Roles que siempre ven Servicio Técnico aunque el backend aún no envíe
+ * `menu:servicio_tecnico:read` en la matriz de permisos.
+ */
+const ROLES_SERVICIO_TECNICO = ['ADMIN', 'DESARROLLADOR_WEB'];
+
+function navVisibleDe(ability, puedeVerST) {
+  return NAV_ITEMS.filter((i) => {
+    if (i.key === VIEWS.SERVICIO_TECNICO && puedeVerST) return true;
+    return ability.can('read', i.perm);
+  });
 }
 
 export default function AdminPanel() {
-  const { logout, accessToken } = useAuth();
+  const { logout, accessToken, user } = useAuth();
   const ability = useAbility();
+  // Bypass por rol: ADMIN y DESARROLLADOR_WEB ven Servicio Técnico siempre.
+  // El resto lo decide la matriz del backend (`menu:servicio_tecnico:read`).
+  const puedeVerST = tieneRol(ROLES_SERVICIO_TECNICO, rolesDe(user));
 
   const getInitialView = () => {
     const path = window.location.pathname;
+    const search = window.location.search;
     let candidata = VIEWS.DASHBOARD;
-    if (path.includes('/admin/distribuidores')) candidata = VIEWS.DISTRIBUIDORES;
+    if (path.includes('/admin/dashboard-embed') && search.includes('servicio-tecnico')) candidata = VIEWS.SERVICIO_TECNICO;
+    else if (path.includes('/admin/distribuidores')) candidata = VIEWS.DISTRIBUIDORES;
     else if (path.includes('/admin/blog')) candidata = VIEWS.BLOG;
     else if (path.includes('/admin/productos')) candidata = VIEWS.PRODUCTOS;
     else if (path.includes('/admin/colores')) candidata = VIEWS.COLORES;
@@ -96,12 +126,14 @@ export default function AdminPanel() {
     else if (path.includes('/admin/emails')) candidata = VIEWS.EMAILS;
     else if (path.includes('/admin/metricas')) candidata = VIEWS.METRICAS;
     else if (path.includes('/admin/usuarios')) candidata = VIEWS.USUARIOS;
+    else if (path.includes('/admin/roles')) candidata = VIEWS.ROLES;
+    else if (path.includes('/admin/ajustes')) candidata = VIEWS.AJUSTES;
     else if (path.includes('/admin/dashboard')) candidata = VIEWS.DASHBOARD;
 
     // Una URL directa no debe abrir una sección que la sesión no ve (§40).
     // El primer ítem permitido además resuelve la landing de quien sólo ve
     // blog o distribuidores, sin casos especiales por rol.
-    const permitidas = navVisibleDe(ability).map((i) => i.key);
+    const permitidas = navVisibleDe(ability, puedeVerST).map((i) => i.key);
     if (permitidas.length === 0) return VIEWS.DASHBOARD;
     return permitidas.includes(candidata) ? candidata : permitidas[0];
   };
@@ -119,7 +151,7 @@ export default function AdminPanel() {
   const [anivOn, setAnivOn] = useState(() => temaAniversarioActivo());
   const handleAnivToggle = () => setAnivOn(toggleTemaAniversario());
 
-  const visibleNav = navVisibleDe(ability);
+  const visibleNav = navVisibleDe(ability, puedeVerST);
 
   // Rótulo del sidebar según el perfil de permisos de la sesión.
   const subtitulo = canGrant
@@ -165,7 +197,14 @@ export default function AdminPanel() {
   const navigateTo = (target, id = null) => {
     setEditingId(id);
     setView(target);
-    const newPath = target === VIEWS.DASHBOARD ? '/admin' : `/admin/${target}`;
+    let newPath = '/admin/dashboard-embed';
+    if (target === VIEWS.SERVICIO_TECNICO) {
+      newPath = '/admin/dashboard-embed?slug=servicio-tecnico';
+    } else if (target === VIEWS.DASHBOARD) {
+      newPath = '/admin/dashboard-embed';
+    } else {
+      newPath = `/admin/${target}`;
+    }
     window.history.pushState({}, '', newPath);
   };
 
@@ -220,15 +259,15 @@ export default function AdminPanel() {
             const Icon = item.icon;
             const active = view === item.key || (item.key === VIEWS.PRODUCTOS && view === VIEWS.PRODUCTO_FORM);
             return (
-              <button
-                key={item.key}
-                onClick={() => navigateTo(item.key)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  active
-                    ? 'bg-brand/10 text-brand font-semibold'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
+          <button
+            key={item.key}
+            onClick={() => navigateTo(item.key)}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+              active
+                ? 'bg-brand/10 text-brand font-semibold'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
                 <Icon className="w-4 h-4" />
                 {item.label}
               </button>
@@ -312,7 +351,16 @@ export default function AdminPanel() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        {view === VIEWS.DASHBOARD && <AdminDashboard onNavigate={navigateTo} />}
+        {view === VIEWS.DASHBOARD && (
+          window.location.pathname.includes('/admin/dashboard-embed') ? (
+            <DashboardEmbedded />
+          ) : (
+            <AdminDashboard onNavigate={navigateTo} />
+          )
+        )}
+        {view === VIEWS.SERVICIO_TECNICO && (
+          <DashboardEmbedded key="servicio-tecnico" slugInicial="servicio-tecnico" />
+        )}
         {view === VIEWS.PRODUCTOS && (
           <AdminProductos
             onEdit={(id) => navigateTo(VIEWS.PRODUCTO_FORM, id)}
@@ -338,6 +386,8 @@ export default function AdminPanel() {
         {view === VIEWS.METRICAS && <AdminMetrics />}
         {view === VIEWS.BOVEDA && <AdminBoveda />}
         {view === VIEWS.USUARIOS && <AdminUsuarios />}
+        {view === VIEWS.ROLES && <AdminRoles />}
+        {view === VIEWS.AJUSTES && <AdminAjustes />}
       </main>
     </div>
   );

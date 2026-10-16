@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search } from '../../lib/icons';
+import { Plus, Pencil, Trash2, Search, Upload } from '../../lib/icons';
 import { ColorDot } from '../ColorDot';
+import AdminStockImportar from './AdminStockImportar';
 
 export default function AdminProductos({ onEdit, onNew }) {
     const [productos, setProductos] = useState([]);
@@ -10,6 +11,7 @@ export default function AdminProductos({ onEdit, onNew }) {
     const [filterCat, setFilterCat] = useState('');
     const [categorias, setCategorias] = useState([]);
     const [colores, setColores] = useState([]);
+    const [importando, setImportando] = useState(false);
 
   useEffect(() => {
     load();
@@ -23,7 +25,7 @@ export default function AdminProductos({ onEdit, onNew }) {
         id, nombre, slug, precio_actual, precio_original, destacado, disponible, created_at,
         categoria:categorias(id, nombre),
         imagenes(id),
-        color_rel:prod_color_rel(color_id, visible, color:colores(id, nombre, hex_code))
+        color_rel:prod_color_rel(color_id, stock, visible, color:colores(id, nombre, hex_code))
       `).order('created_at', { ascending: false }),
       supabase.from('categorias').select('*').order('id'),
       supabase.from('colores').select('id, nombre, hex_code').order('nombre'),
@@ -57,6 +59,10 @@ export default function AdminProductos({ onEdit, onNew }) {
       categoria_nombre: p.categoria?.nombre || 'Sin categoría',
       total_imagenes: (p.imagenes || []).length,
       disponible: p.disponible !== false,
+      stock_total: (p.color_rel || []).reduce(
+        (acc, cr) => acc + (Math.max(0, Math.trunc(Number(cr.stock))) || 0),
+        0,
+      ),
       colores_disponibles: (p.color_rel || [])
         .filter((cr) => cr.color && cr.visible !== false)
         .map((cr) => cr.color.nombre),
@@ -85,13 +91,23 @@ export default function AdminProductos({ onEdit, onNew }) {
           <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
           <p className="text-sm text-gray-500 mt-1">{productos.length} productos en total</p>
         </div>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo Producto
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setImportando(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+            title="Cargar unidades por modelo × color desde un .xlsx o .csv"
+          >
+            <Upload className="w-4 h-4" />
+            Importar Excel
+          </button>
+          <button
+            onClick={onNew}
+            className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo Producto
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -132,6 +148,7 @@ export default function AdminProductos({ onEdit, onNew }) {
                   <th className="px-4 py-3 font-semibold text-gray-600 text-right">Precio</th>
                   <th className="px-4 py-3 font-semibold text-gray-600 text-center">Disponible</th>
                   <th className="px-4 py-3 font-semibold text-gray-600 text-center">Colores</th>
+                  <th className="px-4 py-3 font-semibold text-gray-600 text-right">Stock</th>
                   <th className="px-4 py-3 font-semibold text-gray-600 text-right">Acciones</th>
                 </tr>
              </thead>
@@ -161,9 +178,18 @@ export default function AdminProductos({ onEdit, onNew }) {
                            className="w-4 h-4"
                          />
                        ))}
-                     </div>
-                   </td>
-                   <td className="px-4 py-3 text-right">
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span
+                        className={`text-sm font-semibold ${p.stock_total > 0 ? 'text-gray-900' : 'text-red-500'}`}
+                        title="Unidades en almacén (suma de todos los colores)"
+                      >
+                        {p.stock_total}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-1">un.</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
                      <div className="flex items-center justify-end gap-1">
                        <button
                          onClick={() => onEdit(p.id)}
@@ -185,7 +211,7 @@ export default function AdminProductos({ onEdit, onNew }) {
                ))}
 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                       No se encontraron productos
                     </td>
                   </tr>
@@ -193,6 +219,13 @@ export default function AdminProductos({ onEdit, onNew }) {
              </tbody>
           </table>
         </div>
+      )}
+
+      {importando && (
+        <AdminStockImportar
+          onClose={() => setImportando(false)}
+          onAplicado={fetchProductos}
+        />
       )}
     </div>
   );

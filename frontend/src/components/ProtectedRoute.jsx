@@ -1,12 +1,23 @@
 import { Navigate, useLocation } from 'react-router-dom';
+import { useAbility } from '@casl/react';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from '../lib/icons';
 import { rolesDe, tieneRol } from '../lib/roles';
 
-// Los roles viven en lib/roles.js (fuente única): aquí sólo se decide si la
-// sesión y el rol permiten seguir. Ver lib/roles.js para el mapa completo.
-export default function ProtectedRoute({ children, requiredRoles = null }) {
+/**
+ * Guard de sesión + autorización del panel.
+ *
+ *   requiredRoles → lista de roles permitidos (multi-rol: basta con uno).
+ *   guardia       → predicado `(ability) => boolean` basado en PERMISOS.
+ *
+ * `/admin` usa `guardia={puedeEntrarAlPanel}` para no tener que mantener una
+ * lista de roles a mano; `/fase-2-implementacion` conserva `requiredRoles`
+ * porque es una vista heredada cuyo acceso se decide por rol (excepción
+ * documentada en App.jsx).
+ */
+export default function ProtectedRoute({ children, requiredRoles = null, guardia = null }) {
   const { user, loading } = useAuth();
+  const ability = useAbility();
   const location = useLocation();
 
   if (loading) {
@@ -26,6 +37,9 @@ export default function ProtectedRoute({ children, requiredRoles = null }) {
     return <Navigate to="/" replace />;
   }
 
+  if (guardia && !guardia(ability)) {
+    return <Navigate to="/" replace />;
+  }
+
   return children;
 }
-

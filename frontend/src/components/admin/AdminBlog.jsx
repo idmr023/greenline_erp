@@ -302,6 +302,19 @@ export default function AdminBlog() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [vistaPreviaOpen, setVistaPreviaOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  // Aviso nativo del navegador al recargar/cerrar la pestaña con cambios sin
+  // guardar. El texto del diálogo lo controla el navegador (no personalizable).
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const avisar = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [dirty]);
 
   const categoryById = useMemo(() => {
     const map = {};
@@ -350,6 +363,7 @@ export default function AdminBlog() {
 
   const startNew = () => {
     setEditingId(null);
+    setDirty(false);
     setGalleryImages([]);
     setForm({
       ...EMPTY,
@@ -363,6 +377,7 @@ export default function AdminBlog() {
 
   const startEdit = (post) => {
     setEditingId(post.id);
+    setDirty(false);
     setForm({
       title: post.title || '',
       slug: post.slug || '',
@@ -380,11 +395,13 @@ export default function AdminBlog() {
 
   const cancel = () => {
     setEditingId(null);
+    setDirty(false);
     setForm(EMPTY);
     setGalleryImages([]);
   };
 
   const onTitleChange = (val) => {
+    setDirty(true);
     setForm((f) => ({
       ...f,
       title: val,
@@ -392,7 +409,10 @@ export default function AdminBlog() {
     }));
   };
 
-  const setField = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const setField = (field, value) => {
+    setDirty(true);
+    setForm((f) => ({ ...f, [field]: value }));
+  };
 
   const crearCategoria = async () => {
     const name = prompt('Nombre de la nueva categoría:');
@@ -408,6 +428,7 @@ export default function AdminBlog() {
       return;
     }
     setCategories((prev) => [...prev, data].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+    setDirty(true);
     setForm((f) => ({ ...f, category_id: data.id }));
   };
 

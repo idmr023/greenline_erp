@@ -33,6 +33,7 @@ import {
   faSpinner,
   faShieldHalved,
   faGauge,
+  faGhost,
   faPalette,
   faQuoteLeft,
   faCartShopping,
@@ -46,6 +47,8 @@ import {
   faChevronLeft,
   faChevronRight,
   faChevronUp,
+  faCar,
+  faCamera,
   faPhone,
   faStar,
   faFont,
@@ -123,7 +126,6 @@ import {
   faFolderOpen,
   faLightbulb,
   faGlobe,
-  faGhost,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -141,8 +143,6 @@ export default function Icon({ icon, size = 24, className, color, ...rest }) {
     />
   );
 }
-
-export const Ghost = (props) => <Icon icon={faGhost} {...props} />;
 export const Globe = (props) => <Icon icon={faGlobe} {...props} />;
 export const Lightbulb = (props) => <Icon icon={faLightbulb} {...props} />; 
 export const FolderOpen = (props) => <Icon icon={faFolderOpen} {...props} />;
@@ -180,6 +180,8 @@ export const ChevronDown = (props) => <Icon icon={faChevronDown} {...props} />;
 export const ChevronLeft = (props) => <Icon icon={faChevronLeft} {...props} />;
 export const ChevronRight = (props) => <Icon icon={faChevronRight} {...props} />;
 export const ChevronUp = (props) => <Icon icon={faChevronUp} {...props} />;
+export const Car = (props) => <Icon icon={faCar} {...props} />;
+export const Camera = (props) => <Icon icon={faCamera} {...props} />;
 export const CircleDollarSign = (props) => <Icon icon={faDollarSign} {...props} />;
 export const Clock = (props) => <Icon icon={faClock} {...props} />;
 export const Columns2 = (props) => <Icon icon={faColumns} {...props} />;
@@ -196,6 +198,7 @@ export const FileCog = (props) => <Icon icon={faFilePen} {...props} />;
 export const FileSignature = (props) => <Icon icon={faFileSignature} {...props} />;
 export const FileText = (props) => <Icon icon={faFileLines} {...props} />;
 export const Gauge = (props) => <Icon icon={faGauge} {...props} />;
+export const Ghost = (props) => <Icon icon={faGhost} {...props} />;
 export const Gift = (props) => <Icon icon={faGift} {...props} />;
 export const GraduationCap = (props) => <Icon icon={faGraduationCap} {...props} />;
 export const GripVertical = (props) => <Icon icon={faGripVertical} {...props} />;

@@ -17,12 +17,13 @@ import AdminDistribuidores from './AdminDistribuidores';
 import AdminContactos from './AdminContactos';
 import AdminReclamaciones from './AdminReclamaciones';
 import AdminCitas from './AdminCitas';
+import AdminPrestamosVehiculo from './AdminPrestamosVehiculo';
 import AdminEmails from './AdminEmails';
 import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import AdminRoles from './AdminRoles';
 import AdminAjustes from './AdminAjustes';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings } from '../../lib/icons';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
 
 const VIEWS = {
@@ -39,6 +40,7 @@ const VIEWS = {
   CONTACTOS: 'contactos',
   RECLAMACIONES: 'reclamaciones',
   CITAS: 'citas',
+  PRESTAMOS_VEHICULO: 'prestamos_vehiculo',
   EMAILS: 'emails',
   BOVEDA: 'boveda',
   USUARIOS: 'usuarios',
@@ -68,6 +70,7 @@ const NAV_ITEMS = [
   // Citas de servicio técnico (§10): la agenda por tienda; las tiendas
   // se enteran por correo, aquí sólo administra el equipo central.
   { key: VIEWS.CITAS, label: 'Citas', icon: Wrench, perm: 'menu:citas' },
+  { key: VIEWS.PRESTAMOS_VEHICULO, label: 'Préstamos Vehículos', icon: Car, perm: 'menu:prestamos-vehiculo:read' },
   { key: VIEWS.EMAILS, label: 'Email Logs', icon: Activity, perm: 'menu:emails' },
   { key: VIEWS.METRICAS, label: 'Métricas', icon: Activity, perm: 'menu:metricas' },
   // Bóveda Segura V5: la ABRE todo el staff (§40 — ver y copiar es de todos);
@@ -123,6 +126,7 @@ export default function AdminPanel() {
     else if (path.includes('/admin/contactos')) candidata = VIEWS.CONTACTOS;
     else if (path.includes('/admin/reclamaciones')) candidata = VIEWS.RECLAMACIONES;
     else if (path.includes('/admin/citas')) candidata = VIEWS.CITAS;
+    else if (path.includes('/admin/prestamos-vehiculo')) candidata = VIEWS.PRESTAMOS_VEHICULO;
     else if (path.includes('/admin/emails')) candidata = VIEWS.EMAILS;
     else if (path.includes('/admin/metricas')) candidata = VIEWS.METRICAS;
     else if (path.includes('/admin/usuarios')) candidata = VIEWS.USUARIOS;
@@ -382,6 +386,7 @@ export default function AdminPanel() {
         {view === VIEWS.CONTACTOS && <AdminContactos />}
         {view === VIEWS.RECLAMACIONES && <AdminReclamaciones />}
         {view === VIEWS.CITAS && <AdminCitas />}
+        {view === VIEWS.PRESTAMOS_VEHICULO && <AdminPrestamosVehiculo />}
         {view === VIEWS.EMAILS && <AdminEmails />}
         {view === VIEWS.METRICAS && <AdminMetrics />}
         {view === VIEWS.BOVEDA && <AdminBoveda />}

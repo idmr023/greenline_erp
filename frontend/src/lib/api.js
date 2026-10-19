@@ -415,6 +415,74 @@ export const citasAPI = {
 };
 
 // ============================================================
+// Préstamos de vehículos (verificación de estado ingreso/salida)
+// ============================================================
+export const prestamosVehiculoAPI = {
+  listar: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/prestamos-vehiculo${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+
+  obtener: (id, accessToken) =>
+    request(`/prestamos-vehiculo/${encodeURIComponent(id)}`, { headers: authHeaders(accessToken) }),
+
+  crear: (payload, accessToken) =>
+    request('/prestamos-vehiculo', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  actualizar: (id, payload, accessToken) =>
+    request(`/prestamos-vehiculo/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  eliminar: (id, accessToken) =>
+    request(`/prestamos-vehiculo/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(accessToken),
+    }),
+
+  registrarIngreso: (id, payload, accessToken) =>
+    request(`/prestamos-vehiculo/${encodeURIComponent(id)}/ingreso`, {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  registrarSalida: (id, payload, accessToken) =>
+    request(`/prestamos-vehiculo/${encodeURIComponent(id)}/salida`, {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  listarTiendas: (accessToken) =>
+    request('/prestamos-vehiculo/tiendas', { headers: authHeaders(accessToken) }),
+
+  listarEmpleados: (accessToken) =>
+    request('/prestamos-vehiculo/empleados', { headers: authHeaders(accessToken) }),
+
+  subirFoto: (id, file, parte, accessToken) => {
+    const formData = new FormData();
+    formData.append('foto', file);
+    if (parte) formData.append('parte', parte);
+    return request(`/prestamos-vehiculo/${encodeURIComponent(id)}/fotos`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    });
+  },
+};
+
+// ============================================================
 // Ajustes del SITIO PÚBLICO (greenline)
 //
 // El panel escribe aquí lo que el sitio público debe mostrar sin redeploy:

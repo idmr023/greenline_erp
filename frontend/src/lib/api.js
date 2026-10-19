@@ -483,6 +483,160 @@ export const prestamosVehiculoAPI = {
 };
 
 // ============================================================
+// TALLER OPERATIVO: evaluación de incentivos (armadores),
+// registro de garantías y reporte de ensamblado.
+// ============================================================
+
+/** Taller: técnicos, rotaciones, criterios y evaluaciones de incentivos. */
+export const tallerAPI = {
+  // técnicos
+  listarTecnicos: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/taller/tecnicos${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+  crearTecnico: (payload, accessToken) =>
+    request('/taller/tecnicos', {
+      method: 'POST', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  actualizarTecnico: (id, payload, accessToken) =>
+    request(`/taller/tecnicos/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  eliminarTecnico: (id, accessToken) =>
+    request(`/taller/tecnicos/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: authHeaders(accessToken),
+    }),
+
+  // rotaciones entre tiendas
+  crearRotacion: (tecnicoId, payload, accessToken) =>
+    request(`/taller/tecnicos/${encodeURIComponent(tecnicoId)}/rotaciones`, {
+      method: 'POST', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  eliminarRotacion: (tecnicoId, rotacionId, accessToken) =>
+    request(`/taller/tecnicos/${encodeURIComponent(tecnicoId)}/rotaciones/${encodeURIComponent(rotacionId)}`, {
+      method: 'DELETE', headers: authHeaders(accessToken),
+    }),
+
+  // condiciones evaluables (columnas configurables del formulario)
+  listarCriterios: (accessToken) =>
+    request('/taller/criterios', { headers: authHeaders(accessToken) }),
+  crearCriterio: (payload, accessToken) =>
+    request('/taller/criterios', {
+      method: 'POST', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  actualizarCriterio: (id, payload, accessToken) =>
+    request(`/taller/criterios/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  eliminarCriterio: (id, accessToken) =>
+    request(`/taller/criterios/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: authHeaders(accessToken),
+    }),
+
+  // historial + puntaje general
+  listarEvaluaciones: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/taller/evaluaciones${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+  crearEvaluacion: (payload, accessToken) =>
+    request('/taller/evaluaciones', {
+      method: 'POST', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  actualizarEvaluacion: (id, payload, accessToken) =>
+    request(`/taller/evaluaciones/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  eliminarEvaluacion: (id, accessToken) =>
+    request(`/taller/evaluaciones/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: authHeaders(accessToken),
+    }),
+  puntajes: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/taller/puntajes${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+};
+
+/** Registro de garantías. */
+export const garantiasAPI = {
+  listar: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/garantias${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+  crear: (payload, accessToken) =>
+    request('/garantias', {
+      method: 'POST', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  actualizar: (id, payload, accessToken) =>
+    request(`/garantias/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  eliminar: (id, accessToken) =>
+    request(`/garantias/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: authHeaders(accessToken),
+    }),
+  copiar: (id, accessToken) =>
+    request(`/garantias/${encodeURIComponent(id)}/copiar`, {
+      method: 'POST', headers: authHeaders(accessToken),
+    }),
+  resumen: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/garantias/resumen${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+};
+
+/** Reporte de ensamblado. */
+export const ensambladoAPI = {
+  listar: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/ensamblado${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+  crear: (payload, accessToken) =>
+    request('/ensamblado', {
+      method: 'POST', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  actualizar: (id, payload, accessToken) =>
+    request(`/ensamblado/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: authHeaders(accessToken), body: JSON.stringify(payload),
+    }),
+  eliminar: (id, accessToken) =>
+    request(`/ensamblado/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: authHeaders(accessToken),
+    }),
+  resumen: (params = {}, accessToken) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    const sufijo = q.toString() ? `?${q.toString()}` : '';
+    return request(`/ensamblado/resumen${sufijo}`, { headers: authHeaders(accessToken) });
+  },
+};
+
+// ============================================================
 // Ajustes del SITIO PÚBLICO (greenline)
 //
 // El panel escribe aquí lo que el sitio público debe mostrar sin redeploy:

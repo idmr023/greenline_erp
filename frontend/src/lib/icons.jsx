@@ -114,6 +114,7 @@ import {
   faBullseye,
   faLeaf,
   faCopy,
+  faClipboardList,
   faCalculator,
   faDollarSign,
   faNewspaper,
@@ -187,6 +188,7 @@ export const Clock = (props) => <Icon icon={faClock} {...props} />;
 export const Columns2 = (props) => <Icon icon={faColumns} {...props} />;
 export const Construction = (props) => <Icon icon={faHammer} {...props} />;
 export const Copy = (props) => <Icon icon={faCopy} {...props} />;
+export const Clipboard = (props) => <Icon icon={faClipboardList} {...props} />;
 export const Cpu = (props) => <Icon icon={faMicrochip} {...props} />;
 export const CreditCard = (props) => <Icon icon={faCreditCard} {...props} />;
 export const DollarSign = (props) => <Icon icon={faDollarSign} {...props} />;

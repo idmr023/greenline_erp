@@ -18,12 +18,15 @@ import AdminContactos from './AdminContactos';
 import AdminReclamaciones from './AdminReclamaciones';
 import AdminCitas from './AdminCitas';
 import AdminPrestamosVehiculo from './AdminPrestamosVehiculo';
+import AdminEvaluaciones from './AdminEvaluaciones';
+import AdminGarantias from './AdminGarantias';
+import AdminEnsamblado from './AdminEnsamblado';
 import AdminEmails from './AdminEmails';
 import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import AdminRoles from './AdminRoles';
 import AdminAjustes from './AdminAjustes';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car } from '../../lib/icons';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
 
 const VIEWS = {
@@ -41,6 +44,9 @@ const VIEWS = {
   RECLAMACIONES: 'reclamaciones',
   CITAS: 'citas',
   PRESTAMOS_VEHICULO: 'prestamos_vehiculo',
+  EVALUACIONES: 'evaluaciones',
+  GARANTIAS: 'garantias',
+  ENSAMBLADO: 'ensamblado',
   EMAILS: 'emails',
   BOVEDA: 'boveda',
   USUARIOS: 'usuarios',
@@ -71,6 +77,13 @@ const NAV_ITEMS = [
   // se enteran por correo, aquí sólo administra el equipo central.
   { key: VIEWS.CITAS, label: 'Citas', icon: Wrench, perm: 'menu:citas' },
   { key: VIEWS.PRESTAMOS_VEHICULO, label: 'Préstamos Vehículos', icon: Car, perm: 'menu:prestamos-vehiculo:read' },
+  // Taller operativo (sustituye las hojas de evaluación/garantías/ensamblado):
+  //   · Evaluación de incentivos de armadores (historial + puntaje general)
+  //   · Registro de garantías (editable celda a celda, con copiar)
+  //   · Reporte de ensamblado (registro → dashboard)
+  { key: VIEWS.EVALUACIONES, label: 'Evaluación Incentivos', icon: Award, perm: 'menu:evaluacion-armadores:read' },
+  { key: VIEWS.GARANTIAS, label: 'Garantías', icon: ShieldCheck, perm: 'menu:garantias:read' },
+  { key: VIEWS.ENSAMBLADO, label: 'Reporte Ensamblado', icon: Package, perm: 'menu:ensamblado:read' },
   { key: VIEWS.EMAILS, label: 'Email Logs', icon: Activity, perm: 'menu:emails' },
   { key: VIEWS.METRICAS, label: 'Métricas', icon: Activity, perm: 'menu:metricas' },
   // Bóveda Segura V5: la ABRE todo el staff (§40 — ver y copiar es de todos);
@@ -127,6 +140,9 @@ export default function AdminPanel() {
     else if (path.includes('/admin/reclamaciones')) candidata = VIEWS.RECLAMACIONES;
     else if (path.includes('/admin/citas')) candidata = VIEWS.CITAS;
     else if (path.includes('/admin/prestamos-vehiculo')) candidata = VIEWS.PRESTAMOS_VEHICULO;
+    else if (path.includes('/admin/evaluaciones')) candidata = VIEWS.EVALUACIONES;
+    else if (path.includes('/admin/garantias')) candidata = VIEWS.GARANTIAS;
+    else if (path.includes('/admin/ensamblado')) candidata = VIEWS.ENSAMBLADO;
     else if (path.includes('/admin/emails')) candidata = VIEWS.EMAILS;
     else if (path.includes('/admin/metricas')) candidata = VIEWS.METRICAS;
     else if (path.includes('/admin/usuarios')) candidata = VIEWS.USUARIOS;
@@ -387,6 +403,9 @@ export default function AdminPanel() {
         {view === VIEWS.RECLAMACIONES && <AdminReclamaciones />}
         {view === VIEWS.CITAS && <AdminCitas />}
         {view === VIEWS.PRESTAMOS_VEHICULO && <AdminPrestamosVehiculo />}
+        {view === VIEWS.EVALUACIONES && <AdminEvaluaciones />}
+        {view === VIEWS.GARANTIAS && <AdminGarantias />}
+        {view === VIEWS.ENSAMBLADO && <AdminEnsamblado />}
         {view === VIEWS.EMAILS && <AdminEmails />}
         {view === VIEWS.METRICAS && <AdminMetrics />}
         {view === VIEWS.BOVEDA && <AdminBoveda />}

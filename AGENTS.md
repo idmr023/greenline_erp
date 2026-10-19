@@ -33,6 +33,22 @@ greenline_erp/
 
 Los scripts de este repo cuyos datos o workflows viven en el sitio lo indican explícitamente (ver §4).
 
+### Módulos del taller (panel + backend hermano)
+
+Los módulos que antes vivían en Google Sheets ya están en la BD del backend hermano y se administran desde el panel:
+
+| Módulo | Componente del panel | API (repo `greenline`) |
+|---|---|---|
+| Evaluación de incentivos (armadores) | `AdminEvaluaciones.jsx` | `/api/taller` (técnicos, rotaciones, criterios, evaluaciones, puntajes) |
+| Registro de garantías | `AdminGarantias.jsx` | `/api/garantias` (CRUD, edición por celda, `/:id/copiar`) |
+| Reporte de ensamblado | `AdminEnsamblado.jsx` | `/api/ensamblado` (CRUD + `/resumen`) |
+| Préstamo de vehículos a empleados | `AdminPrestamosVehiculo.jsx` | `/api/prestamos-vehiculo` (inspección de ingreso/salida) |
+
+Convenciones de estos módulos:
+- **Filtro por mes** (`mes=YYYY-MM`) en historiales, puntajes y resúmenes; helpers en `frontend/src/utils/meses.js`.
+- **Rotación de técnicos:** el técnico tiene una tienda base, pero cada registro guarda la tienda donde *ocurrió* el hecho. Los consolidados miran todas las tiendas.
+- **Columnas configurables:** las condiciones evaluables son filas de `criterios_armador`; añadir una columna nueva es un INSERT, no un cambio de código.
+
 ---
 
 ## 1. Convenciones de Código y Estilo
@@ -93,6 +109,7 @@ Guía de dashboards propios: `dashboard/README.md`.
 | `npm run security-smoke` | Humo de seguridad del backend. El paso de RLS (`backend/scripts/rls-smoke.mjs`) necesita BD: si no la hay se omite y avisa. `SMOKE_RLS_STRICT=1` lo convierte en fallo. |
 | `npm test` (en `backend/`) | Vitest del backend |
 | `npm run rbac:check` (en `backend/`) | Paridad BD ↔ catálogo de permisos (sólo lectura; sale con 1 si falta algo) |
+| `npm run smoke:taller` (en `backend/`) | Humo end-to-end de los módulos del taller contra la BD real: técnicos, rotaciones, condiciones, evaluaciones, puntaje general, garantías (alta/edición por celda/copiar) y ensamblado. Crea datos de prueba y los borra al terminar. |
 | `npm run apply-audit-rls` | Audit triggers + RLS de auth |
 
 ## 5. Control de Calidad y Verificación
@@ -103,6 +120,7 @@ Guía de dashboards propios: `dashboard/README.md`.
   - Smoke del SPA: `npm run preview` y comprobar que `/`, `/login`, `/admin` y `/fase-2-implementacion` montan sin errores de runtime.
   - Si se toca `dashboard/`: arrancar `.venv\Scripts\python app.py` y comprobar `/` y `/api/datos/<id>` con una hoja pública.
   - Si se toca lógica que depende del backend/RLS, verificar también en el repo hermano `greenline`: `npm run lint`, `npm run security-smoke`, `npm test` (en `backend/`).
+  - Si se tocan los **módulos del taller** (evaluación de incentivos, garantías, ensamblado, préstamos de vehículos): `npm run smoke:taller` (en `backend/`) — levanta el backend contra la BD real, ejercita los endpoints y borra lo que crea. Si cambia el catálogo de permisos: `npm run seed:rbac` y `npm run rbac:check` (en `backend/`), y regenerar el golden con `node scripts/regenerar-golden.mjs`.
 - Mantener la concisión y la precisión técnica en las respuestas y documentación.
 
 ## 6. Despliegue

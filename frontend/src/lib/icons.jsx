@@ -47,6 +47,8 @@ import {
   faChevronLeft,
   faChevronRight,
   faChevronUp,
+  faCar,
+  faCamera,
   faPhone,
   faStar,
   faFont,
@@ -185,6 +187,8 @@ export const ChevronDown = (props) => <Icon icon={faChevronDown} {...props} />;
 export const ChevronLeft = (props) => <Icon icon={faChevronLeft} {...props} />;
 export const ChevronRight = (props) => <Icon icon={faChevronRight} {...props} />;
 export const ChevronUp = (props) => <Icon icon={faChevronUp} {...props} />;
+export const Car = (props) => <Icon icon={faCar} {...props} />;
+export const Camera = (props) => <Icon icon={faCamera} {...props} />;
 export const CircleDollarSign = (props) => <Icon icon={faDollarSign} {...props} />;
 export const Clock = (props) => <Icon icon={faClock} {...props} />;
 export const Columns2 = (props) => <Icon icon={faColumns} {...props} />;

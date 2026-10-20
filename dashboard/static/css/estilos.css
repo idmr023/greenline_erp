@@ -144,3 +144,82 @@ code {
   border-radius: 5px;
   font-size: 0.85em;
 }
+
+/* ============================================================
+   Bloque "Taller" (datos vivos de la API del backend)
+   ============================================================ */
+.taller-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.taller-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.taller-filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--sutil);
+}
+
+.taller-filtros select,
+.taller-filtros button {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #fff;
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.taller-filtros button:hover { background: var(--verde-claro); }
+
+.taller-kpi { text-align: left; }
+.taller-kpi-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.taller-barra {
+  height: 8px;
+  border-radius: 999px;
+  background: #eceff1;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+.taller-barra i { display: block; height: 100%; }
+.taller-barra i.verde { background: var(--verde); }
+.taller-barra i.amarillo { background: #f9a825; }
+.taller-barra i.rojo { background: #c62828; }
+
+.taller-minis { display: grid; gap: 0.35rem; margin: 0.5rem 0 1rem; }
+.taller-mini {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--texto);
+  border-bottom: 1px dashed var(--borde);
+  padding-bottom: 0.25rem;
+}
+.taller-mini span:last-child { color: var(--sutil); }
+
+.taller-columnas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}

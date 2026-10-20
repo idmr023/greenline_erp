@@ -213,6 +213,45 @@ la página sigue funcionando con datos algo más antiguos. Esa carpeta está en
 `.gitignore`; en Vercel (sistema de archivos de sólo lectura) se ignora en
 silencio.
 
+### Módulos del taller (incentivos, garantías, ensamblado)
+
+Abajo de la data de Google Sheets, la página `/dashboard/servicio-tecnico`
+incluye un bloque **«Taller»** con los datos **vivos** de los módulos que
+administra el panel (evaluación de incentivos, registro de garantías y reporte
+de ensamblado). Esos módulos escriben en la base de datos del backend
+Express, así que el dashboard los pide a su API:
+
+| Bloque | Endpoint |
+|---|---|
+| Puntaje general de armadores | `GET /taller/puntajes?mes=&tiendaId=` |
+| Historial de evaluaciones | `GET /taller/evaluaciones?mes=&tiendaId=` |
+| Rotación de técnicos | `GET /taller/tecnicos` |
+| Tiendas (filtro) | `GET /prestamos-vehiculo/tiendas` |
+| Garantías (casos + resumen) | `GET /garantias` y `GET /garantias/resumen` |
+| Ensamblado (registros + resumen) | `GET /ensamblado` y `GET /ensamblado/resumen` |
+
+**Cómo llega el token:** el panel (`frontend/src/pages/DashboardEmbedded.jsx`)
+está embebido en un `<iframe>` y entrega su `accessToken` por `postMessage`
+(`{tipo:'gl:taller-token'}`). El dashboard lo recibe en `static/js/taller.js`
+—validando `event.origin` contra la misma lista que usa la CSP
+`frame-ancestors`— y lo reenvía al backend en la cabecera `X-GL-Token`; el
+Flask lo pasa como `Authorization: Bearer`. El token nunca va en la URL ni se
+escribe en los logs.
+
+Sin sesión (dashboard abierto fuera del panel) el bloque avisa «Inicia sesión
+en el panel…» y no rompe. Para ese caso existe `TALLER_API_TOKEN` (env): un
+token de servicio que permite leer los datos sin panel.
+
+**Variables de entorno** (ver `dashboard/.env.example`):
+
+| Variable | Para qué |
+|---|---|
+| `TALLER_API_URL` | URL base del backend Express (local: `http://localhost:3000/api`) |
+| `TALLER_API_TOKEN` | Opcional: token de servicio para leer sin panel |
+| `GOOGLE_SHEETS_API_KEY` | Sólo para descubrir pestañas (`hojas: "*"`) |
+
+Las consultas salen en paralelo y se cachean 60 s por (mes, tienda, token).
+
 ## 8. Despliegue en Vercel (función Python)
 
 El dashboard se despliega como **función serverless** dentro del mismo proyecto Vercel del ERP, bajo el prefijo `/dash`:

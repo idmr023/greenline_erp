@@ -1,7 +1,8 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Globe, ExternalLink, RefreshCw, AlertCircle } from '../lib/icons';
+import { useAuth } from '../contexts/AuthContext';
 
 // Base del dashboard Flask:
 //  - Producción (Vercel): función Python same-origin en `/dash` (ver vercel.json).
@@ -13,10 +14,12 @@ const DASHBOARD_BASE_URL = (
 ).replace(/\/+$/, '');
 
 export default function DashboardEmbedded({ slugInicial = null }) {
+  const { accessToken } = useAuth();
   const [searchParams] = useSearchParams();
   const [iframeSrc, setIframeSrc] = useState(`${DASHBOARD_BASE_URL}/`);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const iframeRef = useRef(null);
 
   const targetSlug = useMemo(
     () => searchParams.get('slug') || searchParams.get('id') || slugInicial,
@@ -48,6 +51,30 @@ export default function DashboardEmbedded({ slugInicial = null }) {
       iframe.src = iframeSrc;
     }
   };
+
+  /**
+   * El dashboard Flask (embebido) muestra los datos vivos de los módulos del
+   * taller (incentivos, garantías, ensamblado) y para eso necesita el token
+   * del usuario: se lo entregamos por `postMessage` y el dashboard lo
+   * reenvía al backend. El token viaja en memoria, nunca en la URL, y sólo
+   * se acepta desde los orígenes que el propio dashboard autoriza.
+   */
+  const enviarToken = useCallback(() => {
+    if (!accessToken) return;
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+    let destino;
+    try {
+      destino = new URL(DASHBOARD_BASE_URL, window.location.origin).origin;
+    } catch {
+      return;
+    }
+    iframe.contentWindow.postMessage({ tipo: 'gl:taller-token', token: accessToken }, destino);
+  }, [accessToken]);
+
+  useEffect(() => {
+    enviarToken();
+  }, [enviarToken, iframeSrc]);
 
   return (
     <>
@@ -133,12 +160,17 @@ export default function DashboardEmbedded({ slugInicial = null }) {
           )}
           <iframe
             id="dashboard-iframe"
+            ref={iframeRef}
             src={iframeSrc}
             title="Dashboard embebido"
             className="w-full h-full border-0"
             sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
             loading="lazy"
-            onLoad={handleLoad}
+            onLoad={() => {
+              handleLoad();
+              // El iframe acaba de cargar: se le entrega el token del usuario.
+              enviarToken();
+            }}
             onError={handleError}
           />
         </div>

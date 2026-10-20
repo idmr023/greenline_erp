@@ -100,6 +100,12 @@ Las llamadas a Google reintentan los fallos transitorios (3 intentos con backoff
 y la API key se redacta (`key=***`) en errores y logs: **nunca** incluir la clave
 real en un mensaje, un log o un commit (si se filtra, rotarla en Google Cloud).
 
+El bloque **«Taller»** del dashboard (`/dashboard/servicio-tecnico`) lee los
+módulos del taller (incentivos, garantías, ensamblado) de la API del backend
+hermano (`TALLER_API_URL`): el panel embebido entrega su `accessToken` por
+`postMessage` y el Flask lo reenvía como `Authorization: Bearer`. El token
+nunca va en la URL ni en los logs.
+
 ### scripts/ (o `node scripts/<archivo>` desde la raíz)
 | Script | Qué hace |
 |---|---|

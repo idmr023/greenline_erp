@@ -59,11 +59,6 @@ DIRECTORIO_CACHE = Path(__file__).resolve().parent.parent / ".cache"
 TTL_CACHE_PESTANAS_DISCO = 24 * 3600
 PATRON_ID = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 PATRON_GID = re.compile(r"[#&?]gid=(\d+)")
-# La API key viaja en la URL; los mensajes de error de `requests` la incluyen
-# completa. Este patrón la oculta antes de que llegue a la página o al log.
-PATRON_CLAVE = re.compile(r"(key=)[^&\s\"']+")
-
-CABECERAS = {"User-Agent": "greenline-dashboard"}
 
 # Clave de Google Sheets API usada SÓLO para descubrir pestañas (`hojas: "*"`).
 CLAVE_API = os.environ.get("GOOGLE_SHEETS_API_KEY", "")

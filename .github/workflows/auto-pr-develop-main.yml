@@ -19,12 +19,11 @@ permissions:
   statuses: read
   issues: write
   repository-projects: read
-  # `workflows: write` → el GITHUB_TOKEN puede pushear cambios en
-  # .github/workflows/** (un PAT sin el scope `workflow` es rechazado por
-  # GitHub). Es el respaldo cuando AUTO_MERGE_PAT no tiene ese scope.
-  workflows: write
   # `actions: write` → permite lanzar el CI a mano (workflow_dispatch) cuando
   # el push a develop se hizo con GITHUB_TOKEN (ese push no dispara 'on: push').
+  # OJO: `workflows` NO es una clave válida de `permissions:` (la lista oficial
+  # es actions/checks/contents/.../statuses): el GITHUB_TOKEN no puede tocar
+  # .github/workflows/**. Sólo un PAT con el scope `workflow` puede.
   actions: write
 
 jobs:
@@ -241,6 +240,9 @@ jobs:
               | awk 'NR > 1 && /^$/{exit} NR > 1{print}' || true)
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            # SHA de develop ANTES de fusionar main: si el PAT no puede tocar
+            # .github/workflows/**, la fusión se rehace sin esos archivos.
+            antes=$(git rev-parse HEAD)
             if ! git merge --no-edit --strategy-option ours origin/main; then
               # `-X ours` sólo resuelve conflictos de CONTENIDO: lo que quede
               # (modify/delete, add/add…) se fuerza también hacia OURS.
@@ -274,26 +276,31 @@ jobs:
                 fail_conflict "$sha"
               fi
             fi
-            # Push del merge a develop. Si el PAT no puede tocar
-            # .github/workflows/** (scope `workflow`), se reintenta con el
-            # GITHUB_TOKEN del job (que tiene `workflows: write`) y se lanza el
-            # CI a mano, porque un push con GITHUB_TOKEN no dispara 'on: push'.
+            # El PAT sólo puede pushear .github/workflows/** si tiene el scope
+            # `workflow`. Sin él, GitHub rechaza el push ENTERO ("refusing to
+            # allow a GitHub App to create or update workflow ... without
+            # `workflows` permission"). En ese caso la fusión se rehace
+            # dejando la versión de develop de esos archivos (el código sí
+            # entra) y se avisa de que los workflows hay que sincronizarlos a
+            # mano con una cuenta que tenga el scope.
+            if [ "${{ steps.token.outputs.workflow }}" != "1" ]; then
+              if git diff --name-only "$antes" HEAD -- .github/workflows | grep -q .; then
+                echo "::warning::AUTO_MERGE_PAT no tiene el scope 'workflow': la fusión deja fuera .github/workflows/** (GitHub rechazaría el push)."
+                git checkout "$antes" -- .github/workflows/
+                git add .github/workflows/ 2>/dev/null || true
+                git commit --no-edit --no-verify --allow-empty
+              fi
+            fi
             if ! push_out=$(git push "https://x-access-token:${AUTO_MERGE_PAT}@github.com/${REPO}.git" HEAD:develop 2>&1); then
               if printf '%s' "$push_out" | grep -qi "workflows\` permission"; then
-                echo "::warning::El PAT no puede modificar .github/workflows/ (falta el scope 'workflow'). Reintento con GITHUB_TOKEN."
-                if ! push_out=$(git push "https://x-access-token:${GH_FALLBACK_TOKEN}@github.com/${REPO}.git" HEAD:develop 2>&1); then
-                  echo "$push_out"
-                  echo "::error::No se pudo pushear a develop ni con el PAT ni con GITHUB_TOKEN."
-                  fail_conflict "$sha"
-                fi
-                echo "::notice::Push a develop hecho con GITHUB_TOKEN: se lanza el CI de develop a mano (workflow_dispatch)."
-                gh workflow run ci.yml --ref develop \
-                  || echo "::warning::No se pudo lanzar el CI con workflow_dispatch; lánzalo a mano en la pestaña Actions."
-              else
                 echo "$push_out"
-                echo "::error::Merge local hecho pero el push a develop fue rechazado (permisos o carrera con otro push)."
-                fail_conflict "$sha"
+                echo "::error::El push a develop fue rechazado por el scope 'workflow' de AUTO_MERGE_PAT (GitHub no deja modificar .github/workflows/** sin ese scope). Súbele el scope al PAT y re-lanza el workflow."
+                gh pr comment "$PR" --body "⛔ El push del merge a \`develop\` fue rechazado: \`AUTO_MERGE_PAT\` no tiene el scope \`workflow\` (classic PAT) ni el permiso *Workflows: Read and write* (fine-grained). Sin eso GitHub no deja modificar \`.github/workflows/**\`. Súbele el permiso al PAT y re-lanza este workflow."
+                exit 1
               fi
+              echo "$push_out"
+              echo "::error::Merge local hecho pero el push a develop fue rechazado (permisos o carrera con otro push)."
+              fail_conflict "$sha"
             fi
             {
               echo "🔀 Conflictos resueltos automáticamente en \`develop\` con estrategia \`-X ours\` (ganan los cambios de esta rama):"

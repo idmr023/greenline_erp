@@ -75,3 +75,7 @@ jobs:
       - name: Dashboard smoke
         working-directory: dashboard
         run: python smoke.py
+
+      - name: Dashboard tests
+        working-directory: dashboard
+        run: python -m unittest discover -s . -p "test_*.py"

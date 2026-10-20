@@ -89,10 +89,16 @@ Convenciones de estos módulos:
 | `py -m venv .venv` | Crea el entorno virtual (una sola vez; Python 3.13+ vía winget) |
 | `.venv\Scripts\python -m pip install -r requirements.txt` | Instala dependencias (flask, requests, pyyaml, pandas) |
 | `.venv\Scripts\python app.py` | Arranca el dashboard en http://127.0.0.1:5000 |
+| `.venv\Scripts\python smoke.py` | Smoke de CI: renderiza `/dashboard/servicio-tecnico` con datos simulados (sin red) |
+| `.venv\Scripts\python -m unittest discover -s . -p "test_*.py"` | Tests del dashboard: reintentos de red, redacción de la API key y caché en disco |
 
 Las fuentes de datos se editan en `dashboard/config/fuentes.yaml` (enlaces de
 Google Sheets compartidos como «Cualquier persona con el enlace puede ver»).
 Guía de dashboards propios: `dashboard/README.md`.
+
+Las llamadas a Google reintentan los fallos transitorios (3 intentos con backoff)
+y la API key se redacta (`key=***`) en errores y logs: **nunca** incluir la clave
+real en un mensaje, un log o un commit (si se filtra, rotarla en Google Cloud).
 
 ### scripts/ (o `node scripts/<archivo>` desde la raíz)
 | Script | Qué hace |
@@ -118,7 +124,7 @@ Guía de dashboards propios: `dashboard/README.md`.
   - `npm test` — suite de criptografía de `frontend/src/lib/vault/` en verde.
   - `npm run build` (frontend del panel) — debe compilar sin errores.
   - Smoke del SPA: `npm run preview` y comprobar que `/`, `/login`, `/admin` y `/fase-2-implementacion` montan sin errores de runtime.
-  - Si se toca `dashboard/`: arrancar `.venv\Scripts\python app.py` y comprobar `/` y `/api/datos/<id>` con una hoja pública.
+  - Si se toca `dashboard/`: `.venv\Scripts\python -m unittest discover -s . -p "test_*.py"` y `.venv\Scripts\python smoke.py` en verde; luego arrancar `.venv\Scripts\python app.py` y comprobar `/` y `/api/datos/<id>` con una hoja pública.
   - Si se toca lógica que depende del backend/RLS, verificar también en el repo hermano `greenline`: `npm run lint`, `npm run security-smoke`, `npm test` (en `backend/`).
   - Si se tocan los **módulos del taller** (evaluación de incentivos, garantías, ensamblado, préstamos de vehículos): `npm run smoke:taller` (en `backend/`) — levanta el backend contra la BD real, ejercita los endpoints y borra lo que crea. Si cambia el catálogo de permisos: `npm run seed:rbac` y `npm run rbac:check` (en `backend/`), y regenerar el golden con `node scripts/regenerar-golden.mjs`.
 - Mantener la concisión y la precisión técnica en las respuestas y documentación.

@@ -69,9 +69,14 @@ async function request(path, options = {}) {
   let res;
   let data;
   try {
+    // Con FormData NO debe mandarse Content-Type: el navegador añade el
+    // boundary del multipart. Con application/json, el express.json() global
+    // del backend intenta parsear el multipart y la petición muere 400/500.
+    const esFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
     res = await fetch(`${API_URL}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { ...(esFormData ? {} : { 'Content-Type': 'application/json' }), ...headers },
       body,
       signal: controller.signal,
     });

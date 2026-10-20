@@ -1,10 +1,72 @@
-import { useState, useEffect, useCallback } from 'react';
+
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { prestamosVehiculoAPI } from '../../lib/api';
+import { fetchProductos } from '../../lib/productos';
+import { versionarImagen } from '../../lib/images';
+import { ColorDot } from '../ColorDot';
+import ImageUploader from './ImageUploader';
 import {
   Car, Plus, RefreshCw, Eye, LogIn, LogOut, Trash2, X, Camera,
-  AlertTriangle, CheckCircle2, Clock,
+  AlertTriangle, CheckCircle2, Clock, Search,
 } from '../../lib/icons';
+
+// Partes del vehículo que se pueden etiquetar en cada foto de la inspección.
+const PARTES_VEHICULO = [
+  'Carrocería',
+  'Pintura y rayones',
+  'Tablero e instrumentos',
+  'Llantas',
+  'Frenos',
+  'Motor',
+  'Transmisión',
+  'Asientos yugen',
+  'Documentación',
+  'Otro',
+];
+
+/** Normaliza un texto para comparar nombres (sin acentos ni mayúsculas). */
+function normalizar(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/** Galería de fotos de una inspección, con la "parte" del vehículo de cada una. */
+function FotosInspeccion({ fotos }) {
+  if (!fotos?.length) return null;
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-medium text-gray-700 mb-1">Fotos:</p>
+      <div className="flex gap-2 flex-wrap">
+        {fotos.map((f, i) => (
+          <a
+            key={f.url || i}
+            href={f.url}
+            target="_blank"
+            rel="noreferrer"
+            title={f.parte || `Foto ${i + 1}`}
+            className="block w-20"
+          >
+            <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+              <img
+                src={versionarImagen(f.url)}
+                alt={f.parte || `Foto ${i + 1}`}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+            {f.parte && (
+              <p className="mt-0.5 text-[10px] text-gray-500 truncate" title={f.parte}>{f.parte}</p>
+            )}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const ESTADO_BADGE = {
   activo: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -55,6 +117,8 @@ export default function AdminPrestamosVehiculo() {
   const [filtros, setFiltros] = useState({ estado: '', tiendaId: '', q: '' });
   const [tiendas, setTiendas] = useState([]);
   const [empleados, setEmpleados] = useState([]);
+  const [catalogo, setCatalogo] = useState([]);
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,7 +149,32 @@ export default function AdminPrestamosVehiculo() {
       .catch(() => {});
   }, [accessToken, puedeEditar]);
 
+  // Catálogo de vehículos: se carga LAZILY, sólo cuando hace falta (crear
+  // préstamo o ver el detalle). Viene de la vista `vista_productos_web`
+  // (productos + imágenes + colores + stock), sin backend de por medio.
+  const cargarCatalogo = useCallback(async () => {
+    if (catalogo.length) return;
+    setCargandoCatalogo(true);
+    try {
+      setCatalogo(await fetchProductos());
+    } catch {
+      setCatalogo([]);
+    } finally {
+      setCargandoCatalogo(false);
+    }
+  }, [catalogo.length]);
+
+  // Vehículos que ya están en préstamo activo: no se pueden volver a asignar.
+  const vehiculosEnUso = useMemo(() => {
+    const set = new Set();
+    for (const p of items) {
+      if (p.estado === 'activo' && p.vehiculo) set.add(normalizar(p.vehiculo));
+    }
+    return set;
+  }, [items]);
+
   async function abrirDetalle(prestamo) {
+    cargarCatalogo();
     try {
       const completa = await prestamosVehiculoAPI.obtener(prestamo.id, accessToken);
       setSelected(completa);
@@ -107,7 +196,7 @@ export default function AdminPrestamosVehiculo() {
         </div>
         {puedeEditar && (
           <button
-            onClick={() => setShowCrear(true)}
+            onClick={() => { setShowCrear(true); cargarCatalogo(); }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 transition-colors"
           >
             <Plus className="w-4 h-4" /> Nuevo préstamo
@@ -235,6 +324,9 @@ export default function AdminPrestamosVehiculo() {
         <ModalCrear
           tiendas={tiendas}
           empleados={empleados}
+          catalogo={catalogo}
+          cargandoCatalogo={cargandoCatalogo}
+          vehiculosEnUso={vehiculosEnUso}
           accessToken={accessToken}
           onClose={() => setShowCrear(false)}
           onCreated={(p) => { setShowCrear(false); load(); setSelected(p); }}
@@ -246,6 +338,7 @@ export default function AdminPrestamosVehiculo() {
           prestamo={selected}
           puedeEditar={puedeEditar}
           accessToken={accessToken}
+          catalogo={catalogo}
           onClose={() => setSelected(null)}
           onUpdated={(p) => { setSelected(p); load(); }}
           onDeleted={() => { setSelected(null); load(); }}
@@ -270,7 +363,7 @@ export default function AdminPrestamosVehiculo() {
 // Modal: Crear préstamo
 // ============================================================
 
-function ModalCrear({ tiendas, empleados, accessToken, onClose, onCreated }) {
+function ModalCrear({ tiendas, empleados, catalogo, cargandoCatalogo, vehiculosEnUso, accessToken, onClose, onCreated }) {
   const [form, setForm] = useState({
     tiendaId: '',
     vehiculo: '',
@@ -279,11 +372,17 @@ function ModalCrear({ tiendas, empleados, accessToken, onClose, onCreated }) {
     motivo: '',
     notas: '',
   });
+  const [busqueda, setBusqueda] = useState('');
+  const [soloDisponibles, setSoloDisponibles] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   async function submit(e) {
     e.preventDefault();
+    if (!form.vehiculo.trim()) {
+      setError('Selecciona el vehículo del catálogo.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -294,6 +393,25 @@ function ModalCrear({ tiendas, empleados, accessToken, onClose, onCreated }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  // El catálogo manda: "disponible" = con stock ('En stock', lo calcula la
+  // vista SQL vista_productos_web) y sin un préstamo activo del mismo
+  // vehículo. El nombre elegido es lo que se guarda en `vehiculo`.
+  const candidatos = useMemo(() => {
+    const q = normalizar(busqueda);
+    return catalogo.filter((p) => {
+      if (q && !normalizar(p.nombre).includes(q)) return false;
+      if (soloDisponibles) {
+        if (p.disponibilidad && p.disponibilidad !== 'En stock') return false;
+        if (vehiculosEnUso.has(normalizar(p.nombre))) return false;
+      }
+      return true;
+    });
+  }, [catalogo, busqueda, soloDisponibles, vehiculosEnUso]);
+
+  function elegir(p) {
+    setForm({ ...form, vehiculo: p.nombre });
   }
 
   return (
@@ -310,7 +428,7 @@ function ModalCrear({ tiendas, empleados, accessToken, onClose, onCreated }) {
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{error}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tienda / Origen *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tienda*</label>
             <select
               value={form.tiendaId}
               onChange={(e) => setForm({ ...form, tiendaId: e.target.value })}
@@ -324,14 +442,116 @@ function ModalCrear({ tiendas, empleados, accessToken, onClose, onCreated }) {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Vehículo *</label>
-            <input
-              value={form.vehiculo}
-              onChange={(e) => setForm({ ...form, vehiculo: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              placeholder="Ej: Moto Honda XR150, Placa ABC-123"
-              required
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Vehículo *</label>
+              {catalogo.length > 0 && (
+                <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <input
+                    type="checkbox"
+                    checked={soloDisponibles}
+                    onChange={(e) => setSoloDisponibles(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Sólo disponibles
+                </label>
+              )}
+            </div>
+
+            {cargandoCatalogo && catalogo.length === 0 ? (
+              <div className="border border-gray-200 rounded-lg p-4 text-xs text-gray-500 text-center">
+                Cargando catálogo de vehículos…
+              </div>
+            ) : catalogo.length === 0 ? (
+              <div className="border border-gray-200 rounded-lg p-4 text-xs text-gray-500">
+                <p className="mb-2">
+                  No se pudo leer el catálogo de vehículos. Puedes escribir el nombre a mano.
+                </p>
+                <input
+                  value={form.vehiculo}
+                  onChange={(e) => setForm({ ...form, vehiculo: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  placeholder="Ej: Moto Honda XR150"
+                  required
+                />
+              </div>
+            ) : (
+              <>
+                <div className="relative mb-2">
+                  <Search className="w-4 h-4 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar vehículo del catálogo…"
+                    className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm"
+                  />
+                </div>
+
+                {form.vehiculo && (
+                  <p className="mb-2 text-xs text-gray-600">
+                    Seleccionado: <strong className="text-gray-900">{form.vehiculo}</strong>
+                  </p>
+                )}
+
+                {candidatos.length === 0 ? (
+                  <div className="border border-gray-200 rounded-lg p-4 text-xs text-gray-500 text-center">
+                    {soloDisponibles
+                      ? 'No hay vehículos disponibles con ese filtro.'
+                      : 'Ningún vehículo coincide con la búsqueda.'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+                    {candidatos.map((p) => {
+                      const img = (p.imagenes || []).find((i) => i.es_principal) || (p.imagenes || [])[0];
+                      const enUso = vehiculosEnUso.has(normalizar(p.nombre));
+                      const colores = (p.colores_detalle || []).filter((c) => c.visible !== false);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => elegir(p)}
+                          className={`text-left border rounded-lg p-2 transition-colors ${
+                            normalizar(form.vehiculo) === normalizar(p.nombre)
+                              ? 'border-brand bg-brand/5 ring-1 ring-brand/30'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="w-full h-20 rounded-md bg-gray-50 overflow-hidden mb-1.5 flex items-center justify-center">
+                            {img?.src ? (
+                              <img
+                                src={versionarImagen(img.src)}
+                                alt={p.nombre}
+                                className="w-full h-full object-contain"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <Car className="w-6 h-6 text-gray-300" />
+                            )}
+                          </div>
+                          <p className="text-xs font-medium text-gray-900 leading-tight">{p.nombre}</p>
+                          {p.categoria && (
+                            <p className="text-[10px] text-gray-400">{p.categoria}</p>
+                          )}
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {colores.slice(0, 4).map((c) => (
+                              <ColorDot
+                                key={c.id ?? c.nombre}
+                                nombre={c.nombre}
+                                coloresDetalle={colores}
+                                className="w-2.5 h-2.5"
+                              />
+                            ))}
+                            {enUso && (
+                              <span className="text-[10px] text-amber-600">En préstamo</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Placa</label>
@@ -358,12 +578,16 @@ function ModalCrear({ tiendas, empleados, accessToken, onClose, onCreated }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
-            <input
+  
+            <select 
               value={form.motivo}
               onChange={(e) => setForm({ ...form, motivo: e.target.value })}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              placeholder="Ej: Reparto de pedidos, visita a cliente…"
-            />
+            >
+              <option value="Sesión de fotos">Sesión de foto</option>
+              <option value="Grabación de video">Grabación de video</option>
+            </select>
+
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
@@ -400,10 +624,20 @@ function ModalCrear({ tiendas, empleados, accessToken, onClose, onCreated }) {
 // Modal: Detalle del préstamo
 // ============================================================
 
-function ModalDetalle({ prestamo, puedeEditar, accessToken, onClose, onUpdated, onDeleted, onInspeccion }) {
+function ModalDetalle({ prestamo, puedeEditar, accessToken, catalogo, onClose, onUpdated, onDeleted, onInspeccion }) {
   const [notas, setNotas] = useState(prestamo.notas || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  // Foto y colores del modelo en catálogo (si el préstamo se creó desde el
+  // selector, el nombre del vehículo coincide con el del producto).
+  const modelo = useMemo(
+    () => catalogo.find((p) => normalizar(p.nombre) === normalizar(prestamo.vehiculo)) || null,
+    [catalogo, prestamo.vehiculo],
+  );
+  const fotoModelo = modelo
+    ? (modelo.imagenes || []).find((i) => i.es_principal) || (modelo.imagenes || [])[0]
+    : null;
 
   async function guardarNotas() {
     setSaving(true);
@@ -435,9 +669,19 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, onClose, onUpdated, 
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Car className="w-5 h-5 text-brand" /> {prestamo.vehiculo}
-          </h2>
+          <div className="flex items-center gap-3 min-w-0">
+            {fotoModelo?.src && (
+              <img
+                src={versionarImagen(fotoModelo.src)}
+                alt={prestamo.vehiculo}
+                className="w-12 h-12 rounded-lg object-contain bg-gray-50 border border-gray-100 shrink-0"
+              />
+            )}
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 min-w-0">
+              <Car className="w-5 h-5 text-brand shrink-0" />
+              <span className="truncate">{prestamo.vehiculo}</span>
+            </h2>
+          </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
@@ -506,16 +750,7 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, onClose, onUpdated, 
                   </div>
                 )}
                 {prestamo.ingresoFotos?.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium text-gray-700 mb-1">Fotos:</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {prestamo.ingresoFotos.map((f, i) => (
-                        <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
-                          <img src={f.url} alt={f.parte || `Foto ${i + 1}`} className="w-full h-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
+                  <FotosInspeccion fotos={prestamo.ingresoFotos} />
                 )}
               </div>
             ) : (
@@ -564,16 +799,7 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, onClose, onUpdated, 
                   </div>
                 )}
                 {prestamo.salidaFotos?.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium text-gray-700 mb-1">Fotos:</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {prestamo.salidaFotos.map((f, i) => (
-                        <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
-                          <img src={f.url} alt={f.parte || `Foto ${i + 1}`} className="w-full h-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
+                  <FotosInspeccion fotos={prestamo.salidaFotos} />
                 )}
               </div>
             ) : (
@@ -813,56 +1039,17 @@ function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fotos</label>
-            <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center">
-              <Camera className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-xs text-gray-500 mb-2">
-                Sube fotos del vehículo (carrocería, tablero, llantas, etc.)
-              </p>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                id="fotos-input"
-                onChange={async (e) => {
-                  const files = Array.from(e.target.files || []);
-                  for (const file of files) {
-                    try {
-                      const result = await prestamosVehiculoAPI.subirFoto(prestamo.id, file, file.name, accessToken);
-                      setForm((prev) => ({ ...prev, fotos: [...prev.fotos, { url: result.url, parte: result.parte || file.name }] }));
-                    } catch (err) {
-                      setError(err?.error || err?.message || 'No se pudo subir la foto');
-                    }
-                  }
-                  e.target.value = '';
-                }}
-              />
-              <label
-                htmlFor="fotos-input"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" /> Añadir fotos
-              </label>
-            </div>
-            {form.fotos.length > 0 && (
-              <div className="flex gap-2 flex-wrap mt-2">
-                {form.fotos.map((f, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
-                    <img src={f.url} alt="" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, fotos: form.fotos.filter((_, idx) => idx !== i) })}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-bl-lg p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ImageUploader
+            value={form.fotos}
+            onChange={(fotos) => setForm({ ...form, fotos })}
+            upload={(file, parte) =>
+              prestamosVehiculoAPI.subirFoto(prestamo.id, file, parte, accessToken)
+            }
+            partes={PARTES_VEHICULO}
+            disabled={saving}
+            label="Fotos"
+            hint="Sube fotos del vehículo (carrocería, tablero, llantas, etc.). Elige la parte a la que corresponde cada foto."
+          />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

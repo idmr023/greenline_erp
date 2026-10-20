@@ -45,6 +45,7 @@ Thumbs.db
 
 # Python (dashboard/)
 dashboard/.venv/
+dashboard/.cache/
 __pycache__/
 *.py[cod]
 .pytest_cache/

@@ -47,8 +47,6 @@ import {
   faChevronLeft,
   faChevronRight,
   faChevronUp,
-  faCar,
-  faCamera,
   faPhone,
   faStar,
   faFont,
@@ -114,7 +112,6 @@ import {
   faBullseye,
   faLeaf,
   faCopy,
-  faClipboardList,
   faCalculator,
   faDollarSign,
   faNewspaper,
@@ -127,6 +124,9 @@ import {
   faFolderOpen,
   faLightbulb,
   faGlobe,
+  faCamera,
+  faCar,
+  faClipboard,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -144,6 +144,10 @@ export default function Icon({ icon, size = 24, className, color, ...rest }) {
     />
   );
 }
+
+export const Clipboard = (props) => <Icon icon={faClipboard} {...props} />;
+export const Car = (props) => <Icon icon={faCar} {...props} />;
+export const Camera = (props) => <Icon icon={faCamera} {...props} />;
 export const Globe = (props) => <Icon icon={faGlobe} {...props} />;
 export const Lightbulb = (props) => <Icon icon={faLightbulb} {...props} />; 
 export const FolderOpen = (props) => <Icon icon={faFolderOpen} {...props} />;
@@ -181,14 +185,11 @@ export const ChevronDown = (props) => <Icon icon={faChevronDown} {...props} />;
 export const ChevronLeft = (props) => <Icon icon={faChevronLeft} {...props} />;
 export const ChevronRight = (props) => <Icon icon={faChevronRight} {...props} />;
 export const ChevronUp = (props) => <Icon icon={faChevronUp} {...props} />;
-export const Car = (props) => <Icon icon={faCar} {...props} />;
-export const Camera = (props) => <Icon icon={faCamera} {...props} />;
 export const CircleDollarSign = (props) => <Icon icon={faDollarSign} {...props} />;
 export const Clock = (props) => <Icon icon={faClock} {...props} />;
 export const Columns2 = (props) => <Icon icon={faColumns} {...props} />;
 export const Construction = (props) => <Icon icon={faHammer} {...props} />;
 export const Copy = (props) => <Icon icon={faCopy} {...props} />;
-export const Clipboard = (props) => <Icon icon={faClipboardList} {...props} />;
 export const Cpu = (props) => <Icon icon={faMicrochip} {...props} />;
 export const CreditCard = (props) => <Icon icon={faCreditCard} {...props} />;
 export const DollarSign = (props) => <Icon icon={faDollarSign} {...props} />;

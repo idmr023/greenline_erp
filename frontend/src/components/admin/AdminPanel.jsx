@@ -76,14 +76,14 @@ const NAV_ITEMS = [
   // Citas de servicio técnico (§10): la agenda por tienda; las tiendas
   // se enteran por correo, aquí sólo administra el equipo central.
   { key: VIEWS.CITAS, label: 'Citas', icon: Wrench, perm: 'menu:citas' },
-  { key: VIEWS.PRESTAMOS_VEHICULO, label: 'Préstamos Vehículos', icon: Car, perm: 'menu:prestamos-vehiculo:read' },
+  { key: VIEWS.PRESTAMOS_VEHICULO, label: 'Préstamos Vehículos', icon: Car, perm: 'menu:prestamos-vehiculo' },
   // Taller operativo (sustituye las hojas de evaluación/garantías/ensamblado):
   //   · Evaluación de incentivos de armadores (historial + puntaje general)
   //   · Registro de garantías (editable celda a celda, con copiar)
   //   · Reporte de ensamblado (registro → dashboard)
-  { key: VIEWS.EVALUACIONES, label: 'Evaluación Incentivos', icon: Award, perm: 'menu:evaluacion-armadores:read' },
-  { key: VIEWS.GARANTIAS, label: 'Garantías', icon: ShieldCheck, perm: 'menu:garantias:read' },
-  { key: VIEWS.ENSAMBLADO, label: 'Reporte Ensamblado', icon: Package, perm: 'menu:ensamblado:read' },
+  { key: VIEWS.EVALUACIONES, label: 'Evaluación Incentivos', icon: Award, perm: 'menu:evaluacion-armadores' },
+  { key: VIEWS.GARANTIAS, label: 'Garantías', icon: ShieldCheck, perm: 'menu:garantias' },
+  { key: VIEWS.ENSAMBLADO, label: 'Reporte Ensamblado', icon: Package, perm: 'menu:ensamblado' },
   { key: VIEWS.EMAILS, label: 'Email Logs', icon: Activity, perm: 'menu:emails' },
   { key: VIEWS.METRICAS, label: 'Métricas', icon: Activity, perm: 'menu:metricas' },
   // Bóveda Segura V5: la ABRE todo el staff (§40 — ver y copiar es de todos);

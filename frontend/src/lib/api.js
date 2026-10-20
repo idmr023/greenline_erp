@@ -100,7 +100,21 @@ async function request(path, options = {}) {
     emitColdStart({ coldStart: false, latency: ms, path });
   }
 
-  if (!res.ok) throw { status: res.status, ...data };
+  if (!res.ok) {
+    // 429: el backend tiene un límite global por IP (15 min). Desde una red
+    // compartida (oficina) se puede agotar: se explica en vez de dejar el
+    // error técnico pelado.
+    if (res.status === 429) {
+      throw {
+        status: 429,
+        ...data,
+        error:
+          'El servidor está limitando las peticiones (demasiadas desde esta red). ' +
+          'Espera un par de minutos y vuelve a intentarlo.',
+      };
+    }
+    throw { status: res.status, ...data };
+  }
   return data;
 }
 
@@ -485,6 +499,14 @@ export const prestamosVehiculoAPI = {
       body: formData,
     });
   },
+
+  /** Añade fotos a una inspección YA registrada (ingreso o salida). */
+  adjuntarFotos: (id, tipo, fotos, accessToken) =>
+    request(`/prestamos-vehiculo/${encodeURIComponent(id)}/fotos/adjuntar`, {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ tipo, fotos }),
+    }),
 };
 
 // ============================================================

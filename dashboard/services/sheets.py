@@ -8,6 +8,10 @@ programes sólo necesitan:
 Flujo: `config/fuentes.yaml` (los enlaces) → URL pública CSV de Google →
 lista de diccionarios [{columna: valor}, ...] con caché de 5 minutos.
 
+Robustez: los fallos transitorios de red (SSL/timeout) se reintentan solos
+(3 intentos con backoff) y la lista de pestañas se guarda en disco
+(`.cache/`, TTL 24 h) para que la página siga sirviéndose si Google falla.
+
 Soporta dos modos por fuente:
   - UNA pestaña:  `hoja: "Nombre"`  (o sin `hoja` = la primera pestaña)
   - TODAS/las pestañas:  `hojas: "*"` (descubre vía API key de Google) o
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 import re
 import time
@@ -37,9 +42,23 @@ except ImportError:  # pragma: no cover - python-dotenv opcional
 
 RUTA_FUENTES = Path(__file__).resolve().parent.parent / "config" / "fuentes.yaml"
 TTL_CACHE_SEGUNDOS = 300
-TIEMPO_ESPERA_SEGUNDOS = 20
+TIEMPO_ESPERA_SEGUNDOS = 12
+# Reintentos ante fallos TRANSITORIOS de red (SSL/timeout) o de servidor.
+# Sin esto, un solo corte de conexión con Google tumba la página del dashboard.
+MAX_INTENTOS = 3
+BACKOFF_SEGUNDOS = (0.5, 1.5)
+STATUS_REINTENTABLES = (429, 500, 502, 503, 504)
+# Caché en disco de la lista de pestañas: si la API falla, la página sigue
+# sirviéndose con la última lista conocida (TTL 24 h).
+DIRECTORIO_CACHE = Path(__file__).resolve().parent.parent / ".cache"
+TTL_CACHE_PESTANAS_DISCO = 24 * 3600
 PATRON_ID = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 PATRON_GID = re.compile(r"[#&?]gid=(\d+)")
+# La API key viaja en la URL; los mensajes de error de `requests` la incluyen
+# completa. Este patrón la oculta antes de que llegue a la página o al log.
+PATRON_CLAVE = re.compile(r"(key=)[^&\s\"']+")
+
+CABECERAS = {"User-Agent": "greenline-dashboard"}
 
 # Clave de Google Sheets API usada SÓLO para descubrir pestañas (`hojas: "*"`).
 CLAVE_API = os.environ.get("GOOGLE_SHEETS_API_KEY", "")
@@ -51,6 +70,81 @@ class FuenteError(Exception):
 
 _cache: dict[tuple[str, str], tuple[float, list[dict]]] = {}
 _cache_pestanas: dict[str, tuple[float, list[str]]] = {}
+
+
+# ============================================================
+# Red: reintentos, redacción de secretos y caché en disco
+# ============================================================
+
+
+def _sin_clave(texto: str) -> str:
+    """Oculta la API key de Google dentro de un texto (URLs de error)."""
+    return PATRON_CLAVE.sub(r"\1***", texto or "")
+
+
+def _get_con_reintentos(url: str, mensaje_error: str, intentos: int = MAX_INTENTOS):
+    """GET con reintentos ante fallos transitorios de red o de servidor.
+
+    Reintenta los `requests.RequestException` (SSL/timeout/conexión) y los
+    status 429/5xx; el resto de respuestas se devuelven tal cual para que las
+    validaciones de cada endpoint emitan su mensaje específico. Si se agotan
+    los intentos, lanza `FuenteError` con la API key redactada.
+    """
+    detalle = "sin detalle"
+    for intento in range(intentos):
+        try:
+            resp = requests.get(url, timeout=TIEMPO_ESPERA_SEGUNDOS, headers=CABECERAS)
+        except requests.RequestException as exc:
+            detalle = str(exc)
+        else:
+            if resp.status_code not in STATUS_REINTENTABLES:
+                return resp
+            detalle = f"HTTP {resp.status_code}"
+        if intento < intentos - 1:
+            espera = BACKOFF_SEGUNDOS[min(intento, len(BACKOFF_SEGUNDOS) - 1)]
+            print(
+                f"[dashboard] fallo transitorio en Google "
+                f"({_sin_clave(detalle)[:80]}); reintento {intento + 2}/{intentos} en {espera}s",
+                flush=True,
+            )
+            time.sleep(espera)
+    raise FuenteError(f"{mensaje_error}: {_sin_clave(detalle)}")
+
+
+def _ruta_cache_pestanas(id_sheet: str) -> Path:
+    return DIRECTORIO_CACHE / f"pestanas-{id_sheet}.json"
+
+
+def _leer_cache_pestanas(id_sheet: str) -> list[str] | None:
+    """Última lista de pestañas conocida en disco (None si no hay o está vieja)."""
+    try:
+        datos = json.loads(_ruta_cache_pestanas(id_sheet).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(datos, dict):
+        return None
+    try:
+        antiguedad = time.time() - float(datos.get("ts") or 0)
+    except (TypeError, ValueError):
+        return None
+    if antiguedad > TTL_CACHE_PESTANAS_DISCO:
+        return None
+    pestanas = datos.get("pestanas")
+    if not isinstance(pestanas, list) or not pestanas:
+        return None
+    return [str(p) for p in pestanas]
+
+
+def _escribir_cache_pestanas(id_sheet: str, pestanas: list[str]) -> None:
+    """Guarda la lista de pestañas en disco. Ignora fallos (FS de sólo lectura)."""
+    try:
+        DIRECTORIO_CACHE.mkdir(parents=True, exist_ok=True)
+        _ruta_cache_pestanas(id_sheet).write_text(
+            json.dumps({"ts": time.time(), "pestanas": pestanas}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
 
 
 def cargar_fuentes(solo_activas: bool = True) -> list[dict]:
@@ -150,9 +244,20 @@ def descubrir_pestanas(id_sheet: str, forzar: bool = False) -> list[str]:
         f"?key={CLAVE_API}&fields=sheets.properties(title)"
     )
     try:
-        resp = requests.get(url, timeout=TIEMPO_ESPERA_SEGUNDOS)
-    except requests.RequestException as exc:
-        raise FuenteError(f"No se pudo consultar la API de Google: {exc}") from exc
+        resp = _get_con_reintentos(url, "No se pudo consultar la API de Google")
+    except FuenteError:
+        # Fallo de red tras agotar los reintentos: si hay una lista de pestañas
+        # guardada en disco, la página se sirve igual (datos algo más viejos).
+        guardadas = _leer_cache_pestanas(id_sheet)
+        if guardadas:
+            _cache_pestanas[id_sheet] = (time.time(), guardadas)
+            print(
+                f"[dashboard] API de Google caída: se usan las pestañas guardadas en "
+                f"{_ruta_cache_pestanas(id_sheet)}",
+                flush=True,
+            )
+            return guardadas
+        raise
 
     if resp.status_code in (401, 403):
         raise FuenteError(
@@ -161,7 +266,7 @@ def descubrir_pestanas(id_sheet: str, forzar: bool = False) -> list[str]:
             "la Google Sheets API esté habilitada en el proyecto de Google Cloud."
         )
     if resp.status_code == 400:
-        cuerpo = resp.text
+        cuerpo = _sin_clave(resp.text)
         if "Office file" in cuerpo or "FAILED_PRECONDITION" in cuerpo:
             raise FuenteError(
                 "Este archivo es un documento de Microsoft Office (Excel) subido a Drive, "
@@ -181,6 +286,7 @@ def descubrir_pestanas(id_sheet: str, forzar: bool = False) -> list[str]:
     if not pestanas:
         raise FuenteError("La API de Google no devolvió ninguna pestaña para ese Sheet.")
     _cache_pestanas[id_sheet] = (ahora, pestanas)
+    _escribir_cache_pestanas(id_sheet, pestanas)
     return pestanas
 
 
@@ -256,10 +362,7 @@ def limpiar_cache() -> None:
 
 
 def _descargar_csv(url: str) -> list[dict]:
-    try:
-        resp = requests.get(url, timeout=TIEMPO_ESPERA_SEGUNDOS, headers={"User-Agent": "greenline-dashboard"})
-    except requests.RequestException as exc:
-        raise FuenteError(f"No se pudo conectar con Google Sheets: {exc}") from exc
+    resp = _get_con_reintentos(url, "No se pudo conectar con Google Sheets")
 
     if resp.status_code in (401, 403):
         raise FuenteError(

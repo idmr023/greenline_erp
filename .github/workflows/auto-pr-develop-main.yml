@@ -19,6 +19,12 @@ permissions:
   statuses: read
   issues: write
   repository-projects: read
+  # `actions: write` → permite lanzar el CI a mano (workflow_dispatch) cuando
+  # el push a develop se hizo con GITHUB_TOKEN (ese push no dispara 'on: push').
+  # OJO: `workflows` NO es una clave válida de `permissions:` (la lista oficial
+  # es actions/checks/contents/.../statuses): el GITHUB_TOKEN no puede tocar
+  # .github/workflows/**. Sólo un PAT con el scope `workflow` puede.
+  actions: write
 
 jobs:
   auto-pr:
@@ -111,6 +117,28 @@ jobs:
           probe "graphql pullRequests" "$AUTO_MERGE_PAT" gh api graphql \
             -f query="$GQL_LIST" -f o="$OWNER" -f n="$NAME" || pat_ok=0
           probe_api "check-runs verify (checks:read)" "$AUTO_MERGE_PAT" "$CHECKS_PATH" || pat_ok=0
+
+          # ¿El PAT puede modificar .github/workflows/**? GitHub rechaza el push
+          # con "refusing to allow a GitHub App to create or update workflow
+          # ... without `workflows` permission" si el token no lo tiene:
+          #   · classic PAT  → scope `workflow`
+          #   · fine-grained → permiso "Workflows: Read and write"
+          # Un PAT fino-grained NO expone la cabecera x-oauth-scopes: en ese
+          # caso no se puede saber y se comprueba al pushear (hay respaldo).
+          if [ "$pat_ok" -eq 1 ]; then
+            hdr=$(GH_TOKEN="$AUTO_MERGE_PAT" gh api -i "/repos/$REPO" 2>/dev/null \
+              | grep -i '^x-oauth-scopes:' | tr -d '\r' | head -1 || true)
+            if [ -z "$hdr" ]; then
+              echo "  [info] AUTO_MERGE_PAT: no se puede leer el scope (PAT fine-grained); se comprobará al pushear"
+              echo "workflow=unknown" >> "$GITHUB_OUTPUT"
+            elif printf '%s' "$hdr" | grep -qi 'workflow'; then
+              echo "  [ok]   AUTO_MERGE_PAT puede modificar workflows (scope workflow)"
+              echo "workflow=1" >> "$GITHUB_OUTPUT"
+            else
+              echo "  [FAIL] AUTO_MERGE_PAT NO tiene el scope 'workflow' → no puede pushear cambios en .github/workflows/"
+              echo "workflow=0" >> "$GITHUB_OUTPUT"
+            fi
+          fi
 
           if [ "$pat_ok" -eq 1 ]; then
             echo "token=pat" >> "$GITHUB_OUTPUT"
@@ -212,6 +240,9 @@ jobs:
               | awk 'NR > 1 && /^$/{exit} NR > 1{print}' || true)
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            # SHA de develop ANTES de fusionar main: si el PAT no puede tocar
+            # .github/workflows/**, la fusión se rehace sin esos archivos.
+            antes=$(git rev-parse HEAD)
             if ! git merge --no-edit --strategy-option ours origin/main; then
               # `-X ours` sólo resuelve conflictos de CONTENIDO: lo que quede
               # (modify/delete, add/add…) se fuerza también hacia OURS.
@@ -245,7 +276,29 @@ jobs:
                 fail_conflict "$sha"
               fi
             fi
-            if ! git push "https://x-access-token:${AUTO_MERGE_PAT}@github.com/${REPO}.git" HEAD:develop; then
+            # El PAT sólo puede pushear .github/workflows/** si tiene el scope
+            # `workflow`. Sin él, GitHub rechaza el push ENTERO ("refusing to
+            # allow a GitHub App to create or update workflow ... without
+            # `workflows` permission"). En ese caso la fusión se rehace
+            # dejando la versión de develop de esos archivos (el código sí
+            # entra) y se avisa de que los workflows hay que sincronizarlos a
+            # mano con una cuenta que tenga el scope.
+            if [ "${{ steps.token.outputs.workflow }}" != "1" ]; then
+              if git diff --name-only "$antes" HEAD -- .github/workflows | grep -q .; then
+                echo "::warning::AUTO_MERGE_PAT no tiene el scope 'workflow': la fusión deja fuera .github/workflows/** (GitHub rechazaría el push)."
+                git checkout "$antes" -- .github/workflows/
+                git add .github/workflows/ 2>/dev/null || true
+                git commit --no-edit --no-verify --allow-empty
+              fi
+            fi
+            if ! push_out=$(git push "https://x-access-token:${AUTO_MERGE_PAT}@github.com/${REPO}.git" HEAD:develop 2>&1); then
+              if printf '%s' "$push_out" | grep -qi "workflows\` permission"; then
+                echo "$push_out"
+                echo "::error::El push a develop fue rechazado por el scope 'workflow' de AUTO_MERGE_PAT (GitHub no deja modificar .github/workflows/** sin ese scope). Súbele el scope al PAT y re-lanza el workflow."
+                gh pr comment "$PR" --body "⛔ El push del merge a \`develop\` fue rechazado: \`AUTO_MERGE_PAT\` no tiene el scope \`workflow\` (classic PAT) ni el permiso *Workflows: Read and write* (fine-grained). Sin eso GitHub no deja modificar \`.github/workflows/**\`. Súbele el permiso al PAT y re-lanza este workflow."
+                exit 1
+              fi
+              echo "$push_out"
               echo "::error::Merge local hecho pero el push a develop fue rechazado (permisos o carrera con otro push)."
               fail_conflict "$sha"
             fi
@@ -344,9 +397,19 @@ jobs:
               # primer intento falla con "verify is in progress/queued".
               MERGED=0
               for attempt in 1 2 3 4 5; do
-                if gh pr merge "$PR" --squash --admin; then
+                if merge_out=$(gh pr merge "$PR" --squash --admin 2>&1); then
                   MERGED=1
                   break
+                fi
+                # El merge de un PR que toca .github/workflows/** exige un token
+                # con el scope `workflow` (classic) o "Workflows: Read and write"
+                # (fine-grained). Sin eso, GitHub lo rechaza siempre: no hay
+                # reintento que valga, hay que corregir el token.
+                if printf '%s' "$merge_out" | grep -qi "workflows\` permission"; then
+                  echo "$merge_out"
+                  echo "::error::El merge del PR #$PR fue rechazado: el PR toca .github/workflows/ y el token no tiene el scope 'workflow'."
+                  gh pr comment "$PR" --body "⛔ El merge toca \`.github/workflows/\` y el token usado no tiene el scope \`workflow\` (classic PAT) ni el permiso *Workflows: Read and write* (fine-grained). Súbele el permiso al PAT y re-lanza este workflow; mientras tanto, mergea a mano con una cuenta que lo tenga."
+                  exit 1
                 fi
                 echo "merge attempt $attempt falló; re-verifico verify (15s)..."
                 sleep 15

@@ -29,7 +29,7 @@ export default function AdminAjustes() {
   const { accessToken } = useAuth();
 
   const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
+  const [guardando, setGuardando] = useState(false); 
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
 

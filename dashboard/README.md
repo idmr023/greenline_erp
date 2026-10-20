@@ -196,6 +196,22 @@ dashboard/
 | Cambié el enlace y veo datos viejos | La caché dura 5 min: reinicia `app.py` o llama a `POST /api/limpiar-cache` |
 | Pestaña equivocada | Usa el campo `hoja:` con el nombre exacto de la pestaña (mayúsculas incluidas) |
 | Errores de columnas | La primera fila de la hoja debe ser el encabezado (nombres de columna) |
+| «No se pudo consultar la API de Google: … UNEXPECTED_EOF_WHILE_READING» | Fallo de red transitorio hacia `sheets.googleapis.com` (corte de TLS). El dashboard **reintenta solo** (3 intentos con backoff) y, si persiste, usa la última lista de pestañas guardada en `dashboard/.cache/`. Si nunca falla y aun así no carga, revisa VPN/antivirus y `POST /api/limpiar-cache` |
+| La API key aparece en algún mensaje | No debería: `services/sheets.py` la redacta (`key=***`) en errores y logs. Si ves la clave real, **rótala** en Google Cloud y actualiza `dashboard/.env` |
+
+### Fallos de red: reintentos y caché en disco
+
+Las llamadas a Google (`services/sheets.py`) reintentan ante fallos transitorios
+(SSL/timeout/conexión y HTTP 429/5xx): 3 intentos con esperas de 0,5 s y 1,5 s.
+Los errores de configuración (401/403/404/400) **no** se reintentan: son
+permanentes y hay que corregirlos.
+
+Además, la lista de pestañas descubierta (`hojas: "*"`) se guarda en
+`dashboard/.cache/pestanas-<id>.json` (TTL 24 h). Si la API no responde tras los
+reintentos, el dashboard sirve esa lista en vez de mostrar un error, de modo que
+la página sigue funcionando con datos algo más antiguos. Esa carpeta está en
+`.gitignore`; en Vercel (sistema de archivos de sólo lectura) se ignora en
+silencio.
 
 ## 8. Despliegue en Vercel (función Python)
 
@@ -213,4 +229,6 @@ El ERP embebe el dashboard con `<iframe src="/dash/">` (mismo origen → sin COR
 .venv\Scripts\python app.py                                  # arrancar
 .venv\Scripts\python -m pip install -r requirements.txt      # dependencias
 .venv\Scripts\python -c "from services.sheets import *; print(cargar_fuentes())"   # probar config
+.venv\Scripts\python smoke.py                                # smoke de CI (sin red)
+.venv\Scripts\python -m unittest discover -s . -p "test_*.py"   # tests (reintentos, redacción de la clave)
 ```

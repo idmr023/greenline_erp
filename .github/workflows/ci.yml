@@ -5,6 +5,9 @@ on:
     branches: [develop, main]
   pull_request:
     branches: [develop, main]
+  # Lanzamiento manual: lo usa auto-pr-develop-main.yml cuando el push a
+  # develop se hizo con GITHUB_TOKEN (ese push no dispara 'on: push').
+  workflow_dispatch:
 
 # Cancela ejecuciones anteriores del mismo PR/rama al hacer nuevos pushes.
 # En main NO se cancela: el check `verify` es quality gate del auto-merge
@@ -75,3 +78,7 @@ jobs:
       - name: Dashboard smoke
         working-directory: dashboard
         run: python smoke.py
+
+      - name: Dashboard tests
+        working-directory: dashboard
+        run: python -m unittest discover -s . -p "test_*.py"

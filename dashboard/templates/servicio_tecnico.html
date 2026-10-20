@@ -149,9 +149,35 @@
       </tbody>
     </table>
   </div>
+  {# ============ TALLER: datos vivos de la API del backend ============ #}
+  <div class="tarjeta" id="taller-bloque">
+    <div class="taller-cabecera">
+      <h2>Taller · incentivos, garantías y ensamblado</h2>
+      <div class="taller-filtros">
+        <label>Mes
+          <select id="taller-mes"></select>
+        </label>
+        <label>Tienda
+          <select id="taller-tienda">
+            <option value="">Todas las tiendas</option>
+          </select>
+        </label>
+        <button type="button" id="taller-recargar">Actualizar</button>
+      </div>
+    </div>
+    <p id="taller-estado" class="sutil">Esperando la sesión del panel…</p>
+    <div id="taller-contenido"></div>
+  </div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+  window.__GL_TALLER__ = {
+    url: {{ url_for('api_taller_datos') | tojson }},
+    origenes: {{ origenes_aceptados | tojson }},
+  };
+</script>
+<script src="{{ url_for('static', filename='js/taller.js') }}"></script>
 <script>
   const sedes = {{ sedes | tojson }};
   const etiquetas = sedes.map(s => s.sede.replace(/^\d+-/, ''));

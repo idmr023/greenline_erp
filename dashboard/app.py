@@ -15,6 +15,7 @@ Cada página de dashboard es una función con `@app.route`; ver README.md.
 from __future__ import annotations
 
 import os
+import re
 import socket
 from datetime import datetime
 
@@ -28,6 +29,7 @@ from services.sheets import (
     fuente_por_id,
     limpiar_cache,
 )
+from services.taller import TallerError, datos_taller
 
 app = Flask(__name__)
 
@@ -96,6 +98,22 @@ def _ancestros_efectivos() -> str:
     if ref and ref not in base:
         base = f"{base} {ref}"
     return base
+
+
+def _origenes_aceptados() -> list[str]:
+    """Orígenes desde los que el dashboard acepta el `postMessage` del token.
+
+    Es la misma lista que usa la CSP `frame-ancestors`, con `'self'`
+    resuelto al origen de la propia petición (el panel y el dashboard
+    comparten origen en producción).
+    """
+    origenes: list[str] = []
+    for item in _ancestros_efectivos().split():
+        if item == "'self'":
+            origenes.append(f"{request.scheme}://{request.host}")
+        else:
+            origenes.append(item)
+    return origenes
 
 
 @app.after_request
@@ -287,6 +305,24 @@ def api_limpiar_cache():
     return jsonify({"ok": True})
 
 
+@app.route("/api/taller/datos")
+def api_taller_datos():
+    """Datos vivos de los módulos del taller (incentivos, garantías, ensamblado).
+
+    El token del usuario llega en la cabecera `X-GL-Token` (lo manda el panel
+    al iframe por postMessage). Sin token se usa `TALLER_API_TOKEN` del entorno.
+    """
+    mes = (request.args.get("mes") or "").strip()
+    if mes and not re.fullmatch(r"\d{4}-\d{2}", mes):
+        return jsonify({"error": "El mes debe tener el formato YYYY-MM."}), 400
+    tienda_id = (request.args.get("tiendaId") or "").strip()
+    token = request.headers.get("X-GL-Token", "")
+    try:
+        return jsonify(datos_taller(mes=mes, tienda_id=tienda_id, token=token))
+    except TallerError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
 @app.route("/dashboard/servicio-tecnico")
 def dashboard_servicio_tecnico():
     try:
@@ -304,6 +340,7 @@ def dashboard_servicio_tecnico():
         tipos=datos["tipos"],
         tecnicos=datos["tecnicos"],
         totales=datos["totales"],
+        origenes_aceptados=_origenes_aceptados(),
         generado=datetime.now().strftime("%d/%m/%Y %H:%M"),
     )
 

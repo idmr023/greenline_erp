@@ -117,6 +117,7 @@ export default function AdminPrestamosVehiculo() {
   const [filtros, setFiltros] = useState({ estado: '', tiendaId: '', q: '' });
   const [tiendas, setTiendas] = useState([]);
   const [empleados, setEmpleados] = useState([]);
+  const [errorEmpleados, setErrorEmpleados] = useState(null);
   const [catalogo, setCatalogo] = useState([]);
   const [cargandoCatalogo, setCargandoCatalogo] = useState(false);
 
@@ -142,11 +143,19 @@ export default function AdminPrestamosVehiculo() {
       .catch(() => {});
   }, [accessToken]);
 
-  useEffect(() => {
+  // Los empleados sólo hacen falta para CREAR un préstamo: se cargan al abrir
+  // el formulario (no en cada montaje) y su error se muestra en vez de
+  // tragarse la respuesta (antes un 429 dejaba el desplegable vacío sin
+  // explicación).
+  const cargarEmpleados = useCallback(async () => {
     if (!puedeEditar) return;
-    prestamosVehiculoAPI.listarEmpleados(accessToken)
-      .then((d) => setEmpleados(d.empleados || []))
-      .catch(() => {});
+    try {
+      const d = await prestamosVehiculoAPI.listarEmpleados(accessToken);
+      setEmpleados(d.empleados || []);
+      setErrorEmpleados(null);
+    } catch (err) {
+      setErrorEmpleados(err?.error || err?.message || 'No se pudieron cargar los empleados.');
+    }
   }, [accessToken, puedeEditar]);
 
   // Catálogo de vehículos: se carga LAZILY, sólo cuando hace falta (crear
@@ -196,7 +205,7 @@ export default function AdminPrestamosVehiculo() {
         </div>
         {puedeEditar && (
           <button
-            onClick={() => { setShowCrear(true); cargarCatalogo(); }}
+            onClick={() => { setShowCrear(true); cargarCatalogo(); cargarEmpleados(); }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 transition-colors"
           >
             <Plus className="w-4 h-4" /> Nuevo préstamo
@@ -324,6 +333,8 @@ export default function AdminPrestamosVehiculo() {
         <ModalCrear
           tiendas={tiendas}
           empleados={empleados}
+          errorEmpleados={errorEmpleados}
+          onReintentarEmpleados={cargarEmpleados}
           catalogo={catalogo}
           cargandoCatalogo={cargandoCatalogo}
           vehiculosEnUso={vehiculosEnUso}
@@ -342,7 +353,7 @@ export default function AdminPrestamosVehiculo() {
           onClose={() => setSelected(null)}
           onUpdated={(p) => { setSelected(p); load(); }}
           onDeleted={() => { setSelected(null); load(); }}
-          onInspeccion={(tipo) => setShowInspeccion({ tipo })}
+          onInspeccion={(tipo, soloFotos) => setShowInspeccion({ tipo, soloFotos })}
         />
       )}
 
@@ -350,6 +361,7 @@ export default function AdminPrestamosVehiculo() {
         <ModalInspeccion
           prestamo={selected}
           tipo={showInspeccion.tipo}
+          soloFotos={!!showInspeccion.soloFotos}
           accessToken={accessToken}
           onClose={() => setShowInspeccion(null)}
           onSaved={(p) => { setShowInspeccion(null); setSelected(p); load(); }}
@@ -363,7 +375,7 @@ export default function AdminPrestamosVehiculo() {
 // Modal: Crear préstamo
 // ============================================================
 
-function ModalCrear({ tiendas, empleados, catalogo, cargandoCatalogo, vehiculosEnUso, accessToken, onClose, onCreated }) {
+function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados, catalogo, cargandoCatalogo, vehiculosEnUso, accessToken, onClose, onCreated }) {
   const [form, setForm] = useState({
     tiendaId: '',
     vehiculo: '',
@@ -564,6 +576,19 @@ function ModalCrear({ tiendas, empleados, catalogo, cargandoCatalogo, vehiculosE
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Empleado *</label>
+            {errorEmpleados && (
+              <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span className="flex-1">{errorEmpleados}</span>
+                <button
+                  type="button"
+                  onClick={onReintentarEmpleados}
+                  className="shrink-0 font-semibold underline hover:no-underline"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
             <select
               value={form.empleadoId}
               onChange={(e) => setForm({ ...form, empleadoId: e.target.value })}
@@ -752,6 +777,15 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, catalogo, onClose, o
                 {prestamo.ingresoFotos?.length > 0 && (
                   <FotosInspeccion fotos={prestamo.ingresoFotos} />
                 )}
+                {puedeEditar && (
+                  <button
+                    type="button"
+                    onClick={() => onInspeccion('ingreso', true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 text-xs font-medium hover:bg-blue-50"
+                  >
+                    <Camera className="w-3.5 h-3.5" /> Añadir fotos
+                  </button>
+                )}
               </div>
             ) : (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-500 flex items-center justify-between">
@@ -800,6 +834,15 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, catalogo, onClose, o
                 )}
                 {prestamo.salidaFotos?.length > 0 && (
                   <FotosInspeccion fotos={prestamo.salidaFotos} />
+                )}
+                {puedeEditar && (
+                  <button
+                    type="button"
+                    onClick={() => onInspeccion('salida', true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-200 bg-white text-green-700 text-xs font-medium hover:bg-green-50"
+                  >
+                    <Camera className="w-3.5 h-3.5" /> Añadir fotos
+                  </button>
                 )}
               </div>
             ) : (
@@ -922,7 +965,7 @@ function ComparacionIngresoSalida({ prestamo }) {
 // Modal: Inspección (ingreso o salida)
 // ============================================================
 
-function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
+function ModalInspeccion({ prestamo, tipo, soloFotos = false, accessToken, onClose, onSaved }) {
   const esIngreso = tipo === 'ingreso';
   const [form, setForm] = useState({
     kilometraje: esIngreso ? prestamo.ingresoKm || '' : prestamo.salidaKm || '',
@@ -939,6 +982,28 @@ function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
 
   async function submit(e) {
     e.preventDefault();
+    if (soloFotos) {
+      if (!form.fotos.length) {
+        setError('Sube al menos una foto.');
+        return;
+      }
+      setSaving(true);
+      setError(null);
+      try {
+        const actualizado = await prestamosVehiculoAPI.adjuntarFotos(
+          prestamo.id,
+          esIngreso ? 'ingreso' : 'salida',
+          form.fotos,
+          accessToken,
+        );
+        onSaved(actualizado);
+      } catch (err) {
+        setError(err?.error || err?.message || 'No se pudieron guardar las fotos.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!form.kilometraje || form.kilometraje < 0) {
       setError('Ingresa el kilometraje.');
       return;
@@ -988,11 +1053,13 @@ function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             {esIngreso ? <LogIn className="w-5 h-5 text-blue-500" /> : <LogOut className="w-5 h-5 text-green-500" />}
-            Inspección de {esIngreso ? 'ingreso' : 'salida'}
+            {soloFotos
+              ? `Añadir fotos · ${esIngreso ? 'inspección de ingreso' : 'inspección de salida'}`
+              : `Inspección de ${esIngreso ? 'ingreso' : 'salida'}`}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
@@ -1011,6 +1078,22 @@ function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
             </p>
           </div>
 
+          {/* Las fotos van PRIMERO: es lo que el usuario viene a hacer y antes
+              quedaban enterradas al final de un formulario con scroll. */}
+          <ImageUploader
+            value={form.fotos}
+            onChange={(fotos) => setForm({ ...form, fotos })}
+            upload={(file, parte) =>
+              prestamosVehiculoAPI.subirFoto(prestamo.id, file, parte, accessToken)
+            }
+            partes={PARTES_VEHICULO}
+            disabled={saving}
+            label="Fotos"
+            hint="Sube fotos del vehículo (carrocería, tablero, llantas, etc.). Elige la parte a la que corresponde cada foto."
+          />
+
+          {!soloFotos && (
+            <>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Kilometraje *</label>
@@ -1038,18 +1121,6 @@ function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
               </select>
             </div>
           </div>
-
-          <ImageUploader
-            value={form.fotos}
-            onChange={(fotos) => setForm({ ...form, fotos })}
-            upload={(file, parte) =>
-              prestamosVehiculoAPI.subirFoto(prestamo.id, file, parte, accessToken)
-            }
-            partes={PARTES_VEHICULO}
-            disabled={saving}
-            label="Fotos"
-            hint="Sube fotos del vehículo (carrocería, tablero, llantas, etc.). Elige la parte a la que corresponde cada foto."
-          />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1139,6 +1210,8 @@ function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
               rows={2}
             />
           </div>
+            </>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <button
@@ -1155,7 +1228,11 @@ function ModalInspeccion({ prestamo, tipo, accessToken, onClose, onSaved }) {
                 esIngreso ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'
               }`}
             >
-              {saving ? 'Guardando…' : `Registrar ${esIngreso ? 'ingreso' : 'salida'}`}
+              {saving
+                ? 'Guardando…'
+                : soloFotos
+                  ? 'Guardar fotos'
+                  : `Registrar ${esIngreso ? 'ingreso' : 'salida'}`}
             </button>
           </div>
         </form>

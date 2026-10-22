@@ -388,6 +388,26 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
   const [soloDisponibles, setSoloDisponibles] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [fotos, setFotos] = useState([]);
+  const [archivosPendientes, setArchivosPendientes] = useState([]);
+  const [errorFotos, setErrorFotos] = useState(null);
+
+  function uploadTemp(file, parte) {
+    const url = URL.createObjectURL(file);
+    setArchivosPendientes((prev) => [...prev, { file, parte, url }]);
+    setFotos((prev) => [...prev, { url, parte: parte || '' }]);
+    return Promise.resolve({ url, parte });
+  }
+
+  // El ImageUploader edita la lista de fotos (quitar / cambiar la "parte"),
+  // así que hay que replicar ese cambio en la cola de archivos pendientes
+  // para no subir al backend fotos que el usuario ya quitó.
+  function onChangeFotos(nuevas) {
+    setFotos(nuevas);
+    setArchivosPendientes((prev) =>
+      prev.filter((p) => nuevas.some((n) => n.url === p.url)),
+    );
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -397,8 +417,17 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
     }
     setSaving(true);
     setError(null);
+    setErrorFotos(null);
     try {
       const creado = await prestamosVehiculoAPI.crear(form, accessToken);
+      // Subir fotos pendientes al préstamo creado
+      for (const { file, parte } of archivosPendientes) {
+        try {
+          await prestamosVehiculoAPI.subirFoto(creado.id, file, parte, accessToken);
+        } catch (err) {
+          setErrorFotos(err?.error || err?.message || 'No se pudo subir una foto.');
+        }
+      }
       onCreated(creado);
     } catch (err) {
       setError(err?.error || err?.message || 'No se pudo crear el préstamo');
@@ -623,6 +652,20 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
               rows={3}
             />
           </div>
+          <ImageUploader
+            value={fotos}
+            onChange={onChangeFotos}
+            upload={uploadTemp}
+            partes={PARTES_VEHICULO}
+            disabled={saving}
+            label="Fotos"
+            hint="Sube fotos del vehículo (carrocería, tablero, llantas, etc.). Elige la parte a la que corresponde cada foto."
+          />
+          {errorFotos && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+              {errorFotos}
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"

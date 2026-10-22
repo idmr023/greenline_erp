@@ -4,7 +4,8 @@ import { clearCache } from '../../lib/productos';
 import { versionarImagen } from '../../lib/images';
 import { imagenesAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, ArrowUp, ArrowDown, Save, Upload, X, GripVertical, Search, FolderOpen, Loader2, Eye, EyeOff } from '../../lib/icons';
+import { ArrowLeft, ArrowUp, ArrowDown, Save, Upload, X, GripVertical, Search, FolderOpen, Loader2, Eye, EyeOff, FileText } from '../../lib/icons';
+import ConfirmModal from './ConfirmModal';
 
 const EMPTY_PRODUCT = {
   nombre: '',
@@ -16,6 +17,8 @@ const EMPTY_PRODUCT = {
   disponible: true,
   video_id: '',
   categoria_id: '',
+  // Estado de publicación: false = borrador (no aparece en la tienda).
+  activo: true,
 };
 
 const EMPTY_FICHA = {
@@ -57,6 +60,8 @@ async function guardarProductoPrincipal(form, isEdit, productoId) {
     video_id: form.video_id || null,
     categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
     disponible: form.disponible !== false,
+    // false = borrador: el producto se guarda pero no se publica en la web.
+    activo: form.activo !== false,
   };
   if (isEdit) {
     const { error } = await supabase.from('productos').update(data).eq('id', productoId);
@@ -230,6 +235,8 @@ export default function AdminProductoForm({ productoId, onBack, onSaved }) {
   const [uploading, setUploading] = useState(false);
   const [exploradorAbierto, setExploradorAbierto] = useState(false);
   const [exploradorIndice, setExploradorIndice] = useState(null);
+  // 'publicar' | 'borrador' | null — qué acción se está por confirmar.
+  const [confirmGuardado, setConfirmGuardado] = useState(null);
 
   const { accessToken } = useAuth();
   const isEdit = !!productoId;
@@ -270,6 +277,7 @@ export default function AdminProductoForm({ productoId, onBack, onSaved }) {
             disponible: prod.disponible !== false,
             video_id: prod.video_id || '',
             categoria_id: prod.categoria_id || '',
+            activo: prod.activo !== false,
           });
         }
 
@@ -361,10 +369,14 @@ potencia_bateria: ft.potencia_bateria || '',
     init();
   }, [productoId]);
 
-  const handleSave = async () => {
+  /**
+   * Valida el formulario antes de guardar. Devuelve true si todo está bien
+   * (los avisos al usuario se hacen aquí).
+   */
+  const validarFormulario = () => {
     if (!form.nombre || !form.precio_actual) {
       alert('Nombre y precio son obligatorios');
-      return;
+      return false;
     }
 
     const opcionesColor = productoColores.filter((cr) => cr.nombre).map((cr) => cr.nombre);
@@ -374,15 +386,15 @@ potencia_bateria: ft.potencia_bateria || '',
     );
     if (imgSinColor) {
       alert('Todas las imágenes deben tener un color asignado (no existe "General / Sin color").');
-      return;
+      return false;
     }
     if (imgColorNoRegistrado) {
       alert('Hay imágenes con un color que no está registrado en la sección Colores. Regístralo o reasigna la imagen.');
-      return;
+      return false;
     }
     if (imagenes.some((img) => img.url) && !opcionesColor.length) {
       alert('El producto tiene imágenes pero ningún color registrado. Agrega los colores en la sección Colores.');
-      return;
+      return false;
     }
 
     const conStockInvalido = productoColores.find((cr) => cr.color_id && stockEsInvalido(cr.stock));
@@ -391,13 +403,25 @@ potencia_bateria: ft.potencia_bateria || '',
         `Unidades inválidas en el color "${conStockInvalido.nombre || '(sin nombre)'}": ` +
           'escribe un número entero igual o mayor a 0.',
       );
-      return;
+      return false;
     }
+    return true;
+  };
 
+  /** Botón "Guardar como borrador" / "Guardar y publicar": valida y pregunta. */
+  const handleSave = (publicar) => {
+    if (!validarFormulario()) return;
+    setConfirmGuardado(publicar ? 'publicar' : 'borrador');
+  };
+
+  /** Confirmación del modal: aquí sí se escribe en la base de datos. */
+  const confirmarGuardado = async () => {
+    const publicar = confirmGuardado === 'publicar';
+    setConfirmGuardado(null);
     setSaving(true);
 
     const fallo = await guardarProductoCompleto({
-      form,
+      form: { ...form, activo: publicar },
       isEdit,
       productoId,
       ficha,
@@ -590,31 +614,72 @@ potencia_bateria: ft.potencia_bateria || '',
 
   if (loading) return <div className="p-8 text-gray-400 text-sm">Cargando...</div>;
 
+  const publicado = form.activo !== false;
+
+  // Textos del modal de confirmación según la acción y el estado actual.
+  const tituloConfirmacion =
+    confirmGuardado === 'publicar'
+      ? (isEdit ? 'Publicar producto' : 'Publicar y guardar')
+      : 'Guardar como borrador';
+
+  const mensajeConfirmacion =
+    confirmGuardado === 'publicar'
+      ? (publicado
+        ? 'Se guardarán los cambios y el producto seguirá visible en la tienda.'
+        : 'Se guardará el producto y aparecerá en la tienda y en la web de inmediato.')
+      : (publicado
+        ? 'El producto dejará de aparecer en la tienda hasta que lo publiques de nuevo.'
+        : 'Se guardará el producto como borrador: no aparecerá en la tienda hasta que lo publiques.');
+
+  const etiquetaConfirmacion = confirmGuardado === 'publicar' ? 'Publicar' : 'Guardar borrador';
+
   return (
     <div className="p-8 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 gap-4">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {isEdit ? 'Editar Producto' : 'Nuevo Producto'}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900">
+                {isEdit ? 'Editar Producto' : 'Nuevo Producto'}
+              </h1>
+              {isEdit && (
+                <span
+                  className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    publicado ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {publicado ? 'Publicado' : 'Borrador'}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-0.5">
               {isEdit ? `ID: ${productoId}` : 'Completa los datos del producto'}
             </p>
           </div>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-50"
-        >
-          <Save className="w-4 h-4" />
-          {saving ? 'Guardando...' : 'Guardar'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleSave(false)}
+            disabled={saving}
+            title="Guarda el producto sin publicarlo en la tienda"
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            <FileText className="w-4 h-4" />
+            Guardar como borrador
+          </button>
+          <button
+            onClick={() => handleSave(true)}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Guardando...' : 'Guardar y publicar'}
+          </button>
+        </div>
       </div>
 
       {/* Sección: Datos generales */}
@@ -911,17 +976,34 @@ potencia_bateria: ft.potencia_bateria || '',
         {uploading && <p className="text-xs text-brand mt-2">Subiendo imagen...</p>}
       </Section>
 
-      {/* Save button bottom */}
-      <div className="flex justify-end mt-8 pb-8">
+      {/* Save buttons bottom */}
+      <div className="flex justify-end gap-3 mt-8 pb-8">
         <button
-          onClick={handleSave}
+          onClick={() => handleSave(false)}
+          disabled={saving}
+          title="Guarda el producto sin publicarlo en la tienda"
+          className="flex items-center gap-2 px-5 py-3 border border-gray-200 bg-white text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          <FileText className="w-4 h-4" />
+          Guardar como borrador
+        </button>
+        <button
+          onClick={() => handleSave(true)}
           disabled={saving}
           className="flex items-center gap-2 px-6 py-3 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-50"
         >
           <Save className="w-4 h-4" />
-          {saving ? 'Guardando...' : 'Guardar Producto'}
+          {saving ? 'Guardando...' : 'Guardar y publicar'}
         </button>
       </div>
+      <ConfirmModal
+        open={confirmGuardado !== null}
+        title={tituloConfirmacion}
+        message={mensajeConfirmacion}
+        confirmLabel={etiquetaConfirmacion}
+        onConfirm={confirmarGuardado}
+        onCancel={() => setConfirmGuardado(null)}
+      />
       {exploradorAbierto && (
         <ExploradorImagenes
           rutaInicial={rutaProducto}

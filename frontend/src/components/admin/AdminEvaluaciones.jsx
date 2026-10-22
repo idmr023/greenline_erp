@@ -69,6 +69,10 @@ export default function AdminEvaluaciones() {
           <p className="text-sm text-gray-500 mt-1">
             Cada registro es un motivo o incidencia de un técnico. El puntaje general sale del historial.
           </p>
+          <p className="text-xs text-gray-400 mt-1">
+            El histórico del cierre de mes se importa de la hoja «Evaluación Armadores (Cierre de Mes)»
+            de Google Drive; desde el panel se registran las incidencias día a día.
+          </p>
         </div>
         <button
           onClick={cargarCatalogos}

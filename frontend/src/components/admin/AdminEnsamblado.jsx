@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ensambladoAPI, tallerAPI, prestamosVehiculoAPI } from '../../lib/api';
-import { mesActual, nombreMes, ultimosMeses } from '../../utils/meses';
+import { nombreMes, ultimosMeses } from '../../utils/meses';
 import {
   Package, Plus, RefreshCw, Trash2, X, Pencil, Wrench, MapPin, User,
 } from '../../lib/icons';
@@ -55,7 +55,10 @@ export default function AdminEnsamblado() {
   const [showCrear, setShowCrear] = useState(false);
   const [editando, setEditando] = useState(null);
 
-  const [filtros, setFiltros] = useState({ mes: mesActual(), estado: '', tiendaId: '', q: '' });
+  // El histórico importado de Google Sheets va de junio a septiembre de 2026,
+  // así que el filtro arranca en «todos los meses»: con el mes actual se veía
+  // vacío aunque hubiera datos.
+  const [filtros, setFiltros] = useState({ mes: '', estado: '', tiendaId: '', q: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,6 +113,10 @@ export default function AdminEnsamblado() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             Se registra el armado y el despacho; el dashboard se arma con esa misma data.
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            El histórico viene importado de la hoja «Registro Armado y Despacho» de Google Drive
+            (jun–sep 2026); los registros que llegan desde el panel se marcan igual.
           </p>
         </div>
         <div className="flex gap-2">

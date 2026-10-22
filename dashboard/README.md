@@ -271,3 +271,27 @@ El ERP embebe el dashboard con `<iframe src="/dash/">` (mismo origen → sin COR
 .venv\Scripts\python smoke.py                                # smoke de CI (sin red)
 .venv\Scripts\python -m unittest discover -s . -p "test_*.py"   # tests (reintentos, redacción de la clave)
 ```
+
+## 10. De las hojas a la base de datos del ERP
+
+`config/fuentes.yaml` es **el registro único** de las hojas de Drive, y también
+lo leen los módulos del ERP (incentivos, garantías, ensamblado): el panel no
+consulta las hojas, sino la base de datos del backend.
+
+La carga la hace el importador del repo hermano (`greenline/backend`):
+
+```powershell
+cd <ruta-del-repo-hermano>\backend      # p. ej. C:\Users\Marketing\greenline\backend
+npm run import:taller -- --dry-run       # plan: conteos, mapeos y huecos (no escribe)
+npm run import:taller                    # importa
+```
+
+- Lee los enlaces de este repo (`dashboard/config/fuentes.yaml`): no se duplican.
+- Es **idempotente**: cada fila se busca por su clave natural, así que se puede
+  volver a lanzar cuando cambie la hoja sin duplicar nada.
+- Marca lo que viene de Drive con `Origen: Google Sheets` en
+  `observaciones`/`notas`.
+- La hoja de incentivos trae el **cierre mensual** por persona (no eventos por
+  día): se guarda como una evaluación por persona y ciclo, con el desglose
+  (base, puntos sumados/restados, final e incentivo) en la descripción.
+

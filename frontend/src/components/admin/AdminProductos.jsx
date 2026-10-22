@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Upload } from '../../lib/icons';
+import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff } from '../../lib/icons';
 import { ColorDot } from '../ColorDot';
 import AdminStockImportar from './AdminStockImportar';
 
@@ -9,6 +9,7 @@ export default function AdminProductos({ onEdit, onNew }) {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('');
+    const [filterEstado, setFilterEstado] = useState('');
     const [categorias, setCategorias] = useState([]);
     const [colores, setColores] = useState([]);
     const [importando, setImportando] = useState(false);
@@ -22,7 +23,7 @@ export default function AdminProductos({ onEdit, onNew }) {
 
     const [prodRes, catRes, coloresRes] = await Promise.all([
       supabase.from('productos').select(`
-        id, nombre, slug, precio_actual, precio_original, destacado, disponible, created_at,
+        id, nombre, slug, precio_actual, precio_original, destacado, disponible, activo, created_at,
         categoria:categorias(id, nombre),
         imagenes(id),
         color_rel:prod_color_rel(color_id, stock, visible, color:colores(id, nombre, hex_code))
@@ -59,6 +60,8 @@ export default function AdminProductos({ onEdit, onNew }) {
       categoria_nombre: p.categoria?.nombre || 'Sin categoría',
       total_imagenes: (p.imagenes || []).length,
       disponible: p.disponible !== false,
+      // Estado de publicación: false = borrador (oculto de la tienda).
+      activo: p.activo !== false,
       stock_total: (p.color_rel || []).reduce(
         (acc, cr) => acc + (Math.max(0, Math.trunc(Number(cr.stock))) || 0),
         0,
@@ -72,10 +75,15 @@ export default function AdminProductos({ onEdit, onNew }) {
     setLoading(false);
   }
 
+  const borradores = productos.filter((p) => !p.activo).length;
+
   const filtered = productos.filter((p) => {
     const matchSearch = !search || p.nombre.toLowerCase().includes(search.toLowerCase());
     const matchCat = !filterCat || p.categoria_nombre === filterCat;
-    return matchSearch && matchCat;
+    const matchEstado =
+      !filterEstado ||
+      (filterEstado === 'publicados' ? p.activo : !p.activo);
+    return matchSearch && matchCat && matchEstado;
   });
 
   const handleDelete = async (id, nombre) => {
@@ -84,12 +92,33 @@ export default function AdminProductos({ onEdit, onNew }) {
     load();
   };
 
+  /** Publica un borrador o lo retira de la tienda, sin abrir el formulario. */
+  const handleToggleEstado = async (p) => {
+    const publicar = !p.activo;
+    const mensaje = publicar
+      ? `¿Publicar "${p.nombre}"? Aparecerá en la tienda y en la web.`
+      : `¿Pasar "${p.nombre}" a borrador? Dejará de aparecer en la tienda.`;
+    if (!confirm(mensaje)) return;
+    const { error } = await supabase
+      .from('productos')
+      .update({ activo: publicar })
+      .eq('id', p.id);
+    if (error) {
+      alert(`No se pudo cambiar el estado: ${error.message}`);
+      return;
+    }
+    load();
+  };
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
-          <p className="text-sm text-gray-500 mt-1">{productos.length} productos en total</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {productos.length} productos en total
+            {borradores > 0 && ` · ${borradores} en borrador`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -132,6 +161,15 @@ export default function AdminProductos({ onEdit, onNew }) {
             <option key={c.id} value={c.nombre}>{c.nombre}</option>
           ))}
         </select>
+        <select
+          value={filterEstado}
+          onChange={(e) => setFilterEstado(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+        >
+          <option value="">Todos los estados</option>
+          <option value="publicados">Publicados</option>
+          <option value="borradores">Borradores</option>
+        </select>
       </div>
 
       {/* Tabla */}
@@ -146,6 +184,7 @@ export default function AdminProductos({ onEdit, onNew }) {
                   <th className="px-4 py-3 font-semibold text-gray-600">Nombre</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">Categoría</th>
                   <th className="px-4 py-3 font-semibold text-gray-600 text-right">Precio</th>
+                  <th className="px-4 py-3 font-semibold text-gray-600 text-center">Estado</th>
                   <th className="px-4 py-3 font-semibold text-gray-600 text-center">Disponible</th>
                   <th className="px-4 py-3 font-semibold text-gray-600 text-center">Colores</th>
                   <th className="px-4 py-3 font-semibold text-gray-600 text-right">Stock</th>
@@ -161,13 +200,20 @@ export default function AdminProductos({ onEdit, onNew }) {
                    <td className="px-4 py-3 text-right font-medium text-gray-900">
                      S/ {Number(p.precio_actual).toLocaleString('es-PE')}
                    </td>
-                   <td className="px-4 py-3 text-center">
-                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-                       p.disponible ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                     }`}>
-                       {p.disponible ? 'Disponible' : 'Agotado'}
-                     </span>
-                   </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        p.activo ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {p.activo ? 'Publicado' : 'Borrador'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        p.disponible ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {p.disponible ? 'Disponible' : 'Agotado'}
+                      </span>
+                    </td>
                    <td className="px-4 py-3">
                      <div className="flex flex-wrap gap-1 justify-center">
                        {(p.colores_disponibles || []).map((nombre) => (
@@ -190,32 +236,43 @@ export default function AdminProductos({ onEdit, onNew }) {
                       <span className="text-xs text-gray-400 ml-1">un.</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                     <div className="flex items-center justify-end gap-1">
-                       <button
-                         onClick={() => onEdit(p.id)}
-                         className="p-1.5 rounded-lg text-gray-400 hover:text-brand hover:bg-brand/10 transition-colors"
-                         title="Editar"
-                       >
-                         <Pencil className="w-4 h-4" />
-                       </button>
-                       <button
-                         onClick={() => handleDelete(p.id, p.nombre)}
-                         className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                         title="Eliminar"
-                       >
-                         <Trash2 className="w-4 h-4" />
-                       </button>
-                     </div>
-                   </td>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleToggleEstado(p)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            p.activo
+                              ? 'text-amber-500 hover:text-amber-700 hover:bg-amber-50'
+                              : 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                          }`}
+                          title={p.activo ? 'Pasar a borrador' : 'Publicar en la tienda'}
+                        >
+                          {p.activo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => onEdit(p.id)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand hover:bg-brand/10 transition-colors"
+                          title="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id, p.nombre)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
                  </tr>
                ))}
-{filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
-                      No se encontraron productos
-                    </td>
-                  </tr>
-                )}
+                {filtered.length === 0 && (
+                   <tr>
+                     <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                       No se encontraron productos
+                     </td>
+                   </tr>
+                 )}
              </tbody>
           </table>
         </div>
@@ -224,7 +281,7 @@ export default function AdminProductos({ onEdit, onNew }) {
       {importando && (
         <AdminStockImportar
           onClose={() => setImportando(false)}
-          onAplicado={fetchProductos}
+          onAplicado={load}
         />
       )}
     </div>

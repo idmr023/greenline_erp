@@ -61,6 +61,7 @@ Convenciones de estos módulos:
 - Las consultas y mutaciones del panel se hacen a través de `frontend/src/lib/supabase.js` (Supabase JS) y `frontend/src/lib/api.js` (API REST del backend, `VITE_API_URL`).
 - El schema, las migraciones y las políticas RLS viven en el **repo hermano** `greenline` (carpeta `supabase/`). Fuente única de verdad del RLS del panel: `supabase/migrations/20260914160000_unificacion_seguridad_seguridad_reportes.sql`; denegado por defecto sobre tablas de auth: `supabase/rls-auth-tablas.sql`.
 - El backend (auth JWT/OTP/2FA/TOTP, blog, métricas, stock, reclamaciones) vive en `greenline/backend/`. No duplicar endpoints ni lógica de servidor en este repo.
+- **Estado de publicación de los productos:** la columna `productos.activo` (mismo patrón que `greenline_posts.active`) distingue *Publicado* de *Borrador*. `activo = false` = el producto se guarda en el panel pero **no** aparece en la tienda ni en la web: lo filtran la vista `vista_productos_web` y la política RLS «Lectura pública de productos», ambas en el repo hermano (`greenline/supabase/migrations/20261021160000_productos_borrador.sql`). El panel lo ve porque sus políticas usan `es_admin_panel()`. La regresión está cubierta en `greenline/backend/scripts/rls-smoke.mjs` (sección 6).
 - No exponer credenciales, claves de API o secretos en el código fuente. Los `.env` van sólo en `.gitignore` (nunca al repo); usar `.env.example` como plantilla.
 
 ## 3. Gestión de Imágenes y Assets
@@ -122,7 +123,16 @@ nunca va en la URL ni en los logs.
 | `npm test` (en `backend/`) | Vitest del backend |
 | `npm run rbac:check` (en `backend/`) | Paridad BD ↔ catálogo de permisos (sólo lectura; sale con 1 si falta algo) |
 | `npm run smoke:taller` (en `backend/`) | Humo end-to-end de los módulos del taller contra la BD real: técnicos, rotaciones, condiciones, evaluaciones, puntaje general, garantías (alta/edición por celda/copiar) y ensamblado. Crea datos de prueba y los borra al terminar. |
+| `npm run import:taller` (en `backend/`) | Importa los módulos del taller desde las hojas de Google Drive a la BD: técnicos, catálogo de condiciones, cierre mensual de incentivos, registros de ensamblado y garantías. Lee los enlaces de `dashboard/config/fuentes.yaml` (el registro único). Es idempotente (clave natural por fila): `--dry-run` muestra el plan sin escribir. |
 | `npm run apply-audit-rls` | Audit triggers + RLS de auth |
+
+Los **módulos del taller** (incentivos, garantías, ensamblado) se alimentan de las
+hojas de Google Drive: el **registro único de enlaces** es
+`dashboard/config/fuentes.yaml` (cambiar la `url` de una fuente cambia de datos).
+La carga a la BD la hace `npm run import:taller` (en el repo hermano): es
+idempotente (clave natural por fila) y se vuelve a lanzar cuando cambia la hoja.
+Lo que viene de Drive queda marcado en `observaciones`/`notas` con
+«Origen: Google Sheets».
 
 ## 5. Control de Calidad y Verificación
 - Antes de proponer cambios mayores en este repo:
@@ -133,6 +143,7 @@ nunca va en la URL ni en los logs.
   - Si se toca `dashboard/`: `.venv\Scripts\python -m unittest discover -s . -p "test_*.py"` y `.venv\Scripts\python smoke.py` en verde; luego arrancar `.venv\Scripts\python app.py` y comprobar `/` y `/api/datos/<id>` con una hoja pública.
   - Si se toca lógica que depende del backend/RLS, verificar también en el repo hermano `greenline`: `npm run lint`, `npm run security-smoke`, `npm test` (en `backend/`).
   - Si se tocan los **módulos del taller** (evaluación de incentivos, garantías, ensamblado, préstamos de vehículos): `npm run smoke:taller` (en `backend/`) — levanta el backend contra la BD real, ejercita los endpoints y borra lo que crea. Si cambia el catálogo de permisos: `npm run seed:rbac` y `npm run rbac:check` (en `backend/`), y regenerar el golden con `node scripts/regenerar-golden.mjs`.
+  - Si cambian los datos de Drive del taller: `npm run import:taller --dry-run` (en `backend/`) para ver el plan (conteos, mapeos y huecos) y luego sin `--dry-run` para escribir. Reejecutarlo no duplica filas.
 - Mantener la concisión y la precisión técnica en las respuestas y documentación.
 
 ## 6. Despliegue

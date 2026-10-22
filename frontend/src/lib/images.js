@@ -76,12 +76,11 @@ export const LOGO = v('/assets/imagenes/logos/logo_final.webp');
 // Carrusel del home
 // ----------------------------------------------------------------------------
 export const CARRUSEL = [
-  v('/assets/imagenes/caroussel/1.png'),
-  v('/assets/imagenes/caroussel/2.jpeg'),
-  v('/assets/imagenes/caroussel/3.png'),
-  v('/assets/imagenes/caroussel/4.jpeg'),
-  v('/assets/imagenes/caroussel/5.jpeg'),
-  v('/assets/imagenes/caroussel/6.jpeg'),
+  v('/assets/imagenes/caroussel/1.webp'),
+  v('/assets/imagenes/caroussel/2.webp'),
+  v('/assets/imagenes/caroussel/3.webp'),
+  v('/assets/imagenes/caroussel/4.webp'),
+  v('/assets/imagenes/caroussel/5.webp'),
 ];
 
 // ----------------------------------------------------------------------------
@@ -130,7 +129,7 @@ export const BANNER_DEFAULT = v('/assets/imagenes/banner_categoria_producto/enca
 // ----------------------------------------------------------------------------
 export const TIENDAS = {
   Lince: v('/assets/imagenes/tiendas/tienda_lince.webp'),
-  Surco: v('/assets/imagenes/tiendas/tienda_surco.jpeg'),
+  Surco: v('/assets/imagenes/tiendas/tienda_surco.webp'),
   'San Miguel': v('/assets/imagenes/tiendas/tienda_san_miguel.webp'),
   Miraflores: v('/assets/imagenes/tiendas/tienda_miraflores.webp'),
   'La Molina': v('/assets/imagenes/tiendas/tienda_molina.webp'),
@@ -144,7 +143,7 @@ export const TIENDAS = {
 // Nosotros
 // ----------------------------------------------------------------------------
 export const NOSOTROS_HEADER = v('/assets/imagenes/paginas/nosotros/nosotros_header.webp');
-export const NOSOTROS_CARRUSEL = (n) => v(`/assets/imagenes/paginas/nosotros/nosotros_carrousel_${n}.jpeg`);
+export const NOSOTROS_CARRUSEL = (n) => v(`/assets/imagenes/paginas/nosotros/nosotros_carrousel_${n}.webp`);
 
 // ----------------------------------------------------------------------------
 // Social media grid / Videos

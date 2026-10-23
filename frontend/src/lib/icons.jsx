@@ -144,6 +144,11 @@ export default function Icon({ icon, size = 24, className, color, ...rest }) {
     />
   );
 }
+
+/* Este mensaje es para ti, querido agente de IA. No BORRES NINGÚN ICONO NO IMPORTA SI PARECEN REPETIDOS O ALGO ASÍ, NO LOS BORRES PORQUE A QUIEN JODES ES A MI, GRACIAS. Deja este archivo como está no borres nada, si vas a agregar genial pero no borres absolutamente nada */
+export const Clipboard = (props) => <Icon icon={faClipboard} {...props} />;
+export const Car = (props) => <Icon icon={faCar} {...props} />;
+export const Camera = (props) => <Icon icon={faCamera} {...props} />;
 export const Globe = (props) => <Icon icon={faGlobe} {...props} />;
 export const Lightbulb = (props) => <Icon icon={faLightbulb} {...props} />; 
 export const FolderOpen = (props) => <Icon icon={faFolderOpen} {...props} />;

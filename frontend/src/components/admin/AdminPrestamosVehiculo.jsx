@@ -4,26 +4,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { prestamosVehiculoAPI } from '../../lib/api';
 import { fetchProductos } from '../../lib/productos';
 import { versionarImagen } from '../../lib/images';
-import { ColorDot } from '../ColorDot';
 import ImageUploader from './ImageUploader';
 import {
   Car, Plus, RefreshCw, Eye, LogIn, LogOut, Trash2, X, Camera,
   AlertTriangle, CheckCircle2, Clock, Search,
 } from '../../lib/icons';
-
-// Partes del vehículo que se pueden etiquetar en cada foto de la inspección.
-const PARTES_VEHICULO = [
-  'Carrocería',
-  'Pintura y rayones',
-  'Tablero e instrumentos',
-  'Llantas',
-  'Frenos',
-  'Motor',
-  'Transmisión',
-  'Asientos yugen',
-  'Documentación',
-  'Otro',
-];
 
 /** Normaliza un texto para comparar nombres (sin acentos ni mayúsculas). */
 function normalizar(texto) {
@@ -32,6 +17,36 @@ function normalizar(texto) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
+}
+
+// Tiendas donde NO se prestan vehículos: no aparecen en el desplegable del
+// formulario de creación (el filtro del listado sigue mostrando todas para
+// poder buscar registros históricos).
+const TIENDAS_SIN_PRESTAMOS = ['huancayo', 'santiago'];
+
+// Estado inicial de una sección de inspección (ingreso o salida) del
+// formulario de creación. `pendientes` son los archivos aún no subidos.
+function seccionVacia() {
+  return {
+    kilometraje: '',
+    combustible: 'lleno',
+    fotos: [],
+    pendientes: [],
+    danos: [],
+    accesorios: [],
+    notas: '',
+  };
+}
+
+/** En el UI el modelo se muestra sin la marca/red de adelante ("GreenLine",
+ * "Trimoto", "Carguero") para ganar espacio; lo que se guarda en `vehiculo`
+ * sigue siendo el nombre completo del catálogo. */
+function nombreModelo(nombre) {
+  const partes = String(nombre || '').trim().split(/\s+/);
+  while (partes.length && ['greenline', 'trimoto', 'carguero'].includes(normalizar(partes[0]))) {
+    partes.shift();
+  }
+  return partes.join(' ');
 }
 
 /** Galería de fotos de una inspección, con la "parte" del vehículo de cada una. */
@@ -183,7 +198,6 @@ export default function AdminPrestamosVehiculo() {
   }, [items]);
 
   async function abrirDetalle(prestamo) {
-    cargarCatalogo();
     try {
       const completa = await prestamosVehiculoAPI.obtener(prestamo.id, accessToken);
       setSelected(completa);
@@ -349,7 +363,6 @@ export default function AdminPrestamosVehiculo() {
           prestamo={selected}
           puedeEditar={puedeEditar}
           accessToken={accessToken}
-          catalogo={catalogo}
           onClose={() => setSelected(null)}
           onUpdated={(p) => { setSelected(p); load(); }}
           onDeleted={() => { setSelected(null); load(); }}
@@ -388,25 +401,32 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
   const [soloDisponibles, setSoloDisponibles] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [fotos, setFotos] = useState([]);
-  const [archivosPendientes, setArchivosPendientes] = useState([]);
-  const [errorFotos, setErrorFotos] = useState(null);
+  // Inspecciones de ingreso y salida: se registran EN ESTE MISMO formulario
+  // (si el usuario llena kilometraje => se registran al crear el préstamo).
+  const [inspeccionIngreso, setInspeccionIngreso] = useState(seccionVacia);
+  const [inspeccionSalida, setInspeccionSalida] = useState(seccionVacia);
 
-  function uploadTemp(file, parte) {
-    const url = URL.createObjectURL(file);
-    setArchivosPendientes((prev) => [...prev, { file, parte, url }]);
-    setFotos((prev) => [...prev, { url, parte: parte || '' }]);
-    return Promise.resolve({ url, parte });
-  }
+  const tiendasDisponibles = useMemo(
+    () => tiendas.filter((t) => !TIENDAS_SIN_PRESTAMOS.some((x) => normalizar(t.name).includes(x))),
+    [tiendas],
+  );
 
-  // El ImageUploader edita la lista de fotos (quitar / cambiar la "parte"),
-  // así que hay que replicar ese cambio en la cola de archivos pendientes
-  // para no subir al backend fotos que el usuario ya quitó.
-  function onChangeFotos(nuevas) {
-    setFotos(nuevas);
-    setArchivosPendientes((prev) =>
-      prev.filter((p) => nuevas.some((n) => n.url === p.url)),
-    );
+  // Las fotos se guardan temporalmente en el navegador (blob:) y SeccionInspeccion
+  // las sube al backend (Storage) justo después de crear el préstamo, junto con
+  // el registro de la inspección a la que pertenecen.
+  // Devuelve { url, parte } de cada foto ya subida al Storage; los fallos se
+  // acumulan en el array de alertas (no frena el flujo del préstamo).
+  async function subirFotos(id, pendientes, alertas) {
+    const meta = [];
+    for (const { file, parte } of pendientes) {
+      try {
+        const r = await prestamosVehiculoAPI.subirFoto(id, file, parte, accessToken);
+        meta.push({ url: r.url, parte: r.parte || parte || '' });
+      } catch (err) {
+        alertas.push(`Foto (${parte || 'sin parte'}): ${err?.error || err?.message || 'no se pudo subir'}`);
+      }
+    }
+    return meta;
   }
 
   async function submit(e) {
@@ -415,18 +435,57 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
       setError('Selecciona el vehículo del catálogo.');
       return;
     }
+    // Una inspección se registra sólo si el usuario puso kilometraje. Si dejó
+    // otros datos (fotos, daños, notas…) sin kilometraje, no se puede vincular
+    // al backend: se pide resolverlo ANTES de crear.
+    const llenoIngreso = /^\d+$/.test(String(inspeccionIngreso.kilometraje).trim());
+    const llenoSalida = /^\d+$/.test(String(inspeccionSalida.kilometraje).trim());
+    const conDatosIngreso = inspeccionIngreso.fotos.length || inspeccionIngreso.danos.length
+      || inspeccionIngreso.accesorios.length || inspeccionIngreso.notas.trim();
+    const conDatosSalida = inspeccionSalida.fotos.length || inspeccionSalida.danos.length
+      || inspeccionSalida.accesorios.length || inspeccionSalida.notas.trim();
+    if (!llenoIngreso && conDatosIngreso) {
+      setError('Ingresa el kilometraje de la inspección de ingreso (o quita sus fotos/datos).');
+      return;
+    }
+    if (!llenoSalida && conDatosSalida) {
+      setError('Ingresa el kilometraje de la inspección de salida (o quita sus fotos/datos).');
+      return;
+    }
+    if (llenoSalida && !llenoIngreso) {
+      setError('No puedes registrar la inspección de salida sin la de ingreso.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setErrorFotos(null);
     try {
       const creado = await prestamosVehiculoAPI.crear(form, accessToken);
-      // Subir fotos pendientes al préstamo creado
-      for (const { file, parte } of archivosPendientes) {
+      const alertas = [];
+      const llamarInspeccion = async (seccion, registrar) => {
+        const fotosMeta = await subirFotos(creado.id, seccion.pendientes, alertas);
         try {
-          await prestamosVehiculoAPI.subirFoto(creado.id, file, parte, accessToken);
+          await registrar(creado.id, {
+            kilometraje: parseInt(seccion.kilometraje, 10),
+            combustible: seccion.combustible,
+            fotos: fotosMeta,
+            danos: seccion.danos,
+            accesorios: seccion.accesorios,
+            notas: seccion.notas,
+          }, accessToken);
         } catch (err) {
-          setErrorFotos(err?.error || err?.message || 'No se pudo subir una foto.');
+          alertas.push(`${err?.error || err?.message || 'No se pudo registrar la inspección'}`);
         }
+      };
+      if (llenoIngreso) {
+        await llamarInspeccion(inspeccionIngreso, prestamosVehiculoAPI.registrarIngreso);
+      }
+      if (llenoSalida) {
+        await llamarInspeccion(inspeccionSalida, prestamosVehiculoAPI.registrarSalida);
+      }
+      if (alertas.length) {
+        window.alert(`El préstamo se creó, pero no todo se pudo guardar:\n${alertas.join('\n')}`);
       }
       onCreated(creado);
     } catch (err) {
@@ -457,7 +516,7 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">Nuevo préstamo de vehículo</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -477,7 +536,7 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
               required
             >
               <option value="">Seleccionar…</option>
-              {tiendas.map((t) => (
+              {tiendasDisponibles.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
@@ -511,7 +570,7 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
                   value={form.vehiculo}
                   onChange={(e) => setForm({ ...form, vehiculo: e.target.value })}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                  placeholder="Ej: Moto Honda XR150"
+                  placeholder="Ej: T4"
                   required
                 />
               </div>
@@ -530,7 +589,7 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
 
                 {form.vehiculo && (
                   <p className="mb-2 text-xs text-gray-600">
-                    Seleccionado: <strong className="text-gray-900">{form.vehiculo}</strong>
+                    Seleccionado: <strong className="text-gray-900">{nombreModelo(form.vehiculo)}</strong>
                   </p>
                 )}
 
@@ -541,51 +600,24 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
                       : 'Ningún vehículo coincide con la búsqueda.'}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-64 overflow-y-auto pr-1">
                     {candidatos.map((p) => {
-                      const img = (p.imagenes || []).find((i) => i.es_principal) || (p.imagenes || [])[0];
                       const enUso = vehiculosEnUso.has(normalizar(p.nombre));
-                      const colores = (p.colores_detalle || []).filter((c) => c.visible !== false);
                       return (
                         <button
                           key={p.id}
                           type="button"
                           onClick={() => elegir(p)}
-                          className={`text-left border rounded-lg p-2 transition-colors ${
+                          className={`text-center border rounded-lg px-1 py-2 transition-colors ${
                             normalizar(form.vehiculo) === normalizar(p.nombre)
                               ? 'border-brand bg-brand/5 ring-1 ring-brand/30'
                               : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                           }`}
                         >
-                          <div className="w-full h-20 rounded-md bg-gray-50 overflow-hidden mb-1.5 flex items-center justify-center">
-                            {img?.src ? (
-                              <img
-                                src={versionarImagen(img.src)}
-                                alt={p.nombre}
-                                className="w-full h-full object-contain"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <Car className="w-6 h-6 text-gray-300" />
-                            )}
-                          </div>
-                          <p className="text-xs font-medium text-gray-900 leading-tight">{p.nombre}</p>
-                          {p.categoria && (
-                            <p className="text-[10px] text-gray-400">{p.categoria}</p>
+                          <p className="text-xs font-medium text-gray-900 leading-tight">{nombreModelo(p.nombre)}</p>
+                          {enUso && (
+                            <span className="mt-0.5 inline-block text-[10px] text-amber-600">En préstamo</span>
                           )}
-                          <div className="flex items-center gap-1 mt-1 flex-wrap">
-                            {colores.slice(0, 4).map((c) => (
-                              <ColorDot
-                                key={c.id ?? c.nombre}
-                                nombre={c.nombre}
-                                coloresDetalle={colores}
-                                className="w-2.5 h-2.5"
-                              />
-                            ))}
-                            {enUso && (
-                              <span className="text-[10px] text-amber-600">En préstamo</span>
-                            )}
-                          </div>
                         </button>
                       );
                     })}
@@ -593,15 +625,6 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
                 )}
               </>
             )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Placa</label>
-            <input
-              value={form.placa}
-              onChange={(e) => setForm({ ...form, placa: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              placeholder="ABC-123"
-            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Empleado *</label>
@@ -643,29 +666,19 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
             </select>
 
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
-            <textarea
-              value={form.notas}
-              onChange={(e) => setForm({ ...form, notas: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              rows={3}
-            />
-          </div>
-          <ImageUploader
-            value={fotos}
-            onChange={onChangeFotos}
-            upload={uploadTemp}
-            partes={PARTES_VEHICULO}
+          <SeccionInspeccion
+            esIngreso
+            titulo="Inspección de ingreso"
+            value={inspeccionIngreso}
+            onChange={setInspeccionIngreso}
             disabled={saving}
-            label="Fotos"
-            hint="Sube fotos del vehículo (carrocería, tablero, llantas, etc.). Elige la parte a la que corresponde cada foto."
           />
-          {errorFotos && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
-              {errorFotos}
-            </div>
-          )}
+          <SeccionInspeccion
+            titulo="Inspección de salida"
+            value={inspeccionSalida}
+            onChange={setInspeccionSalida}
+            disabled={saving}
+          />
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
@@ -689,23 +702,148 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
 }
 
 // ============================================================
+// Sección de inspección embebida en el formulario de creación
+// (ingreso o salida). Mismos campos que ModalInspeccion, pero los
+// archivos quedan pendientes (blob:) hasta que exista el préstamo:
+// entonces se suben al Storage y se adjuntan a la inspección.
+// ============================================================
+
+function SeccionInspeccion({ esIngreso = false, titulo, value, onChange, disabled }) {
+  const [nuevoDano, setNuevoDano] = useState({ parte: '', descripcion: '', nivel: 'leve' });
+  const [nuevoAccesorio, setNuevoAccesorio] = useState('');
+
+  const poner = (patch) => onChange({ ...value, ...patch });
+
+  function agregarDano() {
+    if (!nuevoDano.parte.trim()) return;
+    poner({ danos: [...value.danos, { ...nuevoDano }] });
+    setNuevoDano({ parte: '', descripcion: '', nivel: 'leve' });
+  }
+
+  function quitarDano(idx) {
+    poner({ danos: value.danos.filter((_, i) => i !== idx) });
+  }
+
+  function agregarAccesorio() {
+    if (!nuevoAccesorio.trim()) return;
+    poner({ accesorios: [...value.accesorios, nuevoAccesorio.trim()] });
+    setNuevoAccesorio('');
+  }
+
+  function quitarAccesorio(idx) {
+    poner({ accesorios: value.accesorios.filter((_, i) => i !== idx) });
+  }
+
+  // La imagen no se sube todavía: queda en la cola `pendientes` y el submit la
+  // envía al Storage cuando ya existe el préstamo (ModalCrear.subirFotos).
+  function uploadTemporal(file, parte) {
+    const url = URL.createObjectURL(file);
+    onChange((prev) => ({
+      ...prev,
+      fotos: [...prev.fotos, { url, parte: parte || '' }],
+      pendientes: [...prev.pendientes, { file, parte, url }],
+    }));
+    return Promise.resolve({ url, parte });
+  }
+
+  // El ImageUploader edita la lista de fotos (quitar / cambiar la "parte"):
+  // replicar el cambio en la cola de pendientes para no subir fotos quitadas.
+  function sincronizarFotos(fotos) {
+    onChange((prev) => ({
+      ...prev,
+      fotos,
+      pendientes: prev.pendientes.filter((p) => fotos.some((f) => f.url === p.url)),
+    }));
+  }
+
+  return (
+    <div className={`rounded-xl border p-4 space-y-3 ${
+      esIngreso ? 'border-blue-100 bg-blue-50/40' : 'border-green-100 bg-green-50/40'
+    }`}>
+      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+        {esIngreso
+          ? <LogIn className="w-4 h-4 text-blue-500" />
+          : <LogOut className="w-4 h-4 text-green-500" />}
+        {titulo}
+      </h3>
+      <ImageUploader
+        value={value.fotos}
+        onChange={sincronizarFotos}
+        upload={uploadTemporal}
+        disabled={disabled}
+        label="Fotos"
+        hint="Sube fotos del vehículo (carrocería, tablero, llantas, etc.). Elige la parte a la que corresponde cada foto."
+      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {esIngreso ? 'Daños pre-existentes' : 'Daños detectados'}
+        </label>
+        <div className="space-y-2">
+          {value.danos.map((d, i) => (
+            <div key={i} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2 text-xs">
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${NIVEL_DANO[d.nivel]?.color || ''}`}>
+                {NIVEL_DANO[d.nivel]?.label || d.nivel}
+              </span>
+              <span className="flex-1">{d.parte}{d.descripcion ? ` — ${d.descripcion}` : ''}</span>
+              <button type="button" onClick={() => quitarDano(i)} className="text-red-400 hover:text-red-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input
+              value={nuevoDano.parte}
+              onChange={(e) => setNuevoDano({ ...nuevoDano, parte: e.target.value })}
+              className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+              placeholder="Parte (ej: Parabrisas)"
+            />
+            <input
+              value={nuevoDano.descripcion}
+              onChange={(e) => setNuevoDano({ ...nuevoDano, descripcion: e.target.value })}
+              className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+              placeholder="Descripción"
+            />
+            <select
+              value={nuevoDano.nivel}
+              onChange={(e) => setNuevoDano({ ...nuevoDano, nivel: e.target.value })}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+            >
+              <option value="leve">Leve</option>
+              <option value="moderado">Moderado</option>
+              <option value="grave">Grave</option>
+            </select>
+            <button
+              type="button"
+              onClick={agregarDano}
+              className="px-2 py-1.5 rounded-lg bg-gray-900 text-white text-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+        <textarea
+          value={value.notas}
+          onChange={(e) => poner({ notas: e.target.value })}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+          rows={2}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // Modal: Detalle del préstamo
 // ============================================================
 
-function ModalDetalle({ prestamo, puedeEditar, accessToken, catalogo, onClose, onUpdated, onDeleted, onInspeccion }) {
+function ModalDetalle({ prestamo, puedeEditar, accessToken, onClose, onUpdated, onDeleted, onInspeccion }) {
   const [notas, setNotas] = useState(prestamo.notas || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  // Foto y colores del modelo en catálogo (si el préstamo se creó desde el
-  // selector, el nombre del vehículo coincide con el del producto).
-  const modelo = useMemo(
-    () => catalogo.find((p) => normalizar(p.nombre) === normalizar(prestamo.vehiculo)) || null,
-    [catalogo, prestamo.vehiculo],
-  );
-  const fotoModelo = modelo
-    ? (modelo.imagenes || []).find((i) => i.es_principal) || (modelo.imagenes || [])[0]
-    : null;
 
   async function guardarNotas() {
     setSaving(true);
@@ -738,13 +876,6 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, catalogo, onClose, o
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center gap-3 min-w-0">
-            {fotoModelo?.src && (
-              <img
-                src={versionarImagen(fotoModelo.src)}
-                alt={prestamo.vehiculo}
-                className="w-12 h-12 rounded-lg object-contain bg-gray-50 border border-gray-100 shrink-0"
-              />
-            )}
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 min-w-0">
               <Car className="w-5 h-5 text-brand shrink-0" />
               <span className="truncate">{prestamo.vehiculo}</span>
@@ -761,10 +892,6 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, catalogo, onClose, o
           )}
 
           <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-500 text-xs">Placa</span>
-              <p className="font-medium">{prestamo.placa || '—'}</p>
-            </div>
             <div>
               <span className="text-gray-500 text-xs">Estado</span>
               <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold border ${ESTADO_BADGE[prestamo.estado] || ''}`}>
@@ -798,10 +925,7 @@ function ModalDetalle({ prestamo, puedeEditar, accessToken, catalogo, onClose, o
                 <p className="flex items-center gap-2 text-green-700">
                   <CheckCircle2 className="w-4 h-4" /> Registrada el {formatFecha(prestamo.ingresoEn)}
                 </p>
-                <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                  <p><strong>Km:</strong> {prestamo.ingresoKm?.toLocaleString()}</p>
-                  <p><strong>Combustible:</strong> {COMBUSTIBLE_LABEL[prestamo.ingresoCombustible] || prestamo.ingresoCombustible}</p>
-                </div>
+
                 {prestamo.ingresoDanos?.length > 0 && (
                   <div className="mt-2">
                     <p className="text-xs font-medium text-gray-700 mb-1">Daños pre-existentes:</p>
@@ -1129,7 +1253,6 @@ function ModalInspeccion({ prestamo, tipo, soloFotos = false, accessToken, onClo
             upload={(file, parte) =>
               prestamosVehiculoAPI.subirFoto(prestamo.id, file, parte, accessToken)
             }
-            partes={PARTES_VEHICULO}
             disabled={saving}
             label="Fotos"
             hint="Sube fotos del vehículo (carrocería, tablero, llantas, etc.). Elige la parte a la que corresponde cada foto."

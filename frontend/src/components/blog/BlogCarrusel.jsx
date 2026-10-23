@@ -35,7 +35,7 @@ export default function BlogCarrusel({ images, altByDefault = 'Imagen del artíc
               <img
                 src={img.src}
                 alt={img.alt || altByDefault}
-                className="h-72 w-full object-cover sm:h-96"
+                className="h-72 w-full object-contain sm:h-96"
                 style={{ margin: 0 }}
                 loading="lazy"
               />

@@ -15,7 +15,7 @@ function siteBase() {
   const env =
     import.meta.env?.VITE_ASSETS_URL ||
     import.meta.env?.VITE_SITE_URL ||
-    'https://greenline-eta.vercel.app';
+    'https://greenline-site.onrender.com';
   return String(env).replace(/\/+$/, '');
 }
 

@@ -459,6 +459,7 @@ function ModalCrear({ tiendas, empleados, errorEmpleados, onReintentarEmpleados,
 
     setSaving(true);
     setError(null);
+    setErrorFotos(null);
     try {
       const creado = await prestamosVehiculoAPI.crear(form, accessToken);
       const alertas = [];

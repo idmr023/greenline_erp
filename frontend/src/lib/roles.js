@@ -48,6 +48,16 @@ export const PANEL_ROLES = [
 ];
 
 /**
+ * Roles que gestionan la bóveda (escriben secretos: permiso `boveda:write`).
+ *
+ * Conservan SIEMPRE acceso a la contraseña de cualquier secreto, aunque el
+ * gestor la restrinja a otros roles. Sin este bypass, un gestor podría
+ * quitarse a sí mismo el acceso y dejaría el secreto sin nadie que pueda
+ * auditarlo ni corregirlo (§40).
+ */
+export const ROLES_GESTORES_BOVEDA = ['ADMIN', 'DESARROLLADOR_WEB'];
+
+/**
  * Lista de RESPALDO del selector de roles del formulario de usuarios.
  *
  * No es una segunda matriz de permisos: sólo `nombre` + `etiqueta` para poder

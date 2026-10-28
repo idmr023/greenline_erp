@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Copy, Eye, EyeOff, Lock } from '../../lib/icons';
 import { useVault } from '../../contexts/VaultContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useStepUp } from '../../hooks/useStepUp';
 import { copiarAlPortapapeles, RETENCION_DEFECTO_MS } from '../../lib/vault/clipboard';
+import { rolesDe } from '../../lib/roles';
+import { abilityDe, ABILITY_VACIA } from '../../lib/permissions';
+import { puedeVerContrasena } from '../../lib/vault/visibilidad';
 
 const MASCARA = '••••••••••••••••';
 
 /**
  * Visualización segura de un secreto — Bóveda Segura V5 §12, §14, §42.
  *
- * Principios que este componente materializa:
+ * Los principios que este componente materializa:
  *
  * - Oculto por defecto; el secreto **no está en el DOM** mientras está
  *   oculto (ni en `value`, ni en `title`, ni en `aria-label`).
@@ -21,11 +25,22 @@ const MASCARA = '••••••••••••••••';
  * - Con step-up, copiar exige lo mismo (§14 R44) y avisa del historial del
  *   sistema operativo (R47): el borrado no es garantía (§53 L5).
  * - En modo revelado se pasa a ventana crítica de auto-lock (§9 R27).
+ * - El estado sensible va ligado a `generacion` del VaultContext: si la
+ *   bóveda se bloquea y vuelve a abrirse, la generación cambia y cualquier
+ *   reveal o contraseña maestra quedan descartados sin necesidad de un
+ *   efecto que los limpie (§9 R25).
  *
- * El estado sensible va ligado a `generacion` del VaultContext: si la
- * bóveda se bloquea y vuelve a abrirse, la generación cambia y cualquier
- * reveal o contraseña maestra quedan descartados sin necesidad de un
- * efecto que los limpie (§9 R25).
+ * VISIBILIDAD POR ROL (`rolesPermitidos`): la categoría del secreto decide
+ * QUIÉN llega a ver el ítem (eso lo impone el RLS); esta prop decide QUIÉN
+ * ve, además, la CONTRASEÑA. `null` = sin restricción (comportamiento
+ * heredado). Un array = sólo esos roles, más los gestores (ADMIN y
+ * DESARROLLADOR_WEB), que conservan siempre el acceso.
+ *
+ * Esto NO es un límite de seguridad: la fila llega al cliente porque el RLS
+ * la-ha dejado pasar, y la clave la abre el propio navegador. La
+ * restricción real tiene que estar en el RLS del repo hermano
+ * (`boveda_...` sobre `greenline_vault_items.roles_visibles`); aquí la
+ * comprobación es la UX que hace que la regla sea visible y respetada.
  */
 export default function SecretField({
   valor,
@@ -37,10 +52,31 @@ export default function SecretField({
   permitirCopiar = true,
   retencionPortapapeles = RETENCION_DEFECTO_MS,
   className = '',
+  rolesPermitidos = null,
 }) {
   const { estado, ocupado, generacion, definirModoCritico, registrarActividad } = useVault();
   const desbloqueada = estado === 'activa';
   const { autorizar, verificando, error, limpiar } = useStepUp({ proposito, itemRef: idItem });
+  const { user, permissions } = useAuth();
+  const userRoles = rolesDe(user);
+  const ability = useMemo(
+    () => (permissions === null ? ABILITY_VACIA : abilityDe(permissions)),
+    [permissions],
+  );
+
+  /**
+   * ¿Puede este usuario ver la contraseña?
+   *
+   * 1. Sin restricción (`rolesPermitidos === null`): sí, si tiene acceso a la
+   *    sección de bóveda (`menu:boveda:read`).
+   * 2. Con restricción: sí si tiene alguno de los roles marcados, o si es
+   *    gestor (ADMIN / DESARROLLADOR_WEB), que nunca pierde el acceso.
+   */
+  const accesoBoveda = ability.can('read', 'menu:boveda');
+  const puedeVer = accesoBoveda && puedeVerContrasena({
+    rolesVisibles: rolesPermitidos,
+    rolesUsuario: userRoles,
+  });
 
   const [seguridad, setSeguridad] = useState({ gen: -1, visible: false, preguntando: false, master: '' });
   const [avisoCopia, setAvisoCopia] = useState(null);
@@ -132,6 +168,22 @@ export default function SecretField({
       <div className={`flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 ${className}`}>
         <Lock className="h-3.5 w-3.5 shrink-0" />
         <span>Bóveda bloqueada — desbloquea para ver {etiqueta.toLowerCase()}.</span>
+      </div>
+    );
+  }
+
+  /**
+   * El secreto no le corresponde a este usuario: no se revela, no se copia
+   * y — sobre todo — el valor NO entra en el DOM (§12: el secreto no está
+   * en el markup mientras está oculto).
+   */
+  if (!puedeVer) {
+    return (
+      <div className={`flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 ${className}`}>
+        <Lock className="h-3.5 w-3.5 shrink-0" />
+        <span>
+          {etiqueta} restringida por rol: tu rol no está entre los que pueden verla.
+        </span>
       </div>
     );
   }

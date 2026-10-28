@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '@casl/react';
 import { useStepUp } from '../../hooks/useStepUp';
 import SecretField from '../vault/SecretField';
-import { authAPI } from '../../lib/api';
+import { authAPI, rolesAPI } from '../../lib/api';
 import {
   ErrorSinMigracion,
   cargarBoveda,
@@ -23,6 +23,7 @@ import {
   revocarOtrasSesiones,
   revocarRecuperacion,
   actualizarItem,
+  soportaRolesVisibles,
 } from '../../lib/vault/api';
 import {
   ARGON2,
@@ -30,15 +31,19 @@ import {
   FORMATO_EXPORT,
   MAX_EXPORTS_POR_HORA,
   MAX_INTENTOS_STEPUP,
+  alternarRolVisible,
   borrar,
   detalleAuditoriaExport,
+  etiquetaVisibilidad,
   generarPassphraseExport,
   generarRecoveryKey,
+  normalizarRolesVisibles,
   parametrosUsados,
   parsearRecoveryKey,
   puedeExportar,
   saltAleatorio,
 } from '../../lib/vault';
+import { ROLES_RESPALDO, ROLES_GESTORES_BOVEDA } from '../../lib/roles';
 
 /** §28.1 R123 — la descarga sólo nace del clic del usuario, nunca antes. */
 function descargar(nombre, contenido, mime = 'application/json') {
@@ -53,7 +58,15 @@ function descargar(nombre, contenido, mime = 'application/json') {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-const ITEM_VACIO = { title: '', username: '', password: '', url: '', notes: '', categoria: 'general' };
+const ITEM_VACIO = {
+  title: '',
+  username: '',
+  password: '',
+  url: '',
+  notes: '',
+  categoria: 'general',
+  rolesVisibles: null,
+};
 
 /**
  * §40 — dos límites distintos, no los confundas:
@@ -91,6 +104,10 @@ function normalizarImportado(bruto) {
     salida[campo] =
       typeof valor === 'string' ? valor.slice(0, MAX_LARGO_CAMPO) : '';
   }
+  // La restricción por rol NO se importa: un fichero de disco no puede
+  // decidir quién ve un secreto en esta bóveda. El importado nace sin
+  // restricción y el gestor la asigna desde el panel.
+  salida.rolesVisibles = null;
   return salida;
 }
 
@@ -129,6 +146,20 @@ export default function AdminBoveda() {
   const [reparando, setReparando] = useState(false);
   /** §40 — catálogo de categorías (SÓLO el nombre viaja en claro). */
   const [categorias, setCategorias] = useState([]);
+  /**
+   * Catálogo de roles para elegir «quién ve esta contraseña» (columna
+   * `roles_visibles`). Viene del backend (`GET /auth/roles`) y, si no
+   * contesta, se usa la lista de respaldo — igual que el formulario de
+   * usuarios. El backend valida el alta, así que un rol desconocido acaba
+   * en un error visible.
+   */
+  const [catalogoRoles, setCatalogoRoles] = useState(ROLES_RESPALDO);
+  /**
+   * ¿El servidor soporta la columna `roles_visibles`? Mientras no se sepa,
+   * el selector de roles se oculta (fail-closed: no se ofrece una
+   * restricción que quizá no se pueda guardar).
+   */
+  const [rolesVisiblesSoportados, setRolesVisiblesSoportados] = useState(false);
 
   // --- Fase 4 (§25, §27, §28) ---
   const [panel, setPanel] = useState(null); // 'recovery' | 'export' | 'import'
@@ -228,6 +259,38 @@ export default function AdminBoveda() {
     listarCategorias()
       .then((lista) => { if (vivo) setCategorias(lista); })
       .catch(() => { if (vivo) setCategorias([]); });
+    return () => { vivo = false; };
+  }, []);
+
+  /**
+   * Catálogo de roles para el selector «quién ve esta contraseña». Si el
+   * backend no contesta se queda la lista de respaldo: es preferible
+   * ofrecer los roles conocidos que dejar el selector vacío.
+   */
+  useEffect(() => {
+    let vivo = true;
+    if (!accessToken) return undefined;
+    rolesAPI
+      .listar(accessToken)
+      .then((res) => {
+        if (!vivo) return;
+        const lista = Array.isArray(res?.roles) ? res.roles : [];
+        setCatalogoRoles(lista.length > 0 ? lista : ROLES_RESPALDO);
+      })
+      .catch(() => { if (vivo) setCatalogoRoles(ROLES_RESPALDO); });
+    return () => { vivo = false; };
+  }, [accessToken]);
+
+  /**
+   * §40 — ¿el servidor tiene la columna `roles_visibles`? Si no, el
+   * selector se oculta: ofrecer una restricción que la base de datos no
+   * va a honorar sería peor que no ofrecerla.
+   */
+  useEffect(() => {
+    let vivo = true;
+    soportaRolesVisibles()
+      .then((ok) => { if (vivo) setRolesVisiblesSoportados(ok); })
+      .catch(() => { if (vivo) setRolesVisiblesSoportados(false); });
     return () => { vivo = false; };
   }, []);
 
@@ -442,6 +505,13 @@ export default function AdminBoveda() {
         return;
       }
       const cliente = obtenerCliente();
+      // La restricción por rol viaja en la COLUMNA (metadato en claro, como
+      // `categoria`) para que el RLS pueda aplicarla sin descifrar nada.
+      // Si el servidor no tiene la columna, no se manda: el selector está
+      // oculto, así que `form.rolesVisibles` sería null de todas formas.
+      const rolesVisibles = rolesVisiblesSoportados
+        ? normalizarRolesVisibles(form.rolesVisibles)
+        : null;
       try {
         if (editando) {
           const registro = items.find((i) => i.id === editando);
@@ -453,6 +523,7 @@ export default function AdminBoveda() {
             envoltura,
             tipo: null,
             categoria: form.categoria || null,
+            rolesVisibles,
           });
           await registrarEvento({ evento: 'BOVED_UPDATE', itemId: registro.id });
         } else {
@@ -472,6 +543,7 @@ export default function AdminBoveda() {
             envoltura,
             tipo: null,
             categoria: form.categoria || null,
+            rolesVisibles,
           });
           await registrarEvento({ evento: 'BOVED_CREATE', itemId: contexto.itemId });
         }
@@ -487,7 +559,7 @@ export default function AdminBoveda() {
         setMensaje({ tipo: 'error', texto: err?.message || 'No se pudo guardar.' });
       }
     },
-    [bootstrap, descifrarTodo, editando, form, generacion, items, leerBootstrap, obtenerCliente, puedeEscribir],
+    [bootstrap, descifrarTodo, editando, form, generacion, items, leerBootstrap, obtenerCliente, puedeEscribir, rolesVisiblesSoportados],
   );
 
   const alEliminar = useCallback(
@@ -1386,6 +1458,78 @@ export default function AdminBoveda() {
               Cada secreto sólo lo ve el rol con permiso sobre su categoría (§40).
             </span>
           </label>
+
+          {/*
+            Visibilidad por rol. La categoría decide QUIÉN llega a ver el
+            secreto; este bloque decide QUIÉN ve además la CONTRASEÑA.
+            Sólo los gestores (ADMIN / DESARROLLADOR_WEB) pueden tocarlo, y
+            sólo si el servidor tiene la columna `roles_visibles`.
+          */}
+          {puedeEscribir && rolesVisiblesSoportados && (
+            <div className="rounded-lg border border-gray-200 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-gray-600">
+                  Roles que pueden ver la contraseña
+                </span>
+                <label className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  <input
+                    type="checkbox"
+                    checked={form.rolesVisibles === null}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        rolesVisibles: e.target.checked ? null : [],
+                      })
+                    }
+                    className="h-3.5 w-3.5 rounded border-gray-300"
+                  />
+                  Sin restricción
+                </label>
+              </div>
+
+              {form.rolesVisibles === null ? (
+                <p className="mt-2 text-[11px] text-gray-400">
+                  Cualquier rol con acceso a la categoría ve la contraseña.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                    {catalogoRoles.map((r) => {
+                      const nombre = r.nombre;
+                      const marcado = (form.rolesVisibles ?? []).includes(nombre);
+                      const esGestor = ROLES_GESTORES_BOVEDA.includes(nombre);
+                      return (
+                        <label
+                          key={nombre}
+                          className="flex items-center gap-1.5 text-[11px] text-gray-600"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={marcado}
+                            onChange={() =>
+                              setForm({
+                                ...form,
+                                rolesVisibles: alternarRolVisible(form.rolesVisibles, nombre),
+                              })
+                            }
+                            className="h-3.5 w-3.5 rounded border-gray-300"
+                          />
+                          <span>{r.etiqueta || nombre}</span>
+                          {esGestor && (
+                            <span className="text-[10px] text-gray-400">(gestor)</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] text-gray-400">
+                    ADMIN y DESARROLLADOR_WEB ven siempre la contraseña, aunque no
+                    los marques. Si no marcas ninguno, sólo ellos la ven.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           <label className="block">
             <span className="text-xs font-medium text-gray-600">Notas</span>
             <textarea
@@ -1411,7 +1555,13 @@ export default function AdminBoveda() {
           </p>
         )}
 
-        {items.map((registro) => (
+        {items.map((registro) => {
+          // La columna es la fuente de verdad de la restricción (el RLS la
+          // aplica); el payload cifrado es sólo una copia de cortesía.
+          const rolesVisibles = normalizarRolesVisibles(
+            registro.rolesVisibles ?? registro.datos?.rolesVisibles,
+          );
+          return (
           <div key={registro.id} className="rounded-xl border border-gray-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1422,13 +1572,26 @@ export default function AdminBoveda() {
                 {registro.datos.url && (
                   <p className="truncate text-xs text-gray-400">{registro.datos.url}</p>
                 )}
+                {rolesVisibles && (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    Contraseña restringida a: {etiquetaVisibilidad(rolesVisibles)}
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 gap-1">
                 {puedeEscribir && (
                   <>
                     <button
                       type="button"
-                      onClick={() => { setForm({ ...ITEM_VACIO, ...registro.datos }); setEditando(registro.id); setAbriendoForm(true); }}
+                      onClick={() => {
+                        setForm({
+                          ...ITEM_VACIO,
+                          ...registro.datos,
+                          rolesVisibles,
+                        });
+                        setEditando(registro.id);
+                        setAbriendoForm(true);
+                      }}
                       className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                       title="Editar"
                     >
@@ -1454,6 +1617,7 @@ export default function AdminBoveda() {
                 idItem={registro.id}
                 proposito="reveal"
                 stepUp={false}
+                rolesPermitidos={rolesVisibles}
               />
             </div>
 
@@ -1463,7 +1627,8 @@ export default function AdminBoveda() {
               </p>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

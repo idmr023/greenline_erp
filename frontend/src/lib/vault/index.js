@@ -174,3 +174,13 @@ export {
   revocarOtrasSesiones,
   contarEventos,
 } from './api.js';
+
+// --- §40: visibilidad de contraseñas por rol ---
+
+export {
+  ROLES_GESTORES_BOVEDA,
+  normalizarRolesVisibles,
+  alternarRolVisible,
+  puedeVerContrasena,
+  etiquetaVisibilidad,
+} from './visibilidad.js';

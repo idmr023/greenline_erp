@@ -13,8 +13,9 @@ import { Lock, CheckCircle2, AlertCircle, Loader2 } from '../lib/icons';
  *  2. fijar la contraseña personal;
  *  3. montar el 2FA con el onboardingToken que devuelve el paso 2.
  *
- * No hay "más tarde": las invitaciones son sólo para roles del panel y el
- * login no deja entrar a un staff sin 2FA activo.
+ * Excepción: las cuentas `twoFactorExento` (cuentas de tienda) no montan
+ * 2FA — el backend devuelve `onboardingToken: null` y la activación
+ * termina directo en el paso de confirmación.
  */
 export default function ActivarPage() {
   const [params] = useSearchParams();
@@ -28,6 +29,7 @@ export default function ActivarPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [onboardingToken, setOnboardingToken] = useState('');
+  const [exento2FA, setExento2FA] = useState(false);
   const [avisoDatos, setAvisoDatos] = useState('');
   const verificado = useRef(false);
 
@@ -79,12 +81,14 @@ export default function ActivarPage() {
         return;
       }
       setOnboardingToken(res.onboardingToken);
+      setExento2FA(Boolean(res.twoFactorExento));
       if (res.supabaseOk === false) {
         setAvisoDatos(
           'La cuenta de acceso de datos no se pudo crear ahora. Podrás reintentarlo desde el panel.',
         );
       }
-      setFase('setup');
+      // Cuenta exenta de 2FA (tiendas): no hay 2FA que montar → fin del flujo.
+      setFase(res.twoFactorExento || !res.onboardingToken ? 'listo' : 'setup');
     } catch (err) {
       setError(err.error || err.message || 'No se pudo activar la cuenta');
     } finally {
@@ -148,8 +152,9 @@ export default function ActivarPage() {
           </div>
           <h1 className="text-lg font-bold text-gray-900">Cuenta lista</h1>
           <p className="text-sm text-gray-500 mt-2">
-            Ya puedes iniciar sesión con tu contraseña y el código de tu
-            aplicación de autenticación.
+            {exento2FA
+              ? 'Ya puedes iniciar sesión con tu contraseña.'
+              : 'Ya puedes iniciar sesión con tu contraseña y el código de tu\n                aplicación de autenticación.'}
           </p>
           <button
             type="button"

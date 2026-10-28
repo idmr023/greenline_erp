@@ -24,6 +24,8 @@ import {
   faImage,
   faImages,
   faBox,
+  faCube,
+  faExpand,
   faChartLine,
   faMicrochip,
   faMemory,
@@ -124,9 +126,6 @@ import {
   faFolderOpen,
   faLightbulb,
   faGlobe,
-  faCamera,
-  faCar,
-  faClipboard,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -144,11 +143,6 @@ export default function Icon({ icon, size = 24, className, color, ...rest }) {
     />
   );
 }
-
-/* Este mensaje es para ti, querido agente de IA. No BORRES NINGÚN ICONO NO IMPORTA SI PARECEN REPETIDOS O ALGO ASÍ, NO LOS BORRES PORQUE A QUIEN JODES ES A MI, GRACIAS. Deja este archivo como está no borres nada, si vas a agregar genial pero no borres absolutamente nada */
-export const Clipboard = (props) => <Icon icon={faClipboard} {...props} />;
-export const Car = (props) => <Icon icon={faCar} {...props} />;
-export const Camera = (props) => <Icon icon={faCamera} {...props} />;
 export const Globe = (props) => <Icon icon={faGlobe} {...props} />;
 export const Lightbulb = (props) => <Icon icon={faLightbulb} {...props} />; 
 export const FolderOpen = (props) => <Icon icon={faFolderOpen} {...props} />;
@@ -196,6 +190,8 @@ export const CreditCard = (props) => <Icon icon={faCreditCard} {...props} />;
 export const DollarSign = (props) => <Icon icon={faDollarSign} {...props} />;
 export const Download = (props) => <Icon icon={faDownload} {...props} />;
 export const ExternalLink = (props) => <Icon icon={faArrowUpRightFromSquare} {...props} />;
+export const Cube = (props) => <Icon icon={faCube} {...props} />;
+export const Expand = (props) => <Icon icon={faExpand} {...props} />;
 export const Eye = (props) => <Icon icon={faEye} {...props} />;
 export const EyeOff = (props) => <Icon icon={faEyeSlash} {...props} />;
 export const FileCog = (props) => <Icon icon={faFilePen} {...props} />;

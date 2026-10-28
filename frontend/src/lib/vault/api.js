@@ -51,6 +51,44 @@ export class ErrorRls extends Error {
   }
 }
 
+/**
+ * §40 — la columna `greenline_vault_items.roles_visibles` (qué roles ven la
+ * contraseña de cada secreto) es opcional: existe desde la migración del
+ * repo hermano y puede no estar aplicada todavía.
+ *
+ * Se sondea en vez de asumirla para que la bóveda siga funcionando (guardar,
+ * editar, eliminar) aunque la restricción por rol no esté disponible: la
+ * función de acceso es unaMejora, no un requisito. Cuando la columna no
+ * existe, el panel la oculta y avisa — nunca se guarda un secreto con una
+ * restricción que la base de datos no va a honorar (fail-open silencioso).
+ */
+let rolesVisiblesDisponibles = null;
+
+export async function soportaRolesVisibles() {
+  if (rolesVisiblesDisponibles !== null) return rolesVisiblesDisponibles;
+  try {
+    const { error } = await supabase
+      .from(TABLAS.items)
+      .select('id, roles_visibles')
+      .limit(1);
+    rolesVisiblesDisponibles = !error;
+  } catch {
+    rolesVisiblesDisponibles = false;
+  }
+  return rolesVisiblesDisponibles;
+}
+
+/** ¿El error viene de que la columna `roles_visibles` no existe todavía? */
+function esColumnaRolesVisiblesAusente(error) {
+  const codigo = error?.code || '';
+  const texto = String(error?.message || '');
+  return (
+    codigo === 'PGRST204' ||
+    /column .*roles_visibles.* does not exist/i.test(texto) ||
+    /roles_visibles/i.test(texto) && /does not exist|no existe/i.test(texto)
+  );
+}
+
 function traducir(error, tabla) {
   const codigo = error?.code || '';
   const texto = String(error?.message || '');
@@ -252,6 +290,8 @@ export async function cargarBoveda() {
         keyVersion: fila.key_version,
       },
       envoltura: envolturaDeFila(fila),
+      // roles_visibles: roles del servidor que pueden ver esta contraseña.
+      rolesVisibles: Array.isArray(fila.roles_visibles) ? fila.roles_visibles : null,
     })),
     parametros: boveda
       ? {
@@ -378,7 +418,7 @@ export async function guardarClavePropia({ vaultId, keyVersion, envoltura }) {
 }
 
 /** §10 — alta de item cifrado. */
-export async function guardarItem({ vaultId, contexto, envoltura, tipo, categoria = null }) {
+export async function guardarItem({ vaultId, contexto, envoltura, tipo, categoria = null, rolesVisibles = null }) {
   const fila = {
     // §8.1: `itemId` va DENTRO del AAD con el que se cifró. Si la BD
     // asignara otro id, el AAD reconstruido al descifrar no coincidiría y el
@@ -393,12 +433,30 @@ export async function guardarItem({ vaultId, contexto, envoltura, tipo, categori
     // §40: el RLS de miembros sólo muestra items con categoría asignada.
     // Si no llega, la columna aplica su DEFAULT de BD ('general').
     ...(categoria ? { categoria } : {}),
+    // roles_visibles: roles que pueden ver la contraseña de este ítem.
+    // null = sin restricción de rol (todo el que ve la categoría la ve).
+    ...(rolesVisibles !== null ? { roles_visibles: rolesVisibles } : {}),
     ...filaDeEnvoltura(envoltura),
   };
-  const creada = await consultar(TABLAS.items, () =>
-    supabase.from(TABLAS.items).insert(fila).select().single(),
-  );
-  return { id: creada.id };
+  try {
+    const creada = await consultar(TABLAS.items, () =>
+      supabase.from(TABLAS.items).insert(fila).select().single(),
+    );
+    return { id: creada.id };
+  } catch (err) {
+    // La columna puede no existir todavía. Se reintenta SIN la restricción
+    // para no dejar al usuario sin poder guardar, pero sólo si NO restrictive:
+    // si el usuario pidió restringir y no se puede, se avisa en vez de
+    // guardar un secreto que queda abierto sin que nadie lo note.
+    if (rolesVisibles !== null && esColumnaRolesVisiblesAusente(err)) {
+      throw new Error(
+        'Este servidor todavía no admite la restricción de contraseñas por rol ' +
+          '(falta la columna `roles_visibles`). El secreto NO se ha guardado: ' +
+          'aplica la migración en el repo hermano o guárdalo sin restricción.',
+      );
+    }
+    throw err;
+  }
 }
 
 /**
@@ -406,25 +464,41 @@ export async function guardarItem({ vaultId, contexto, envoltura, tipo, categori
  * condición: si otra sesión ya escribió una revisión más alta, no hay filas
  * afectadas y se lanza en lugar de sobrescribir a ciegas.
  */
-export async function actualizarItem({ id, contexto, envoltura, tipo, categoria = undefined }) {
+export async function actualizarItem({ id, contexto, envoltura, tipo, categoria = undefined, rolesVisibles = undefined }) {
   const fila = {
     revision: contexto.revision,
     key_version: contexto.keyVersion,
     item_type: tipo ?? null,
     ...(categoria ? { categoria } : {}),
+    // roles_visibles: null = quitar restricción, [] = sólo los gestores,
+    // array = esos roles. `undefined` = no tocar la columna.
+    ...(rolesVisibles !== undefined ? { roles_visibles: rolesVisibles } : {}),
     ...filaDeEnvoltura(envoltura),
   };
-  const { data, error } = await supabase
-    .from(TABLAS.items)
-    .update(fila)
-    .eq('id', id)
-    .eq('revision', contexto.revision - 1)
-    .select();
-  if (error) throw traducir(error, TABLAS.items);
-  if (!data || data.length === 0) {
-    throw new Error('La revisión del item cambió en el servidor: recarga antes de guardar.');
+  try {
+    const { data, error } = await supabase
+      .from(TABLAS.items)
+      .update(fila)
+      .eq('id', id)
+      .eq('revision', contexto.revision - 1)
+      .select();
+    if (error) throw traducir(error, TABLAS.items);
+    if (!data || data.length === 0) {
+      throw new Error('La revisión del item cambió en el servidor: recarga antes de guardar.');
+    }
+    return data[0];
+  } catch (err) {
+    // Igual que en `guardarItem`: si la restricción no se puede guardar, no
+    // se guarda el secreto en abierto. Se avisa y se deja el item como
+    // estaba.
+    if (rolesVisibles !== undefined && esColumnaRolesVisiblesAusente(err)) {
+      throw new Error(
+        'Este servidor todavía no admite la restricción de contraseñas por rol ' +
+          '(falta la columna `roles_visibles`). El cambio NO se ha guardado.',
+      );
+    }
+    throw err;
   }
-  return data[0];
 }
 
 /** §19 — borrado lógico: el ciphertext histórico sigue para auditoría. */

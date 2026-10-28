@@ -331,6 +331,36 @@ export const rolesAPI = {
     }),
 };
 
+/**
+ * Configuración de accesos de la Bóveda (categorías ↔ roles).
+ * Exclusiva de ADMIN y DESARROLLADOR_WEB; nunca devuelve secretos.
+ */
+export const bovedaAPI = {
+  permisos: (accessToken) =>
+    request('/boveda/permisos', { headers: authHeaders(accessToken) }),
+
+  setCategoriasDeRol: (rol, categorias, accessToken) =>
+    request(`/boveda/permisos/${encodeURIComponent(rol)}`, {
+      method: 'PUT',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ categorias }),
+    }),
+
+  crearCategoria: (payload, accessToken) =>
+    request('/boveda/categorias', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+
+  actualizarCategoria: (clave, payload, accessToken) =>
+    request(`/boveda/categorias/${encodeURIComponent(clave)}`, {
+      method: 'PATCH',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    }),
+};
+
 export const contactAPI = {
   send: (payload) =>
     request('/contact', { method: 'POST', body: JSON.stringify(payload) }),
@@ -409,6 +439,27 @@ export const citasAPI = {
     }),
 
   tiendas: () => request('/citas/tiendas'),
+
+  /**
+   * Vacantes por día de una tienda en un rango (agenda por vacantes).
+   * Público: no exige sesión; el servidor limita igualmente la tienda.
+   * @param {{ tiendaId: string, desde: string, hasta?: string }} params
+   */
+  disponibilidad: (params) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([clave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') q.set(clave, String(valor));
+    });
+    return request(`/citas/disponibilidad?${q.toString()}`);
+  },
+
+  /**
+   * Crea una cita desde el panel (recepción: walk-in / teléfono).
+   * Usa el endpoint público `POST /citas` (mismo contrato que el formulario
+   * web): clienteEmail obligatorio y motivo del catálogo MOTIVOS_CITA.
+   */
+  crear: (payload) =>
+    request('/citas', { method: 'POST', body: JSON.stringify(payload) }),
 
   destinatarios: (params = {}, accessToken) => {
     const q = new URLSearchParams();

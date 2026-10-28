@@ -17,6 +17,7 @@ import AdminDistribuidores from './AdminDistribuidores';
 import AdminContactos from './AdminContactos';
 import AdminReclamaciones from './AdminReclamaciones';
 import AdminCitas from './AdminCitas';
+import AdminAgendaCitas from './AdminAgendaCitas';
 import AdminPrestamosVehiculo from './AdminPrestamosVehiculo';
 import AdminEvaluaciones from './AdminEvaluaciones';
 import AdminGarantias from './AdminGarantias';
@@ -26,7 +27,7 @@ import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import AdminRoles from './AdminRoles';
 import AdminAjustes from './AdminAjustes';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award } from '../../lib/icons';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar } from '../../lib/icons';
 import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
 
 const VIEWS = {
@@ -43,6 +44,7 @@ const VIEWS = {
   CONTACTOS: 'contactos',
   RECLAMACIONES: 'reclamaciones',
   CITAS: 'citas',
+  AGENDA_CITAS: 'agenda_citas',
   PRESTAMOS_VEHICULO: 'prestamos_vehiculo',
   EVALUACIONES: 'evaluaciones',
   GARANTIAS: 'garantias',
@@ -76,6 +78,10 @@ const NAV_ITEMS = [
   // Citas de servicio técnico (§10): la agenda por tienda; las tiendas
   // se enteran por correo, aquí sólo administra el equipo central.
   { key: VIEWS.CITAS, label: 'Citas', icon: Wrench, perm: 'menu:citas' },
+  // Agenda semanal por vacantes (sin horas): la gestiona cada tienda de su
+  // propia agenda; el jefe/admin filtra por tienda. Menú distinto al de la
+  // tabla central (`menu:citas`), concedido aparte (menu:agenda-citas).
+  { key: VIEWS.AGENDA_CITAS, label: 'Agenda de citas', icon: Calendar, perm: 'menu:agenda-citas' },
   { key: VIEWS.PRESTAMOS_VEHICULO, label: 'Préstamos Vehículos', icon: Car, perm: 'menu:prestamos-vehiculo' },
   // Taller operativo (sustituye las hojas de evaluación/garantías/ensamblado):
   //   · Evaluación de incentivos de armadores (historial + puntaje general)
@@ -139,6 +145,7 @@ export default function AdminPanel() {
     else if (path.includes('/admin/contactos')) candidata = VIEWS.CONTACTOS;
     else if (path.includes('/admin/reclamaciones')) candidata = VIEWS.RECLAMACIONES;
     else if (path.includes('/admin/citas')) candidata = VIEWS.CITAS;
+    else if (path.includes('/admin/agenda_citas')) candidata = VIEWS.AGENDA_CITAS;
     else if (path.includes('/admin/prestamos-vehiculo')) candidata = VIEWS.PRESTAMOS_VEHICULO;
     else if (path.includes('/admin/evaluaciones')) candidata = VIEWS.EVALUACIONES;
     else if (path.includes('/admin/garantias')) candidata = VIEWS.GARANTIAS;
@@ -402,6 +409,7 @@ export default function AdminPanel() {
         {view === VIEWS.CONTACTOS && <AdminContactos />}
         {view === VIEWS.RECLAMACIONES && <AdminReclamaciones />}
         {view === VIEWS.CITAS && <AdminCitas />}
+        {view === VIEWS.AGENDA_CITAS && <AdminAgendaCitas />}
         {view === VIEWS.PRESTAMOS_VEHICULO && <AdminPrestamosVehiculo />}
         {view === VIEWS.EVALUACIONES && <AdminEvaluaciones />}
         {view === VIEWS.GARANTIAS && <AdminGarantias />}

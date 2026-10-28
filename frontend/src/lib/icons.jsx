@@ -24,6 +24,8 @@ import {
   faImage,
   faImages,
   faBox,
+  faCube,
+  faExpand,
   faChartLine,
   faMicrochip,
   faMemory,
@@ -124,9 +126,6 @@ import {
   faFolderOpen,
   faLightbulb,
   faGlobe,
-  faCar,
-  faCamera,
-  faClipboard,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -196,6 +195,8 @@ export const CreditCard = (props) => <Icon icon={faCreditCard} {...props} />;
 export const DollarSign = (props) => <Icon icon={faDollarSign} {...props} />;
 export const Download = (props) => <Icon icon={faDownload} {...props} />;
 export const ExternalLink = (props) => <Icon icon={faArrowUpRightFromSquare} {...props} />;
+export const Cube = (props) => <Icon icon={faCube} {...props} />;
+export const Expand = (props) => <Icon icon={faExpand} {...props} />;
 export const Eye = (props) => <Icon icon={faEye} {...props} />;
 export const EyeOff = (props) => <Icon icon={faEyeSlash} {...props} />;
 export const FileCog = (props) => <Icon icon={faFilePen} {...props} />;
@@ -295,6 +296,3 @@ export const Weight = (props) => <Icon icon={faWeightHanging} {...props} />;
 export const Wrench = (props) => <Icon icon={faWrench} {...props} />;
 export const X = (props) => <Icon icon={faXmark} {...props} />;
 export const Zap = (props) => <Icon icon={faBolt} {...props} />;
-export const Car = (props) => <Icon icon={faCar} {...props} />;
-export const Camera = (props) => <Icon icon={faCamera} {...props} />;
-export const Clipboard = (props) => <Icon icon={faClipboard} {...props} />;

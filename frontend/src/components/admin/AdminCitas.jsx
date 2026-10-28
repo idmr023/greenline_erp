@@ -32,6 +32,10 @@ const ESTADO_LABEL = {
   rechazada: 'Rechazada',
 };
 
+// Re-exportados para la vista de calendario (AdminAgendaCitas): las tarjetas
+// de la semana pintan el mismo badge y al hacer clic abren este mismo modal.
+export { ESTADO_BADGE, ESTADO_LABEL };
+
 function formatFecha(iso) {
   try {
     return new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', {
@@ -287,7 +291,8 @@ function TabCitas({ accessToken, puedeEditar, tiendas }) {
 // Modal de detalle + transiciones
 // ============================================================
 
-function ModalCita({ cita, puedeEditar, accessToken, onClose, onUpdated, onChanged }) {
+// Exportado: AdminAgendaCitas (calendario semanal) abre este mismo modal.
+export function ModalCita({ cita, puedeEditar, accessToken, onClose, onUpdated, onChanged }) {
   const [notasAdmin, setNotasAdmin] = useState(cita.notasAdmin || '');
   const [motivoRechazo, setMotivoRechazo] = useState(cita.motivoRechazo || '');
   const [accionando, setAccionando] = useState(false);

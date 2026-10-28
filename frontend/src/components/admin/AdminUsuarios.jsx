@@ -3,7 +3,7 @@ import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { rolesAPI, usuariosAPI } from '../../lib/api';
 import { rolesDe, ROLES_RESPALDO } from '../../lib/roles';
-import { Check, Loader2, RefreshCw, Pencil, Plus, Search, ShieldCheck, Trash2, Users, X } from '../../lib/icons';
+import { Check, Loader2, RefreshCw, Pencil, Plus, Search, ShieldCheck, ShieldOff, Trash2, Users, X } from '../../lib/icons';
 
 const LIMITE = 20;
 
@@ -52,6 +52,12 @@ export default function AdminUsuarios() {
   const puedeEscribir = ability.can('update', 'usuarios');
   /** El correo es la credencial de acceso: sólo un ADMIN lo cambia (§RBAC). */
   const esAdmin = ability.can('manage-roles', 'usuarios');
+  /**
+   * Exención individual de 2FA: ADMIN y DESARROLLADOR_WEB (asistencia técnica
+   * de cuentas). Para el resto queda manage-roles; el backend lo valida
+   * también (403) por si alguien manda la petición a mano.
+   */
+  const puedeExentar2FA = esAdmin || rolesDe(user).includes('DESARROLLADOR_WEB');
 
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -289,6 +295,40 @@ export default function AdminUsuarios() {
     }
   };
 
+  /**
+   * Exención individual de 2FA (ADMIN / DESARROLLADOR_WEB; el backend también
+   * lo comprueba). Exentar: la cuenta entra con sólo su contraseña. Si tenía
+   * 2FA activo, el backend borra su secreto y códigos de respaldo. Quitar la
+   * exención: en su próximo ingreso se le pedirá montar el 2FA de nuevo
+   * (recibe códigos nuevos, los borrados no vuelven).
+   */
+  const alternarExencion2FA = async (u) => {
+    const objetivo = !u.twoFactorExento;
+    const seguro = window.confirm(
+      objetivo
+        ? `¿Exentar del 2FA a "${u.nombre} ${u.apellido}"?\n\nEntrará con su contraseña sin segundo factor.` +
+          (u.twoFactorEnabled ? ' Su configuración de 2FA (aplicación y códigos de respaldo) se borrará al confirmar.' : '')
+        : `¿Quitar la exención de 2FA a "${u.nombre} ${u.apellido}"?\n\nEn su próximo ingreso se le pedirá activar la verificación en dos pasos.`,
+    );
+    if (!seguro) return;
+    setAccionando(u.id);
+    setMensaje(null);
+    try {
+      await usuariosAPI.actualizar(u.id, { twoFactorExento: objetivo }, accessToken);
+      setMensaje({
+        tipo: 'ok',
+        texto: objetivo
+          ? `${u.email} exentada del 2FA${u.twoFactorEnabled ? ' (se borró su configuración previa)' : ''}.`
+          : `${u.email} vuelve a requerir verificación en dos pasos desde su próximo ingreso.`,
+      });
+      await cargar();
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: mensajeDe(err, 'No se pudo cambiar la exención de 2FA.') });
+    } finally {
+      setAccionando(null);
+    }
+  };
+
   const eliminar = async (u) => {
     const seguro = window.confirm(
       `¿Eliminar DEFINITIVAMENTE a "${u.nombre} ${u.apellido}"?\n\n` +
@@ -438,6 +478,11 @@ export default function AdminUsuarios() {
                       2FA activo
                     </span>
                   )}
+                  {u.twoFactorExento && (
+                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                      Exenta de 2FA
+                    </span>
+                  )}
                   {esMiCuenta(u) && (
                     <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                       Tú
@@ -452,9 +497,21 @@ export default function AdminUsuarios() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-1 self-center">
+                <div className="flex items-center gap-1 self-center">
                 {puedeEscribir && (
                   <>
+                    {/* Exención individual de 2FA: ADMIN / DESARROLLADOR_WEB; no aplica a CLIENTE. */}
+                    {puedeExentar2FA && !rolesDe(u).includes('CLIENTE') && (
+                      <button
+                        type="button"
+                        onClick={() => alternarExencion2FA(u)}
+                        disabled={accionando === u.id}
+                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                        title={u.twoFactorExento ? 'Quitar exención de 2FA' : 'Exentar del 2FA'}
+                      >
+                        {u.twoFactorExento ? <ShieldCheck className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => restablecerEstandar(u)}

@@ -264,6 +264,7 @@ export const Settings2 = (props) => <Icon icon={faGear} {...props} />;
 export const Share2 = (props) => <Icon icon={faShareNodes} {...props} />;
 export const Shield = (props) => <Icon icon={faShieldHalved} {...props} />;
 export const ShieldAlert = (props) => <Icon icon={faTriangleExclamation} {...props} />;
+
 export const ShieldCheck = (props) => <Icon icon={faShieldHalved} {...props} />;
 export const ShieldOff = (props) => <Icon icon={faShieldHalved} {...props} />;
 export const ShoppingCart = (props) => <Icon icon={faCartShopping} {...props} />;

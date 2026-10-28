@@ -126,6 +126,9 @@ import {
   faFolderOpen,
   faLightbulb,
   faGlobe,
+  faCar,
+  faCamera,
+  faClipboard,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -259,6 +262,7 @@ export const Settings2 = (props) => <Icon icon={faGear} {...props} />;
 export const Share2 = (props) => <Icon icon={faShareNodes} {...props} />;
 export const Shield = (props) => <Icon icon={faShieldHalved} {...props} />;
 export const ShieldAlert = (props) => <Icon icon={faTriangleExclamation} {...props} />;
+
 export const ShieldCheck = (props) => <Icon icon={faShieldHalved} {...props} />;
 export const ShieldOff = (props) => <Icon icon={faShieldHalved} {...props} />;
 export const ShoppingCart = (props) => <Icon icon={faCartShopping} {...props} />;
@@ -291,3 +295,6 @@ export const Weight = (props) => <Icon icon={faWeightHanging} {...props} />;
 export const Wrench = (props) => <Icon icon={faWrench} {...props} />;
 export const X = (props) => <Icon icon={faXmark} {...props} />;
 export const Zap = (props) => <Icon icon={faBolt} {...props} />;
+export const Car = (props) => <Icon icon={faCar} {...props} />;
+export const Camera = (props) => <Icon icon={faCamera} {...props} />;
+export const Clipboard = (props) => <Icon icon={faClipboard} {...props} />;

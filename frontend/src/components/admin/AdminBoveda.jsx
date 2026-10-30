@@ -219,38 +219,106 @@ export default function AdminBoveda() {
    * panel de recuperación se rompería la próxima vez que se abriera. Toda
    * actualización del bootstrap pasa por aquí.
    */
-  const leerBootstrap = useCallback(async () => {
-    const b = await cargarBoveda();
-    let recuperacion = [];
-    if (b.bovedaId) {
-      try {
-        recuperacion = await cargarRecuperacion(b.bovedaId);
-      } catch {
-        recuperacion = [];
-      }
-    }
-    return { ...b, recuperacion };
-  }, []);
+  
+const leerBootstrap = useCallback(async () => {
+  console.log('[DEBUG BOOTSTRAP] Iniciando cargarBoveda');
 
-  const recargar = useCallback(async () => {
-    setCargando(true);
-    setErrorCarga(null);
-    setSinMigracion(null);
+  const b = await cargarBoveda();
+
+  console.log('[DEBUG BOVEDA]', {
+    bovedaId: b?.bovedaId,
+    tieneBoveda: Boolean(b?.boveda),
+    tieneClave: Boolean(b?.clave),
+    tieneClavePropia: Boolean(b?.clavePropia),
+    migracionPendiente: b?.migracionPendiente,
+    cantidadClaves: b?.claves?.length,
+    claveVersion: b?.clave?.keyVersion,
+    clavePropiaVersion: b?.clavePropia?.keyVersion,
+    usuario: b?.yo,
+
+    // usuario: (await supabase.auth.getUser()).data.user?.id,
+  });
+
+  let recuperacion = [];
+
+  if (b.bovedaId) {
     try {
-      const b = await leerBootstrap();
-      setBootstrap(b);
-      setActivaRecovery(b.recuperacion.length > 0);
-    } catch (err) {
-      if (err instanceof ErrorSinMigracion) setSinMigracion(err);
-      else setErrorCarga(err);
-    } finally {
-      setCargando(false);
-    }
-  }, [leerBootstrap]);
+      recuperacion = await cargarRecuperacion(b.bovedaId);
 
-  useEffect(() => {
-    void recargar();
-  }, [recargar]);
+      console.log('[DEBUG RECUPERACION]', {
+        cantidad: recuperacion.length,
+        tieneRecuperacion: recuperacion.length > 0,
+      });
+    } catch (err) {
+      console.error('[ERROR RECUPERACION]', err);
+      recuperacion = [];
+    }
+  }
+
+  console.log('[DEBUG BOOTSTRAP] Finalizado');
+
+  return { ...b, recuperacion };
+}, []);
+
+const recargar = useCallback(async () => {
+  console.log('[DEBUG RECARGAR] Iniciando lectura');
+
+  setCargando(true);
+  setErrorCarga(null);
+  setSinMigracion(null);
+
+  try {
+    const b = await leerBootstrap();
+
+    console.log('[DEBUG RECARGAR] Bootstrap recibido', {
+      bovedaId: b?.bovedaId,
+      tieneClave: Boolean(b?.clave),
+      tieneClavePropia: Boolean(b?.clavePropia),
+      migracionPendiente: b?.migracionPendiente,
+      cantidadClaves: b?.claves?.length,
+    });
+
+    setBootstrap(b);
+    setActivaRecovery(b.recuperacion.length > 0);
+
+  } catch (err) {
+    console.error('[ERROR RECARGAR BÓVEDA]', err);
+
+    if (err instanceof ErrorSinMigracion) {
+      setSinMigracion(err);
+    } else {
+      setErrorCarga(err);
+    }
+
+  } finally {
+    setCargando(false);
+    console.log('[DEBUG RECARGAR] Finalizado');
+  }
+}, [leerBootstrap]);
+
+useEffect(() => {
+  console.log('[DEBUG EFFECT] Ejecutando recargar');
+
+  void recargar();
+}, [recargar]);
+
+// El RLS de miembros sólo devuelve items con categoria asignada.
+useEffect(() => {
+  let vivo = true;
+
+  listarCategorias()
+    .then((lista) => {
+      if (vivo) setCategorias(lista);
+    })
+    .catch((err) => {
+      console.error('[ERROR CATEGORIAS]', err);
+      if (vivo) setCategorias([]);
+    });
+
+  return () => {
+    vivo = false;
+  };
+}, []);
 
   // El RLS de miembros sólo devuelve items con `categoria` asignada: sin
   // este catálogo la bóveda de equipo se vería vacía para los demás.

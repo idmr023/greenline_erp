@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Mail, AlertCircle, Loader2, RefreshCw } from '../../lib/icons';
 import { authAPI } from '../../lib/api';
+import { mensajeDeError } from '../../lib/apiErrors';
 
 /**
- * Segundo factor por correo: pide el código de 6 dígitos que llegó al email
+ * Segundo factor por correo: pide el código de 8 dígitos que llegó al email
  * enmascarado. El envío automático lo dispara TwoFactorVerify al entrar en
  * esta pestaña; aquí sólo se reenvía a petición (el límite es de 5 cada
  * 5 minutos y lo comparte con el resto de retos del 2FA).
  */
 export default function EmailFactorVerify({ tempToken, emailMasked, aviso, errorExterno, onVerified, onResend, onBack }) {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState(['', '', '', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [reenviando, setReenviando] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +23,7 @@ export default function EmailFactorVerify({ tempToken, emailMasked, aviso, error
     const next = [...code];
     next[index] = value.slice(-1);
     setCode(next);
-    if (value && index < 5) inputs.current[index + 1]?.focus();
+    if (value && index < 7) inputs.current[index + 1]?.focus();
   };
 
   const handleKeyDown = (index, e) => {
@@ -33,19 +34,19 @@ export default function EmailFactorVerify({ tempToken, emailMasked, aviso, error
 
   const handlePaste = (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
     if (pasted) {
-      const next = pasted.split('').concat(Array(6).fill('')).slice(0, 6);
+      const next = pasted.split('').concat(Array(8).fill('')).slice(0, 8);
       setCode(next);
-      inputs.current[Math.min(pasted.length, 5)]?.focus();
+      inputs.current[Math.min(pasted.length, 7)]?.focus();
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const joined = code.join('');
-    if (joined.length !== 6) {
-      setError('Ingresa los 6 dígitos');
+    if (joined.length !== 8) {
+      setError('Ingresa los 8 dígitos');
       return;
     }
 
@@ -59,7 +60,7 @@ export default function EmailFactorVerify({ tempToken, emailMasked, aviso, error
       }
       onVerified(res);
     } catch (err) {
-      setError(err.error || err.message || 'Código inválido o expirado');
+      setError(mensajeDeError(err, 'Código inválido o expirado'));
     } finally {
       setLoading(false);
     }
@@ -71,7 +72,7 @@ export default function EmailFactorVerify({ tempToken, emailMasked, aviso, error
     try {
       await onResend();
     } catch (err) {
-      setError(err.error || err.message || 'No se pudo reenviar el código');
+      setError(mensajeDeError(err, 'No se pudo reenviar el código'));
     } finally {
       setReenviando(false);
     }
@@ -89,7 +90,7 @@ export default function EmailFactorVerify({ tempToken, emailMasked, aviso, error
             <span>{aviso}</span>
           ) : (
             <>
-              Enviamos un código de 6 dígitos a
+              Enviamos un código de 8 dígitos a
               {emailMasked && (
                 <>
                   <br />
@@ -109,7 +110,7 @@ export default function EmailFactorVerify({ tempToken, emailMasked, aviso, error
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex justify-center gap-2">
+        <div className="flex justify-center gap-1">
           {code.map((digit, i) => (
             <input
               key={i}
@@ -122,7 +123,7 @@ export default function EmailFactorVerify({ tempToken, emailMasked, aviso, error
               onKeyDown={(e) => handleKeyDown(i, e)}
               onPaste={handlePaste}
               aria-label={`Dígito ${i + 1} del código`}
-              className="w-11 h-12 text-center text-lg font-bold border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+              className="w-7 sm:w-9 h-12 text-center text-base sm:text-lg font-bold border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
             />
           ))}
         </div>

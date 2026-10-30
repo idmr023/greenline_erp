@@ -163,13 +163,11 @@ def _extraer_servicio_tecnico(filas: list[dict]) -> dict:
       1) Resumen por sede (sede, técnicos, servicios, prod, MTTR, FTF, cumplimiento)
       2) Desglose de tipos de servicio por sede
       3) Rendimiento por técnico (nombre, nivel, métricas, estado)
-    """
-    sedes: list[dict] = []
-    tipos: list[dict] = []
-    tecnicos: list[dict] = []
-    totales: dict = {}
 
-    # Columnas CSV nombradas según la fila 0 de la hoja
+    Cuando la fuente usa `hojas: "*"`, cada fila trae una columna `_pestaña`.
+    Cada pestaña se procesa de forma INDEPENDIENTE (la máquina de estados
+    `seccion` se reinicia al cambiar de pestaña), y los resultados se unen.
+    """
     C_SEDE = "Sede / Tienda"
     C_B = "N° Técnicos"
     C_C = "Total Servicios (Columna G)"
@@ -180,71 +178,110 @@ def _extraer_servicio_tecnico(filas: list[dict]) -> dict:
     C_H = "Cumplimiento de Meta (%)"
     C_I = "col_8"
 
-    seccion = "sedes"
+    import re
+    PATRON_SEDE = re.compile(r"^\d{2}-")
+
+    grupos: dict[str, list[dict]] = {}
     for fila in filas:
-        titulo = (fila.get(C_SEDE) or "").strip()
-        if not titulo:
-            continue
-        mayus = titulo.upper()
-        if "DESGLOSE" in mayus:
-            seccion = "tipos"
-            continue
-        if "MEDICION" in mayus:
-            seccion = "tecnicos"
-            continue
-        if "PLANTILLA" in mayus:
-            seccion = None
-            continue
+        pestaña = fila.get("_pestaña") or "(primera)"
+        grupos.setdefault(pestaña, []).append(fila)
 
-        if seccion == "sedes":
-            if titulo.startswith(("01-", "02-", "03-", "04-", "05-", "06-", "07-")):
-                sedes.append({
-                    "sede": titulo,
-                    "tecnicos": int(_a_numero(fila.get(C_B))),
-                    "servicios": int(_a_numero(fila.get(C_C))),
-                    "prod": round(_a_numero(fila.get(C_D)), 2),
-                    "mttr": round(_a_numero(fila.get(C_E)), 2),
-                    "ftf": round(_a_numero(fila.get(C_F)), 1),
-                    "cumplimiento": round(_a_numero(fila.get(C_H)), 1),
-                })
-            elif mayus.startswith("TOTAL"):
-                totales = {
-                    "tecnicos": int(_a_numero(fila.get(C_B))),
-                    "servicios": int(_a_numero(fila.get(C_C))),
-                    "prod": round(_a_numero(fila.get(C_D)), 2),
-                    "mttr": round(_a_numero(fila.get(C_E)), 2),
-                    "ftf": round(_a_numero(fila.get(C_F)), 1),
-                    "cumplimiento": round(_a_numero(fila.get(C_H)), 1),
-                }
+    sedes: list[dict] = []
+    tipos: list[dict] = []
+    tecnicos: list[dict] = []
+    totales: dict = {}
 
-        elif seccion == "tipos":
-            if titulo.startswith(("01-", "02-", "03-", "04-", "05-", "06-", "07-")):
-                tipos.append({
-                    "sede": titulo,
-                    "preventivo": int(_a_numero(fila.get(C_B))),
-                    "diagnostico": int(_a_numero(fila.get(C_C))),
-                    "col3": int(_a_numero(fila.get(C_D))),
-                    "col4": int(_a_numero(fila.get(C_E))),
-                    "col5": int(_a_numero(fila.get(C_F))),
-                    "total": int(_a_numero(fila.get(C_G))),
-                    "pct": round(_a_numero(fila.get(C_H)), 1),
-                })
+    for pestaña, filas_pestaña in grupos.items():
+        seccion = "sedes"
+        for fila in filas_pestaña:
+            titulo = (fila.get(C_SEDE) or "").strip()
+            if not titulo:
+                continue
+            mayus = titulo.upper()
+            if "DESGLOSE" in mayus:
+                seccion = "tipos"
+                continue
+            if "MEDICION" in mayus:
+                seccion = "tecnicos"
+                continue
+            if "PLANTILLA" in mayus:
+                seccion = None
+                continue
 
-        elif seccion == "tecnicos":
-            if titulo.startswith(("01-", "02-", "03-", "04-", "05-", "06-", "07-")):
-                tecnicos.append({
-                    "sede": titulo,
-                    "nombre": (fila.get(C_B) or "").strip(),
-                    "nivel": (fila.get(C_C) or "").strip(),
-                    "ots": int(_a_numero(fila.get(C_D))),
-                    "prod_dia": round(_a_numero(fila.get(C_E)), 2),
-                    "mttr": round(_a_numero(fila.get(C_F)), 2),
-                    "ftf": round(_a_numero(fila.get(C_G)), 1),
-                    "csat": round(_a_numero(fila.get(C_H)), 1),
-                    "estado": (fila.get(C_I) or "").strip(),
-                })
+            es_sede = bool(PATRON_SEDE.match(titulo))
 
-    return {"sedes": sedes, "tipos": tipos, "tecnicos": tecnicos, "totales": totales}
+            if seccion == "sedes":
+                if es_sede:
+                    item = {
+                        "sede": titulo,
+                        "tecnicos": int(_a_numero(fila.get(C_B))),
+                        "servicios": int(_a_numero(fila.get(C_C))),
+                        "prod": round(_a_numero(fila.get(C_D)), 2),
+                        "mttr": round(_a_numero(fila.get(C_E)), 2),
+                        "ftf": round(_a_numero(fila.get(C_F)), 1),
+                        "cumplimiento": round(_a_numero(fila.get(C_H)), 1),
+                        "mes": pestaña,
+                    }
+                    sedes.append(item)
+                elif mayus.startswith("TOTAL"):
+                    totales[pestaña] = {
+                        "tecnicos": int(_a_numero(fila.get(C_B))),
+                        "servicios": int(_a_numero(fila.get(C_C))),
+                        "prod": round(_a_numero(fila.get(C_D)), 2),
+                        "mttr": round(_a_numero(fila.get(C_E)), 2),
+                        "ftf": round(_a_numero(fila.get(C_F)), 1),
+                        "cumplimiento": round(_a_numero(fila.get(C_H)), 1),
+                    }
+
+            elif seccion == "tipos":
+                if es_sede:
+                    tipos.append({
+                        "sede": titulo,
+                        "preventivo": int(_a_numero(fila.get(C_B))),
+                        "diagnostico": int(_a_numero(fila.get(C_C))),
+                        "col3": int(_a_numero(fila.get(C_D))),
+                        "col4": int(_a_numero(fila.get(C_E))),
+                        "col5": int(_a_numero(fila.get(C_F))),
+                        "total": int(_a_numero(fila.get(C_G))),
+                        "pct": round(_a_numero(fila.get(C_H)), 1),
+                        "mes": pestaña,
+                    })
+
+            elif seccion == "tecnicos":
+                if es_sede:
+                    tecnicos.append({
+                        "sede": titulo,
+                        "nombre": (fila.get(C_B) or "").strip(),
+                        "nivel": (fila.get(C_C) or "").strip(),
+                        "ots": int(_a_numero(fila.get(C_D))),
+                        "prod_dia": round(_a_numero(fila.get(C_E)), 2),
+                        "mttr": round(_a_numero(fila.get(C_F)), 2),
+                        "ftf": round(_a_numero(fila.get(C_G)), 1),
+                        "csat": round(_a_numero(fila.get(C_H)), 1),
+                        "estado": (fila.get(C_I) or "").strip(),
+                        "mes": pestaña,
+                    })
+
+    # Si hay totales por pestaña, promediar los acumulados; si no, vacío.
+    totales_prom = {}
+    if totales:
+        n = len(totales)
+        totales_prom = {
+            "tecnicos": round(sum(t["tecnicos"] for t in totales.values()) / n),
+            "servicios": sum(t["servicios"] for t in totales.values()),
+            "prod": round(sum(t["prod"] for t in totales.values()) / n, 2),
+            "mttr": round(sum(t["mttr"] for t in totales.values()) / n, 2),
+            "ftf": round(sum(t["ftf"] for t in totales.values()) / n, 1),
+            "cumplimiento": round(sum(t["cumplimiento"] for t in totales.values()) / n, 1),
+            "porMes": totales,
+        }
+
+    return {
+        "sedes": sedes,
+        "tipos": tipos,
+        "tecnicos": tecnicos,
+        "totales": totales_prom,
+    }
 
 
 def _kpi_ejemplo(filas: list[dict], columnas: list[str]) -> dict:
@@ -327,9 +364,19 @@ def api_taller_datos():
 def dashboard_servicio_tecnico():
     try:
         fuente = fuente_por_id("servicio-tecnico")
+        mes = (request.args.get("mes") or "").strip()
         filas = cargar_datos(fuente)
     except FuenteError as exc:
         return render_template("error.html", mensaje=str(exc)), 502
+
+    meses_disponibles = sorted(
+        {f.get("_pestaña") for f in filas if f.get("_pestaña")},
+        reverse=True,
+    )
+
+    if mes:
+        filas = [f for f in filas if f.get("_pestaña") == mes]
+
     datos = _extraer_servicio_tecnico(filas)
     if not datos["sedes"]:
         abort(404, description="No se encontraron datos de sedes en la pestaña «Servicios Tecnico 2026».")
@@ -340,6 +387,8 @@ def dashboard_servicio_tecnico():
         tipos=datos["tipos"],
         tecnicos=datos["tecnicos"],
         totales=datos["totales"],
+        meses=meses_disponibles,
+        mes_seleccionado=mes,
         origenes_aceptados=_origenes_aceptados(),
         generado=datetime.now().strftime("%d/%m/%Y %H:%M"),
     )

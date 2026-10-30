@@ -4,8 +4,15 @@ import { clearCache } from '../../lib/productos';
 import { versionarImagen } from '../../lib/images';
 import { imagenesAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, ArrowUp, ArrowDown, Save, Upload, X, GripVertical, Search, FolderOpen, Loader2, Eye, EyeOff, FileText } from '../../lib/icons';
+import { ArrowLeft, ArrowUp, ArrowDown, Save, Upload, X, GripVertical, Search, FolderOpen, Loader2, Eye, EyeOff, FileText, Calendar } from '../../lib/icons';
 import ConfirmModal from './ConfirmModal';
+import {
+  isoADatetimeLocal,
+  datetimeLocalAIso,
+  esFuturo,
+  estadoPublicacion,
+  fechaAgendadaLegible,
+} from '../../utils/publicacionAgendada';
 
 const EMPTY_PRODUCT = {
   nombre: '',
@@ -19,6 +26,8 @@ const EMPTY_PRODUCT = {
   categoria_id: '',
   // Estado de publicación: false = borrador (no aparece en la tienda).
   activo: true,
+  // Programación opcional de la publicación ("YYYY-MM-DDTHH:MM" local).
+  publicar_en: '',
 };
 
 const EMPTY_FICHA = {
@@ -50,6 +59,7 @@ function slugify(text) {
 }
 
 async function guardarProductoPrincipal(form, isEdit, productoId) {
+  // `publicarEnIso` llega ya convertido (ISO UTC) o null por `confirmarGuardado`.
   const data = {
     nombre: form.nombre,
     slug: form.slug || slugify(form.nombre),
@@ -60,8 +70,11 @@ async function guardarProductoPrincipal(form, isEdit, productoId) {
     video_id: form.video_id || null,
     categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
     disponible: form.disponible !== false,
-    // false = borrador: el producto se guarda pero no se publica en la web.
+    // false = borrador/programado: el producto se guarda pero no se publica
+    // en la web hasta que lo publiques o venza la fecha de agendado.
     activo: form.activo !== false,
+    // ISO UTC o null: fecha en la que el producto debe publicarse solo.
+    publicar_en: form.publicar_en ?? null,
   };
   if (isEdit) {
     const { error } = await supabase.from('productos').update(data).eq('id', productoId);
@@ -235,7 +248,7 @@ export default function AdminProductoForm({ productoId, onBack, onSaved }) {
   const [uploading, setUploading] = useState(false);
   const [exploradorAbierto, setExploradorAbierto] = useState(false);
   const [exploradorIndice, setExploradorIndice] = useState(null);
-  // 'publicar' | 'borrador' | null — qué acción se está por confirmar.
+  // 'publicar' | 'programar' | 'borrador' | null — qué acción se está por confirmar.
   const [confirmGuardado, setConfirmGuardado] = useState(null);
 
   const { accessToken } = useAuth();
@@ -278,6 +291,7 @@ export default function AdminProductoForm({ productoId, onBack, onSaved }) {
             video_id: prod.video_id || '',
             categoria_id: prod.categoria_id || '',
             activo: prod.activo !== false,
+            publicar_en: isoADatetimeLocal(prod.publicar_en),
           });
         }
 
@@ -408,20 +422,34 @@ potencia_bateria: ft.potencia_bateria || '',
     return true;
   };
 
-  /** Botón "Guardar como borrador" / "Guardar y publicar": valida y pregunta. */
-  const handleSave = (publicar) => {
+  /**
+   * Botones de guardado: valida y abre el modal de confirmación.
+   * @param {'publicar'|'programar'|'borrador'} accion
+   */
+  const handleSave = (accion) => {
     if (!validarFormulario()) return;
-    setConfirmGuardado(publicar ? 'publicar' : 'borrador');
+    if (accion === 'programar' && !esFuturo(form.publicar_en)) {
+      alert('Elige una fecha y hora futuras para programar la publicación.');
+      return;
+    }
+    setConfirmGuardado(accion);
   };
 
   /** Confirmación del modal: aquí sí se escribe en la base de datos. */
   const confirmarGuardado = async () => {
-    const publicar = confirmGuardado === 'publicar';
+    const accion = confirmGuardado;
     setConfirmGuardado(null);
     setSaving(true);
 
+    // publicar → activo y sin agenda; programar → borrador con fecha futura;
+    // borrador → sin activo y sin agenda (la agenda se limpia).
+    const activo = accion === 'publicar';
+    const publicarEnIso = accion === 'programar'
+      ? datetimeLocalAIso(form.publicar_en)
+      : null;
+
     const fallo = await guardarProductoCompleto({
-      form: { ...form, activo: publicar },
+      form: { ...form, activo, publicar_en: publicarEnIso },
       isEdit,
       productoId,
       ficha,
@@ -614,24 +642,37 @@ potencia_bateria: ft.potencia_bateria || '',
 
   if (loading) return <div className="p-8 text-gray-400 text-sm">Cargando...</div>;
 
-  const publicado = form.activo !== false;
+  const estado = estadoPublicacion({
+    activo: form.activo !== false,
+    publicarEn: form.publicar_en,
+  });
+  const publicado = estado === 'publicado';
+  const programando = confirmGuardado === 'programar'
+    || (estado === 'programado' && esFuturo(form.publicar_en));
 
   // Textos del modal de confirmación según la acción y el estado actual.
   const tituloConfirmacion =
     confirmGuardado === 'publicar'
       ? (isEdit ? 'Publicar producto' : 'Publicar y guardar')
-      : 'Guardar como borrador';
+      : confirmGuardado === 'programar'
+        ? 'Programar publicación'
+        : 'Guardar como borrador';
 
   const mensajeConfirmacion =
     confirmGuardado === 'publicar'
       ? (publicado
         ? 'Se guardarán los cambios y el producto seguirá visible en la tienda.'
         : 'Se guardará el producto y aparecerá en la tienda y en la web de inmediato.')
-      : (publicado
-        ? 'El producto dejará de aparecer en la tienda hasta que lo publiques de nuevo.'
-        : 'Se guardará el producto como borrador: no aparecerá en la tienda hasta que lo publiques.');
+      : confirmGuardado === 'programar'
+        ? `Se guardará el producto como borrador y se publicará solo el ${fechaAgendadaLegible(form.publicar_en)}.`
+        : (publicado || programando
+          ? 'El producto dejará de aparecer en la tienda hasta que lo publiques de nuevo.'
+          : 'Se guardará el producto como borrador: no aparecerá en la tienda hasta que lo publiques.');
 
-  const etiquetaConfirmacion = confirmGuardado === 'publicar' ? 'Publicar' : 'Guardar borrador';
+  const etiquetaConfirmacion =
+    confirmGuardado === 'publicar' ? 'Publicar'
+      : confirmGuardado === 'programar' ? 'Programar'
+        : 'Guardar borrador';
 
   return (
     <div className="p-8 max-w-4xl">
@@ -649,10 +690,19 @@ potencia_bateria: ft.potencia_bateria || '',
               {isEdit && (
                 <span
                   className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    publicado ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    estado === 'publicado'
+                      ? 'bg-green-100 text-green-700'
+                      : estado === 'programado'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-amber-100 text-amber-700'
                   }`}
                 >
-                  {publicado ? 'Publicado' : 'Borrador'}
+                  {estado === 'publicado' ? 'Publicado' : estado === 'programado' ? 'Programado' : 'Borrador'}
+                </span>
+              )}
+              {estado === 'programado' && esFuturo(form.publicar_en) && (
+                <span className="text-xs text-blue-600">
+                  Se publica el {fechaAgendadaLegible(form.publicar_en)}
                 </span>
               )}
             </div>
@@ -663,7 +713,7 @@ potencia_bateria: ft.potencia_bateria || '',
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => handleSave(false)}
+            onClick={() => handleSave('borrador')}
             disabled={saving}
             title="Guarda el producto sin publicarlo en la tienda"
             className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
@@ -671,8 +721,19 @@ potencia_bateria: ft.potencia_bateria || '',
             <FileText className="w-4 h-4" />
             Guardar como borrador
           </button>
+          {esFuturo(form.publicar_en) && (
+            <button
+              onClick={() => handleSave('programar')}
+              disabled={saving}
+              title="Guarda el borrador y lo publica en la fecha elegida"
+              className="flex items-center gap-2 px-4 py-2.5 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              <Calendar className="w-4 h-4" />
+              Programar
+            </button>
+          )}
           <button
-            onClick={() => handleSave(true)}
+            onClick={() => handleSave('publicar')}
             disabled={saving}
             className="flex items-center gap-2 px-5 py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-50"
           >
@@ -706,6 +767,30 @@ potencia_bateria: ft.potencia_bateria || '',
           <Field label="Video (YouTube)">
             <input value={form.video_id} onChange={(e) => setForm({ ...form, video_id: e.target.value })} className="input" placeholder="Pega el enlace: https://youtu.be/Zxkomo2Ccs0" />
             <p className="text-xs text-gray-400 mt-1">Acepta enlace completo o solo el ID. La miniatura aparece automáticamente.</p>
+          </Field>
+          <Field label="Programar publicación (opcional)" full>
+            <div className="flex items-center gap-3 flex-wrap">
+              <input
+                type="datetime-local"
+                value={form.publicar_en || ''}
+                onChange={(e) => setForm({ ...form, publicar_en: e.target.value })}
+                className="input max-w-xs"
+              />
+              {form.publicar_en && (
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, publicar_en: '' })}
+                  className="text-xs text-gray-500 hover:text-red-600 underline"
+                >
+                  Quitar agenda
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Si eliges una fecha futura, usa el botón «Programar»: el producto permanecerá oculto
+              hasta ese momento y se publicará solo. Con «Guardar y publicar» se publica de inmediato
+              y se limpia la agenda.
+            </p>
           </Field>
           <Field label="Descripción" full>
             <textarea rows={3} value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} className="input" placeholder="Descripción del producto..." />
@@ -979,7 +1064,7 @@ potencia_bateria: ft.potencia_bateria || '',
       {/* Save buttons bottom */}
       <div className="flex justify-end gap-3 mt-8 pb-8">
         <button
-          onClick={() => handleSave(false)}
+          onClick={() => handleSave('borrador')}
           disabled={saving}
           title="Guarda el producto sin publicarlo en la tienda"
           className="flex items-center gap-2 px-5 py-3 border border-gray-200 bg-white text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
@@ -987,8 +1072,19 @@ potencia_bateria: ft.potencia_bateria || '',
           <FileText className="w-4 h-4" />
           Guardar como borrador
         </button>
+        {esFuturo(form.publicar_en) && (
+          <button
+            onClick={() => handleSave('programar')}
+            disabled={saving}
+            title="Guarda el borrador y lo publica en la fecha elegida"
+            className="flex items-center gap-2 px-5 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
+          >
+            <Calendar className="w-4 h-4" />
+            Programar publicación
+          </button>
+        )}
         <button
-          onClick={() => handleSave(true)}
+          onClick={() => handleSave('publicar')}
           disabled={saving}
           className="flex items-center gap-2 px-6 py-3 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-50"
         >

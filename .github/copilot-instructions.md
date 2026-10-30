@@ -119,6 +119,11 @@ No introduzcas librerías de terceros sin:
 - **Variables de entorno:** `.env` sólo en `.gitignore`; `.env.example` es la plantilla. Nunca
   escribas un secreto en el repo.
 - **Comentarios y textos de UI en español (es-AR).** Los identificadores de código, en inglés.
+- **`lib/icons.jsx` es un archivo COMPARTIDO por sincronización** (`npm run sync:shared`, desde el repo hermano): lo define el sitio público y acá se **sobrescribe** la copia.
+  - Si este repo importa un icono que el canónico no exporta, el build falla con `MISSING_EXPORT`. **Eso no es "un icono duplicado": no borres el export.**
+  - Icono nuevo → agregarlo en `greenline/frontend/lib/icons.jsx` y sincronizar. Nunca sólo en el panel.
+  - Alias con el mismo dibujo (`Image`/`ImageIcon`, `Gauge`/`LayoutDashboard`, `Shield`/`ShieldCheck`, `Table`/`TableIcon`…) son intencionales: no los "limpies".
+  - `npm test` corre `frontend/src/lib/icons.test.js`, que valida exports faltantes y duplicados con el archivo y el nombre exactos.
 
 ---
 

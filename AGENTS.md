@@ -61,7 +61,7 @@ Convenciones de estos módulos:
 - Las consultas y mutaciones del panel se hacen a través de `frontend/src/lib/supabase.js` (Supabase JS) y `frontend/src/lib/api.js` (API REST del backend, `VITE_API_URL`).
 - El schema, las migraciones y las políticas RLS viven en el **repo hermano** `greenline` (carpeta `supabase/`). Fuente única de verdad del RLS del panel: `supabase/migrations/20260914160000_unificacion_seguridad_seguridad_reportes.sql`; denegado por defecto sobre tablas de auth: `supabase/rls-auth-tablas.sql`.
 - El backend (auth JWT/OTP/2FA/TOTP, blog, métricas, stock, reclamaciones) vive en `greenline/backend/`. No duplicar endpoints ni lógica de servidor en este repo.
-- **Estado de publicación de los productos:** la columna `productos.activo` (mismo patrón que `greenline_posts.active`) distingue *Publicado* de *Borrador*. `activo = false` = el producto se guarda en el panel pero **no** aparece en la tienda ni en la web: lo filtran la vista `vista_productos_web` y la política RLS «Lectura pública de productos», ambas en el repo hermano (`greenline/supabase/migrations/20261021160000_productos_borrador.sql`). El panel lo ve porque sus políticas usan `es_admin_panel()`. La regresión está cubierta en `greenline/backend/scripts/rls-smoke.mjs` (sección 6).
+- **Estado de publicación de los productos:** las columnas `productos.activo` y `productos.publicar_en` (mismo patrón que `greenline_posts.active` + fecha) distinguen tres estados: *Publicado* (`activo = true`), *Programado* (`activo = false` y `publicar_en` en el futuro) y *Borrador* (`activo = false` sin agenda). Un producto programado se publica solo cuando llega la hora: lo sirven la vista `vista_productos_web` y la política RLS «Lectura pública de productos» (ambas en el repo hermano, migración `20270307000000_productos_publicacion_agendada.sql`), y el backend materializa `activo = true, publicar_en = NULL` cada 5 min con `backend/scripts/publicar-productos-agendados.mjs` (scheduler in-app). El panel lo ve todo porque sus políticas usan `es_admin_panel()`. La regresión está cubierta en `greenline/backend/scripts/rls-smoke.mjs` (secciones 6 y 7).
 - No exponer credenciales, claves de API o secretos en el código fuente. Los `.env` van sólo en `.gitignore` (nunca al repo); usar `.env.example` como plantilla.
 
 ## 3. Gestión de Imágenes y Assets
@@ -79,7 +79,7 @@ Convenciones de estos módulos:
 | `npm run preview` | Vista previa del build servida por Vite |
 | `npm run lint` | Oxlint sobre `frontend/src` + `scripts/auditar-sinks-html.mjs` (falla si hay un `innerHTML` sin `sanitizeHtml`) |
 | `npm run lint:html` | Sólo la auditoría de sinks de HTML |
-| `npm test` | `node --test` sobre `frontend/src/lib/*.test.js` + `frontend/src/lib/vault/*.test.js` (suite de criptografía de la bóveda, V5; sin `**`: no expande en `sh`/Node 20) |
+| `npm test` | `node --test` sobre `frontend/src/lib/*.test.js` + `frontend/src/lib/vault/*.test.js` (suite de criptografía de la bóveda V5 + contrato de iconos; sin `**`: no expande en `sh`/Node 20) |
 | `npm run pdf:ceo` | Regenera `docs/Propuesta_CEO/presentacion-ceo.pdf` (requiere `npm i -D puppeteer` local) |
 | `npm run emails:limpiar` | `scripts/limpiar-emails.mjs` — limpia/deduplica CSVs de `docs/emails/` |
 | `npm run emails:lote` | `scripts/gen-lote-n8n.mjs` — genera la lista embebida del workflow n8n |
@@ -137,8 +137,7 @@ Lo que viene de Drive queda marcado en `observaciones`/`notas` con
 ## 5. Control de Calidad y Verificación
 - Antes de proponer cambios mayores en este repo:
   - `npm run lint` — sin errores (los warnings no bloquean).
-  - `npm test` — suite de criptografía de `frontend/src/lib/vault/` en verde.
-  - `npm run build` (frontend del panel) — debe compilar sin errores.
+  - `npm test` — suite de criptografía de `frontend/src/lib/vault/` en verde.  - `npm run build` (frontend del panel) — debe compilar sin errores.
   - Smoke del SPA: `npm run preview` y comprobar que `/`, `/login`, `/admin` y `/fase-2-implementacion` montan sin errores de runtime.
   - Si se toca `dashboard/`: `.venv\Scripts\python -m unittest discover -s . -p "test_*.py"` y `.venv\Scripts\python smoke.py` en verde; luego arrancar `.venv\Scripts\python app.py` y comprobar `/` y `/api/datos/<id>` con una hoja pública.
   - Si se toca lógica que depende del backend/RLS, verificar también en el repo hermano `greenline`: `npm run lint`, `npm run security-smoke`, `npm test` (en `backend/`).
@@ -146,7 +145,14 @@ Lo que viene de Drive queda marcado en `observaciones`/`notas` con
   - Si cambian los datos de Drive del taller: `npm run import:taller --dry-run` (en `backend/`) para ver el plan (conteos, mapeos y huecos) y luego sin `--dry-run` para escribir. Reejecutarlo no duplica filas.
 - Mantener la concisión y la precisión técnica en las respuestas y documentación.
 
-## 6. Despliegue
+## 6. Archivo de iconos (`frontend/src/lib/icons.jsx`)
+- Es un archivo **compartido por sincronización**: lo define el sitio público (`greenline/frontend/lib/icons.jsx`) y `npm run sync:shared` **sobrescribe** la copia de este repo. El canónico es el del sitio.
+- Consecuencia: **un export agregado sólo en el panel desaparece en la siguiente sincronización** y rompe el build (`MISSING_EXPORT` en Vite). Ese error **no** significa "icono duplicado": borrar el export es lo contrario de la solución.
+- Para un icono nuevo que use el panel: agregarlo en `greenline/frontend/lib/icons.jsx` y correr `npm run sync:shared` (desde el repo hermano). Nunca sólo en el panel.
+- Exports distintos que apuntan al mismo icono de FontAwesome (`Image`/`ImageIcon`, `Gauge`/`LayoutDashboard`, `Shield`/`ShieldCheck`, `Table`/`TableIcon`…) son **alias intencionales**: no son duplicados y no se "limpian".
+- `npm test` incluye `frontend/src/lib/icons.test.js`: falla si algún componente importa un icono que `lib/icons.jsx` no exporta, o si el archivo declara dos veces el mismo export (duplicado real, típico de un merge). El mensaje indica exactamente qué archivo y qué nombre faltan.
+
+## 7. Despliegue
 - **El panel es una SPA propia:** build `npm run build`, salida `frontend/dist/`, `noindex,nofollow` en `index.html`. Desplegada en **Vercel**.
 - **Dashboard Flask:** función Python serverless en el mismo proyecto Vercel, bajo `/dash` (`api/index.py` + `requirements.txt` raíz + rewrites en `vercel.json`). El ERP lo embebe same-origin con `<iframe src="/dash/">`. En local usa `http://127.0.0.1:5000` (ver `dashboard/README.md` §8).
 - **Backend (Render)** en el repo hermano; el frontend lo apunta con `VITE_API_URL` (ver `frontend/.env.example`).

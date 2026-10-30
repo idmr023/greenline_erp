@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { authAPI } from '../../lib/api';
 import { PANEL_ROLES, rolesDe, tieneRol } from '../../lib/roles';
 import AdminDashboard from './AdminDashboard';
+import AdminDashboardHub from './AdminDashboardHub';
 import DashboardEmbedded from '../../pages/DashboardEmbedded';
 import AdminProductos from './AdminProductos';
 import AdminProductoForm from './AdminProductoForm';
@@ -33,6 +34,7 @@ import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversa
 const VIEWS = {
   DASHBOARD: 'dashboard',
   SERVICIO_TECNICO: 'servicio_tecnico',
+  SERVICIO_TECNICO_HUB: 'servicio_tecnico_hub',
   PRODUCTOS: 'productos',
   PRODUCTO_FORM: 'producto_form',
   COLORES: 'colores',
@@ -66,7 +68,7 @@ const NAV_ITEMS = [
   // Servicio Técnico: dashboard Flask embebido con slug fijo. Sin `href` a
   // propósito: se navega con `navigateTo` para no salir del layout con sidebar
   // (un `href` + window.location.href recargaría a una ruta sin sidebar).
-  { key: VIEWS.SERVICIO_TECNICO, label: 'Servicio Técnico', icon: Wrench, perm: 'menu:servicio_tecnico' },
+  { key: VIEWS.SERVICIO_TECNICO, label: 'Servicio Técnico', icon: Wrench, perm: 'menu:servicio_tecnico', onClickToHub: true },
   { key: VIEWS.PRODUCTOS, label: 'Productos', icon: Package, perm: 'menu:productos' },
   { key: VIEWS.COLORES, label: 'Colores', icon: Palette, perm: 'menu:colores' },
   { key: VIEWS.BLOG, label: 'Blog', icon: FileText, perm: 'menu:blog' },
@@ -379,11 +381,7 @@ export default function AdminPanel() {
       {/* Main content */}
       <main className="flex-1 overflow-auto">
         {view === VIEWS.DASHBOARD && (
-          window.location.pathname.includes('/admin/dashboard-embed') ? (
-            <DashboardEmbedded />
-          ) : (
-            <AdminDashboard onNavigate={navigateTo} />
-          )
+          <AdminDashboardHub onNavigate={navigateTo} />
         )}
         {view === VIEWS.SERVICIO_TECNICO && (
           <DashboardEmbedded key="servicio-tecnico" slugInicial="servicio-tecnico" />

@@ -7,6 +7,18 @@
   <h1>Servicio Técnico por Sede</h1>
   <p class="sutil">Generado el {{ generado }} · <a href="{{ url_for('index') }}">volver al selector</a></p>
 
+  {# Filtro por mes (recarga la página con ?mes=nombre_pestaña) #}
+  <form method="get" action="{{ url_for('dashboard_servicio_tecnico') }}" class="filtro-mes">
+    <label>Mes
+      <select name="mes" onchange="this.form.submit()">
+        <option value="">Todos los meses</option>
+        {% for m in meses %}
+        <option value="{{ m }}" {% if m == mes_seleccionado %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+
   {# ============ KPIs GENERALES ============ #}
   <div class="tarjetas">
     <div class="tarjeta kpi">
@@ -60,6 +72,7 @@
     <table>
       <thead>
         <tr>
+          {% if not mes_seleccionado %}<th>Mes</th>{% endif %}
           <th>Sede</th>
           <th>Técnicos</th>
           <th>Servicios</th>
@@ -73,6 +86,7 @@
       <tbody>
         {% for s in sedes %}
         <tr>
+          {% if not mes_seleccionado %}<td>{{ s.mes }}</td>{% endif %}
           <td>{{ s.sede }}</td>
           <td>{{ s.tecnicos }}</td>
           <td>{{ s.servicios }}</td>
@@ -111,6 +125,7 @@
     <table>
       <thead>
         <tr>
+          {% if not mes_seleccionado %}<th>Mes</th>{% endif %}
           <th>Sede</th>
           <th>Técnico</th>
           <th>Nivel</th>
@@ -125,6 +140,7 @@
       <tbody>
         {% for t in tecnicos %}
         <tr>
+          {% if not mes_seleccionado %}<td>{{ t.mes }}</td>{% endif %}
           <td>{{ t.sede }}</td>
           <td>{{ t.nombre }}</td>
           <td>{{ t.nivel }}</td>
@@ -180,7 +196,7 @@
 <script src="{{ url_for('static', filename='js/taller.js') }}"></script>
 <script>
   const sedes = {{ sedes | tojson }};
-  const etiquetas = sedes.map(s => s.sede.replace(/^\d+-/, ''));
+  const etiquetas = sedes.map(s => s.sede.replace(/^\\d+-/, ''));
   const coloresSede = ['#2e7d32', '#1565c0', '#ef6c00', '#6a1b9a', '#c62828', '#00838f', '#4e342e'];
 
   // Gráfico 1: Servicios por sede

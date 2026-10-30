@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { authAPI } from '../../lib/api';
+import { mensajeDeError } from '../../lib/apiErrors';
 import EmailFactorVerify from './EmailFactorVerify';
 import { ShieldCheck, ArrowLeft, AlertCircle, Loader2, Mail } from '../../lib/icons';
 
 /**
  * Segundo factor del login. Dos vías sobre el MISMO tempToken:
  *  - `totp`:  el código de la app de autenticación (por defecto).
- *  - `email`: código de 6 dígitos enviado al correo; se envía SOLO al entrar
+ *  - `email`: código de 8 dígitos enviado al correo; se envía SOLO al entrar
  *             en la pestaña (twoFALimiter: 5 peticiones / 5 minutos, cuota
  *             compartida con setup y confirm).
  */
@@ -31,7 +32,7 @@ export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
         setEmailMasked(res.emailMasked || '');
         setAviso(res.message || 'Código enviado');
       } catch (err) {
-        setError(err.error || err.message || 'No se pudo enviar el código al correo');
+        setError(mensajeDeError(err, 'No se pudo enviar el código al correo'));
       }
     })();
   }, [modo, tempToken]);
@@ -90,7 +91,10 @@ export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
       }
       onVerified({ accessToken: res.accessToken, refreshToken: res.refreshToken }, res.user);
     } catch (err) {
-      setError(err.error || err.message || 'Código inválido');
+      // El mensaje distingue "tu código no vale" de "el servidor falló":
+      // el 2FA sólo admite 5 intentos cada 5 minutos, así que un error
+      // del servidor no debe invite a reintentar como si fuera la clave.
+      setError(mensajeDeError(err, 'No se pudo verificar el código. Revisa tu conexión.'));
     } finally {
       setVerificando(false);
     }

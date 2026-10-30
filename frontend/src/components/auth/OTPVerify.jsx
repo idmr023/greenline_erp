@@ -3,7 +3,7 @@ import { authAPI } from '../../lib/api';
 import { Mail, ArrowLeft, AlertCircle, Loader2 } from '../../lib/icons';
 
 export default function OTPVerify({ email, onVerified, onBack }) {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState(['', '', '', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const inputs = useRef([]);
@@ -15,7 +15,7 @@ export default function OTPVerify({ email, onVerified, onBack }) {
     const next = [...code];
     next[index] = value.slice(-1);
     setCode(next);
-    if (value && index < 5) inputs.current[index + 1]?.focus();
+    if (value && index < 7) inputs.current[index + 1]?.focus();
   };
 
   const handleKeyDown = (index, e) => {
@@ -26,18 +26,18 @@ export default function OTPVerify({ email, onVerified, onBack }) {
 
   const handlePaste = (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
     if (pasted) {
-      const next = pasted.split('').concat(Array(6).fill('')).slice(0, 6);
+      const next = pasted.split('').concat(Array(8).fill('')).slice(0, 8);
       setCode(next);
-      inputs.current[Math.min(pasted.length, 5)]?.focus();
+      inputs.current[Math.min(pasted.length, 7)]?.focus();
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const joined = code.join('');
-    if (joined.length !== 6) { setError('Ingresa los 6 dígitos'); return; }
+    if (joined.length !== 8) { setError('Ingresa los 8 dígitos'); return; }
 
     setLoading(true);
     setError('');
@@ -66,7 +66,7 @@ export default function OTPVerify({ email, onVerified, onBack }) {
             </div>
             <h2 className="text-lg font-bold text-gray-900">Código de verificación</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Enviamos un código de 6 dígitos a<br />
+              Enviamos un código de 8 dígitos a<br />
               <span className="font-medium text-gray-700">{email}</span>
             </p>
           </div>
@@ -79,7 +79,7 @@ export default function OTPVerify({ email, onVerified, onBack }) {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex justify-center gap-2">
+            <div className="flex justify-center gap-1">
               {code.map((digit, i) => (
                 <input
                   key={i}
@@ -91,7 +91,8 @@ export default function OTPVerify({ email, onVerified, onBack }) {
                   onChange={(e) => handleChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
                   onPaste={handlePaste}
-                  className="w-11 h-12 text-center text-lg font-bold border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  aria-label={`Dígito ${i + 1} del código`}
+                  className="w-7 sm:w-9 h-12 text-center text-base sm:text-lg font-bold border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
                 />
               ))}
             </div>

@@ -2,7 +2,11 @@ import { Helmet } from 'react-helmet-async';
 import { CONTACT, BRAND } from '../lib/config';
 import { LOGO } from '../lib/images';
 
-const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://greenlineperu.com';
+// Dominio público del sitio. El que sirve producción es `www.glperu.com`
+// (Render + Cloudflare): el canonical y el og:url deben apuntar ahí, o los
+// buscadores consolidan el sitio en un dominio que no responde.
+// Se puede sobreescribir con VITE_SITE_URL sin tocar el código.
+const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://www.glperu.com';
 const DEFAULT_IMAGE = LOGO;
 
 /**

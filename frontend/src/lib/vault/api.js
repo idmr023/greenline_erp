@@ -181,6 +181,24 @@ export async function cargarBoveda() {
       supabase.from(TABLAS.items).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
     ]);
 
+//   console.log('[DIAGNÓSTICO BÓVEDA]', {
+//   uid,
+//   bovedas: (bovedas || []).map(v => ({
+//     id: v.id,
+//     owner_id: v.owner_id,
+//   })),
+//   claves: (claves || []).map(k => ({
+//     vault_id: k.vault_id,
+//     user_id: k.user_id,
+//     fuente: k.fuente,
+//     key_version: k.key_version,
+//     revoked_at: k.revoked_at,
+//   })),
+//   errorBovedas: e1,
+//   errorClaves: e2,
+//   errorItems: e3,
+// });
+
   if (e1) throw traducir(e1, TABLAS.bovedas);
   if (e2) throw traducir(e2, TABLAS.claves);
   if (e2b) throw traducir(e2b, TABLAS.claves);
@@ -243,6 +261,32 @@ export async function cargarBoveda() {
   // La que se usa para desbloquear: la propia si existe; si no, el legado.
   const filaClave = filaPropia || filaLegado;
 
+  // console.log('[DIAGNÓSTICO SELECCIÓN DEK]', {
+  //   uid,
+  //   bovedaSeleccionada: boveda?.id,
+  //   ownerBoveda: boveda?.owner_id,
+
+  //   clavesVisibles: clavesVisibles.map(k => ({
+  //     id: k.id,
+  //     vault_id: k.vault_id,
+  //     user_id: k.user_id,
+  //     fuente: k.fuente,
+  //     key_version: k.key_version,
+  //     proposito: k.proposito,
+  //     revoked_at: k.revoked_at,
+  //   })),
+
+  //   propias: propias.length,
+  //   legado: legado.length,
+
+  //   filaPropia: filaPropia?.id ?? null,
+  //   filaLegado: filaLegado?.id ?? null,
+  //   filaClave: filaClave?.id ?? null,
+
+  //   clavePropiaEncontrada: Boolean(filaPropia),
+  //   claveEncontrada: Boolean(filaClave),
+  // });
+
   // `claves` es el conjunto que se reenvuelve bajo la recovery key (§25):
   // UNA envoltura por keyVersion (la propia pisa a la legado — envuelven la
   // MISMA DEK), para no chocar con el índice único de la tabla.
@@ -291,7 +335,7 @@ export async function cargarBoveda() {
       },
       envoltura: envolturaDeFila(fila),
       // roles_visibles: roles del servidor que pueden ver esta contraseña.
-      rolesVisibles: Array.isArray(fila.roles_visibles) ? fila.roles_visibles : null,
+      // rolesVisibles: Array.isArray(fila.roles_visibles) ? fila.roles_visibles : null,
     })),
     parametros: boveda
       ? {
@@ -327,7 +371,9 @@ export async function cargarBoveda() {
     salt: boveda ? aBytes(boveda.kdf_salt) : null,
     bovedaId: boveda?.id ?? null,
     rekeyCount: boveda?.rekey_count ?? 0,
+
   };
+
 }
 
 /** §22 — crea la bóveda con su DEK recién envuelta (un solo paso atómico de cliente). */
@@ -524,7 +570,9 @@ export async function eliminarBovedaPropia(vaultId) {
   const [{ count: nClaves, error: eClaves }, { count: nItems, error: eItems }] = await Promise.all([
     supabase.from(TABLAS.claves).select('id', { count: 'exact', head: true }).eq('vault_id', vaultId),
     supabase.from(TABLAS.items).select('id', { count: 'exact', head: true }).eq('vault_id', vaultId),
+    
   ]);
+
   if (eClaves) throw traducir(eClaves, TABLAS.claves);
   if (eItems) throw traducir(eItems, TABLAS.items);
   if (nClaves > 0 || nItems > 0) {

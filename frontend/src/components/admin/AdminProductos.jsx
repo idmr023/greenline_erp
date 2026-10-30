@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff } from '../../lib/icons';
+import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff, Calendar } from '../../lib/icons';
 import { ColorDot } from '../ColorDot';
 import AdminStockImportar from './AdminStockImportar';
+import {
+  estadoPublicacion,
+  esFuturo,
+  fechaAgendadaLegible,
+  isoADatetimeLocal,
+} from '../../utils/publicacionAgendada';
 
 export default function AdminProductos({ onEdit, onNew }) {
     const [productos, setProductos] = useState([]);
@@ -23,7 +29,7 @@ export default function AdminProductos({ onEdit, onNew }) {
 
     const [prodRes, catRes, coloresRes] = await Promise.all([
       supabase.from('productos').select(`
-        id, nombre, slug, precio_actual, precio_original, destacado, disponible, activo, created_at,
+        id, nombre, slug, precio_actual, precio_original, destacado, disponible, activo, publicar_en, created_at,
         categoria:categorias(id, nombre),
         imagenes(id),
         color_rel:prod_color_rel(color_id, stock, visible, color:colores(id, nombre, hex_code))
@@ -60,8 +66,9 @@ export default function AdminProductos({ onEdit, onNew }) {
       categoria_nombre: p.categoria?.nombre || 'Sin categoría',
       total_imagenes: (p.imagenes || []).length,
       disponible: p.disponible !== false,
-      // Estado de publicación: false = borrador (oculto de la tienda).
+      // Estado de publicación: false = borrador/programado (oculto de la tienda).
       activo: p.activo !== false,
+      publicar_en: p.publicar_en || null,
       stock_total: (p.color_rel || []).reduce(
         (acc, cr) => acc + (Math.max(0, Math.trunc(Number(cr.stock))) || 0),
         0,
@@ -75,14 +82,20 @@ export default function AdminProductos({ onEdit, onNew }) {
     setLoading(false);
   }
 
-  const borradores = productos.filter((p) => !p.activo).length;
+  const borradores = productos.filter((p) => estadoPublicacion(p) === 'borrador').length;
+  const programados = productos.filter(
+    (p) => estadoPublicacion(p) === 'programado' && esFuturo(isoADatetimeLocal(p.publicar_en)),
+  ).length;
 
   const filtered = productos.filter((p) => {
     const matchSearch = !search || p.nombre.toLowerCase().includes(search.toLowerCase());
     const matchCat = !filterCat || p.categoria_nombre === filterCat;
+    const estado = estadoPublicacion(p);
     const matchEstado =
       !filterEstado ||
-      (filterEstado === 'publicados' ? p.activo : !p.activo);
+      (filterEstado === 'publicados' && estado === 'publicado') ||
+      (filterEstado === 'programados' && estado === 'programado') ||
+      (filterEstado === 'borradores' && (estado === 'borrador' || estado === 'programado'));
     return matchSearch && matchCat && matchEstado;
   });
 
@@ -92,7 +105,10 @@ export default function AdminProductos({ onEdit, onNew }) {
     load();
   };
 
-  /** Publica un borrador o lo retira de la tienda, sin abrir el formulario. */
+  /**
+   * Publica un borrador/programado o lo retira de la tienda, sin abrir el
+   * formulario. Al cambiar el estado se limpia la agenda (publicar_en = NULL).
+   */
   const handleToggleEstado = async (p) => {
     const publicar = !p.activo;
     const mensaje = publicar
@@ -101,13 +117,57 @@ export default function AdminProductos({ onEdit, onNew }) {
     if (!confirm(mensaje)) return;
     const { error } = await supabase
       .from('productos')
-      .update({ activo: publicar })
+      .update({ activo: publicar, publicar_en: null })
       .eq('id', p.id);
     if (error) {
       alert(`No se pudo cambiar el estado: ${error.message}`);
       return;
     }
     load();
+  };
+
+  /** Cancela la agenda y deja el producto como borrador (oculto). */
+  const handleCancelarAgenda = async (p) => {
+    if (!confirm(`¿Cancelar la publicación programada de "${p.nombre}"? Quedará como borrador.`)) return;
+    const { error } = await supabase
+      .from('productos')
+      .update({ activo: false, publicar_en: null })
+      .eq('id', p.id);
+    if (error) {
+      alert(`No se pudo cancelar la agenda: ${error.message}`);
+      return;
+    }
+    load();
+  };
+
+  /** Badge de estado: Publicado / Programado / Borrador. */
+  const badgeEstado = (p) => {
+    const estado = estadoPublicacion(p);
+    if (estado === 'publicado') {
+      return (
+        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+          Publicado
+        </span>
+      );
+    }
+    if (estado === 'programado') {
+      const futuro = esFuturo(isoADatetimeLocal(p.publicar_en));
+      return (
+        <span
+          className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700"
+          title={futuro
+            ? `Se publicará el ${fechaAgendadaLegible(p.publicar_en)}`
+            : `Agendado para ${fechaAgendadaLegible(p.publicar_en)} (pendiente de materializar)`}
+        >
+          Programado
+        </span>
+      );
+    }
+    return (
+      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+        Borrador
+      </span>
+    );
   };
 
   return (
@@ -118,6 +178,7 @@ export default function AdminProductos({ onEdit, onNew }) {
           <p className="text-sm text-gray-500 mt-1">
             {productos.length} productos en total
             {borradores > 0 && ` · ${borradores} en borrador`}
+            {programados > 0 && ` · ${programados} programados`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -168,6 +229,7 @@ export default function AdminProductos({ onEdit, onNew }) {
         >
           <option value="">Todos los estados</option>
           <option value="publicados">Publicados</option>
+          <option value="programados">Programados</option>
           <option value="borradores">Borradores</option>
         </select>
       </div>
@@ -201,11 +263,12 @@ export default function AdminProductos({ onEdit, onNew }) {
                      S/ {Number(p.precio_actual).toLocaleString('es-PE')}
                    </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        p.activo ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {p.activo ? 'Publicado' : 'Borrador'}
-                      </span>
+                      {badgeEstado(p)}
+                      {estadoPublicacion(p) === 'programado' && esFuturo(isoADatetimeLocal(p.publicar_en)) && (
+                        <div className="text-[11px] text-blue-600 mt-0.5">
+                          {fechaAgendadaLegible(p.publicar_en)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -237,6 +300,15 @@ export default function AdminProductos({ onEdit, onNew }) {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {estadoPublicacion(p) === 'programado' && (
+                          <button
+                            onClick={() => handleCancelarAgenda(p)}
+                            className="p-1.5 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+                            title="Cancelar publicación programada"
+                          >
+                            <Calendar className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleToggleEstado(p)}
                           className={`p-1.5 rounded-lg transition-colors ${

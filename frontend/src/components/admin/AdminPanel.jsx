@@ -167,6 +167,7 @@ export default function AdminPanel() {
   const [view, setView] = useState(getInitialView);
   const [editingId, setEditingId] = useState(null);
   const [supabaseReady, setSupabaseReady] = useState(false);
+  const [supabaseError, setSupabaseError] = useState('');
   const [hasSupabaseSession, setHasSupabaseSession] = useState(false);
   const [grants, setGrants] = useState([]);
   const [grantsLoading, setGrantsLoading] = useState(false);
@@ -218,6 +219,7 @@ export default function AdminPanel() {
         }
       } catch {
         if (!cancelado) {
+          setSupabaseError('No se pudo crear la sesión de datos. Verifica que el backend tenga configurada la conexión de Supabase.');
           setHasSupabaseSession(false);
           setSupabaseReady(true);
         }
@@ -282,6 +284,7 @@ export default function AdminPanel() {
             Cierra sesión y vuelve a ingresar. La conexión con el panel de datos
             se realiza automáticamente durante el inicio de sesión.
           </p>
+          {supabaseError && <p className="text-xs text-red-600 mt-3">{supabaseError}</p>}
           <button
             type="button"
             onClick={() => window.location.assign(loginDesdeLocation(window.location))}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authAPI } from '../lib/api';
 import { supabase } from '../lib/supabase';
+import { conectarPanelDatos } from '../lib/supabaseLink';
 import { ADMIN_ROLES, STAFF_ROLES, rolesDe, tieneRol } from '../lib/roles';
 import { abilityDe, ABILITY_VACIA } from '../lib/permissions';
 
@@ -27,6 +28,23 @@ const CLAVE_INICIO = 'gl_session_inicio';
 /** Marca de «la sesión se cerró por caducar» para avisar en /login. */
 const CLAVE_AVISO = 'gl_sesion_expirada';
 
+function leerHandoff() {
+  if (typeof window === 'undefined' || !window.location.hash.startsWith('#gl-session=')) return null;
+  try {
+    const params = new URLSearchParams(
+      decodeURIComponent(window.location.hash.slice('#gl-session='.length)),
+    );
+    const accessToken = params.get('access');
+    if (!accessToken) return null;
+    const refreshToken = params.get('refresh') || null;
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    return { tokens: { accessToken, refreshToken }, user: null };
+  } catch {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    return null;
+  }
+}
+
 function leerInicio() {
   try {
     const v = Number(sessionStorage.getItem(CLAVE_INICIO));
@@ -52,6 +70,8 @@ function borrarClavesSesion() {
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function loadStored() {
+  const handoff = leerHandoff();
+  if (handoff) return handoff;
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -175,6 +195,21 @@ export function AuthProvider({ children }) {
     return false;
   }, [refreshToken, user, logout]);
 
+  /**
+   * Sesión de DATOS del panel (Supabase, rol `authenticated`): el RLS lo
+   * evalúa con auth.uid(), así que sin ella AdminPanel no monta ("No se pudo
+   * conectar el panel"). Se pide al backend con el token de esta sesión: aquí
+   * no hay contraseña, porque el login vive en el sitio público. Si la
+   * conexión falla, el panel muestra su aviso; la sesión del panel sigue viva.
+   */
+  const conectarDatos = useCallback(async (token) => {
+    try {
+      await conectarPanelDatos(token);
+    } catch {
+      // Sin sesión de datos: el AdminPanel explica que no pudo conectar.
+    }
+  }, []);
+
   useEffect(() => {
     const stored = loadStored();
     if (stored?.tokens?.accessToken && stored?.user) {
@@ -190,6 +225,27 @@ export function AuthProvider({ children }) {
           // En paralelo a nada: se espera aquí para que `loading` cubra
           // también los permisos (la ability no puede llegar tarde al menú).
           await cargarPermisos(stored.tokens.accessToken);
+          await conectarDatos(stored.tokens.accessToken);
+        })
+        .catch(() => {
+          setPermissions(null);
+          persist(null);
+          borrarClavesSesion();
+        })
+        .finally(() => setLoading(false));
+    } else if (stored?.tokens?.accessToken) {
+      // Traspaso desde el sitio público: la sesión llega por el fragmento y
+      // el usuario se pide al backend (aquí no venía).
+      authAPI.me(stored.tokens.accessToken)
+        .then(async (res) => {
+          const userData = res.user;
+          setAccessToken(stored.tokens.accessToken);
+          setRefreshToken(stored.tokens.refreshToken);
+          setUser(userData);
+          persist({ tokens: stored.tokens, user: userData });
+          if (!leerInicio()) escribirInicio(Date.now());
+          await cargarPermisos(stored.tokens.accessToken);
+          await conectarDatos(stored.tokens.accessToken);
         })
         .catch(() => {
           setPermissions(null);
@@ -200,7 +256,7 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false);
     }
-  }, [cargarPermisos]);
+  }, [cargarPermisos, conectarDatos]);
 
   // Refs para que el temporizador de 1 hora no se reinicie con cada
   // rotación de tokens (refreshAccessToken/logout cambian de identidad en

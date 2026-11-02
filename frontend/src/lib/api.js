@@ -240,6 +240,17 @@ export const authAPI = {
       body: JSON.stringify({ password }),
     }),
 
+  // Sesión de Supabase Auth para el "panel de datos" (rol `authenticated`:
+  // el RLS del panel se evalúa con auth.uid()). El login vive en el sitio
+  // público, así que el panel recibe los tokens del backend por el fragmento
+  // de traspaso pero NO la contraseña: esta ruta le entrega la sesión de
+  // datos que necesita para montar.
+  supabaseSession: (accessToken) =>
+    request('/auth/supabase-session', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+    }),
+
   panelGrants: (accessToken) =>
     request('/auth/panel-grants', { headers: authHeaders(accessToken) }),
 

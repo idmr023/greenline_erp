@@ -3,6 +3,7 @@ import { useAbility } from '@casl/react';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from '../lib/icons';
 import { rolesDe, tieneRol } from '../lib/roles';
+import { loginConNext, nextDesdeLocation } from '../lib/nextRoute';
 
 /**
  * Guard de sesión + autorización del panel.
@@ -29,7 +30,13 @@ export default function ProtectedRoute({ children, requiredRoles = null, guardia
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // El destino de vuelta viaja en la URL (?next=) y no en `location.state`:
+    // así sobrevive a una recarga del formulario de login y es compartible.
+    // Se lee `window.location` porque es la dirección real de la barra (la
+    // del router puede ir atrasada si alguien cambia la URL a mano); la
+    // del router queda como respaldo.
+    const destino = nextDesdeLocation(window.location) || nextDesdeLocation(location);
+    return <Navigate to={loginConNext(destino)} replace />;
   }
 
   // Multi-rol: basta con que ALGUNO de los roles efectivos esté permitido.

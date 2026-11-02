@@ -1,43 +1,97 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../lib/api';
 import { linkSupabase } from '../lib/supabaseLink';
+import { pantallaPostLogin } from '../lib/nextRoute';
 import SEOHead from '../components/SEOHead';
 import OTPVerify from '../components/auth/OTPVerify';
 import TwoFactorSetup from '../components/auth/TwoFactorSetup';
 import TwoFactorVerify from '../components/auth/TwoFactorVerify';
 import { Lock, Mail, AlertCircle } from '../lib/icons';
 import { rolesDe, tieneRol } from '../lib/roles';
-const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://www.glperu.com';
+import PageLoader from '../PageLoader';
+const SITE_URL = import.meta.env.VITE_SITE_URL
+  || (window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://www.glperu.com');
+
+function rutaCliente(next) {
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
+  return next;
+}
 
 export default function LoginPage() {
-  const { saveSession, sesionExpirada } = useAuth();
+  useEffect(() => {
+    const publicUrl = import.meta.env.VITE_SITE_URL
+      || (window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://www.glperu.com');
+    const next = new URLSearchParams(window.location.search).get('next');
+    window.location.replace(`${publicUrl.replace(/\/+$/, '')}/login${next ? `?next=${encodeURIComponent(next)}` : ''}`);
+  }, []);
+
+  const { user, loading, saveSession, sesionExpirada } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // A dónde volver tras entrar. Viene en la URL (?next=) y lo pone el guard
+  // de las rutas protegidas: al entrar se devuelve al panel exactamente
+  // donde estaba el usuario. Si no hay o no es válido, se cae al hub.
+  const nextPedido = searchParams.get('next');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loadingForm, setLoadingForm] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState('credentials');
   const [tempToken, setTempToken] = useState('');
 
+  // Marca de "hay un login en curso": evita que el efecto de más abajo
+  // (sesión ya activa -> saltar el formulario) se adelante a la
+  // navegación que hace `completeLogin`.
+  const loginEnCurso = useRef(false);
+
   const completeLogin = async (tokens, user) => {
-    const esCliente = tieneRol(['CLIENTE'], rolesDe(user));
+    const esCliente = user?.tipo === 'CLIENTE'
+      || user?.rol === 'CLIENTE'
+      || tieneRol(['CLIENTE'], rolesDe(user));
     // Espera también a los permisos de la sesión: /admin no debe montar con
     // la ability CASL vacía (menú parpadeando o vacío).
-    await saveSession(tokens, user);
+    loginEnCurso.current = true;
+    try {
+      await saveSession(tokens, user);
+    } catch (err) {
+      // Sin sesión guardada no hay nada que navegar: se sigue en el formulario.
+      loginEnCurso.current = false;
+      throw err;
+    }
     if (!esCliente && !user.mustChangePassword) {
       // La sesión de Supabase se vincula aquí, de forma transparente, usando
       // las mismas credenciales. No se debe mostrar un segundo login en /admin.
       await linkSupabase(email, password, tokens.accessToken);
     }
-    navigate(esCliente ? '/' : (user.mustChangePassword ? '/change-password' : '/admin'));
+    if (esCliente) {
+      const destinoCliente = rutaCliente(searchParams.get('next'));
+      const handoff = new URLSearchParams({
+        access: tokens.accessToken,
+      });
+      if (tokens.refreshToken) handoff.set('refresh', tokens.refreshToken);
+      const hash = encodeURIComponent(handoff.toString());
+      window.location.assign(
+        `${SITE_URL.replace(/\/+$/, '')}${destinoCliente}#gl-session=${hash}`,
+      );
+      return;
+    }
+    // El destino se arrastra también al cambio de contraseña forzado: si no,
+    // quien entra con contraseña temporal se quedaría siempre en el hub.
+    const plan = pantallaPostLogin({
+      esCliente,
+      mustChangePassword: Boolean(user.mustChangePassword),
+      next: searchParams.get('next'),
+    });
+    navigate(plan.destino, { replace: true });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setLoadingForm(true);
     setError('');
 
     try {
@@ -79,15 +133,36 @@ export default function LoginPage() {
     } catch (err) {
       setError(err.error || 'Error de conexión');
     } finally {
-      setLoading(false);
+      setLoadingForm(false);
     }
   };
+
+  // Con sesión ya activa no se muestra el formulario: se va al destino (o
+  // al cambio de contraseña si la sesión lo exige). Durante un login en
+  // curso manda `completeLogin`, que ya navega al destino.
+  useEffect(() => {
+    if (loading || !user || loginEnCurso.current) return;
+    const plan = pantallaPostLogin({
+      esCliente: tieneRol(['CLIENTE'], rolesDe(user)),
+      mustChangePassword: Boolean(user.mustChangePassword),
+      next: nextPedido,
+    });
+    if (plan.tipo === 'cliente') {
+      window.location.assign(`${SITE_URL.replace(/\/+$/, '')}${rutaCliente(nextPedido)}`);
+      return;
+    }
+    navigate(plan.destino, { replace: true });
+  }, [loading, user, nextPedido, navigate]);
 
   const backToCredentials = () => {
     setStep('credentials');
     setTempToken('');
     setError('');
   };
+
+  // Mientras se restaura la sesión no se pinta el formulario: si la había,
+  // el efecto de arriba ya está yendo al destino.
+  if (loading) return <PageLoader />;
 
   if (step === 'setup') {
     return (
@@ -185,10 +260,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loadingForm}
               className="w-full py-2.5 bg-brand text-white font-semibold rounded-lg hover:bg-brand-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Ingresando...' : 'Iniciar sesión'}
+              {loadingForm ? 'Ingresando...' : 'Iniciar sesión'}
             </button>
           </form>
 

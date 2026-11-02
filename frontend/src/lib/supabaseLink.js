@@ -20,3 +20,32 @@ export async function linkSupabase(email, password, accessToken) {
     throw new Error(res.error.message || 'No se pudo vincular el acceso de datos');
   }
 }
+
+/**
+ * Conecta el "panel de datos": deja una sesión de Supabase Auth (rol
+ * `authenticated`) para la sesión actual del backend.
+ *
+ * El RLS del panel se evalúa con auth.uid(), así que sin esta sesión el
+ * AdminPanel no monta ("No se pudo conectar el panel"). Con el login en el
+ * sitio público, el panel recibe los tokens del backend por el fragmento de
+ * traspaso, pero NO la contraseña: por eso la sesión de datos se pide al
+ * backend (POST /auth/supabase-session) en vez de firmarse aquí.
+ *
+ * @param {string|null} accessToken  token de la sesión del backend
+ * @returns {Promise<boolean>}  true si hay sesión de datos al final
+ */
+export async function conectarPanelDatos(accessToken) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) return true;
+  if (!accessToken) return false;
+
+  const res = await authAPI.supabaseSession(accessToken);
+  const { error } = await supabase.auth.setSession({
+    access_token: res.access_token,
+    refresh_token: res.refresh_token,
+  });
+  if (error) {
+    throw new Error(error.message || 'No se pudo conectar con el panel de datos');
+  }
+  return true;
+}

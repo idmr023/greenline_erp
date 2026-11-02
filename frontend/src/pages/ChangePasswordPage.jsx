@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useVault } from '../contexts/VaultContext';
 import { authAPI } from '../lib/api';
@@ -7,12 +7,17 @@ import { PasswordSchema } from '../lib/password';
 import PasswordStrength from '../components/auth/PasswordStrength';
 import { linkSupabase } from '../lib/supabaseLink';
 import { cargarBoveda, guardarClavePropia } from '../lib/vault/api';
+import { destinoPostLogin } from '../lib/nextRoute';
 import { Lock, AlertCircle, Loader2 } from '../lib/icons';
 
 export default function ChangePasswordPage() {
   const { user, accessToken, saveSession } = useAuth();
   const { obtenerCliente } = useVault();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // A dónde seguir tras cambiar la clave: lo arrastra el login (?next=) para
+  // no perder la vista de la que venía el usuario.
+  const destino = destinoPostLogin(searchParams.get('next'));
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -156,7 +161,7 @@ export default function ChangePasswordPage() {
       { ...user, mustChangePassword: false },
     );
     setLoading(false);
-    navigate('/admin', { replace: true });
+    navigate(destino, { replace: true });
   };
 
   return (

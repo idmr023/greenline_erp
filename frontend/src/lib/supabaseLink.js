@@ -40,6 +40,9 @@ export async function conectarPanelDatos(accessToken) {
   if (!accessToken) return false;
 
   const res = await authAPI.supabaseSession(accessToken);
+  if (!res?.access_token || !res?.refresh_token) {
+    throw new Error(res?.error || 'El servidor no devolvió una sesión de datos válida');
+  }
   const { error } = await supabase.auth.setSession({
     access_token: res.access_token,
     refresh_token: res.refresh_token,

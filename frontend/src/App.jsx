@@ -1,16 +1,19 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { AbilityProvider, useAbility } from '@casl/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { VaultProvider } from './contexts/VaultContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ADMIN_ROLES, rolesDe, tieneRol } from './lib/roles';
 import { puedeEntrarAlPanel } from './lib/permissions';
+import { cambiarPasswordConNext, destinoPostLogin } from './lib/nextRoute';
 import SEOHead from './components/SEOHead';
 import LoginPage from './pages/LoginPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import PageLoader from './PageLoader';
 
+const SITE_URL = import.meta.env.VITE_SITE_URL
+  || (window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://www.glperu.com');
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
 const Fase2Implementacion = lazy(() => import('./pages/Fase2Implementacion'));
 // Link de invitaci��n (`<ERP_URL>/activar?token=�?�`): pǧblica, sin sesi��n.
@@ -33,17 +36,27 @@ function RootPortal() {
   const { user, loading } = useAuth();
   const ability = useAbility();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Destino pedido en la URL (?next=). Sin destino válido, el hub del panel.
+  const destino = destinoPostLogin(searchParams.get('next'));
+  const esCliente = Boolean(user && tieneRol(['CLIENTE'], rolesDe(user)));
+
+  useEffect(() => {
+    if (esCliente) {
+      window.location.replace(`${SITE_URL.replace(/\/+$/, '')}${destino === '/admin' ? '/' : destino}`);
+    }
+  }, [esCliente, destino]);
 
   if (loading) return <PageLoader />;
-  if (user?.mustChangePassword) return <Navigate to="/change-password" replace />;
+  if (user?.mustChangePassword) return <Navigate to={cambiarPasswordConNext(destino)} replace />;
   // Multi-rol: con cualquier rol efectivo de equipo que el servidor dé por
   // visible (algún `menu:*:read`) se entra al panel. Sin ninguna sección
   // visible no se redirige, para no entrar en bucle con el guard de /admin.
   if (user && !tieneRol(['CLIENTE'], rolesDe(user)) && puedeEntrarAlPanel(ability)) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={destino} replace />;
   }
 
-  const esCliente = Boolean(user);
+  if (esCliente) return <PageLoader />;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -55,37 +68,21 @@ function RootPortal() {
       <div className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
         <h1 className="text-xl font-bold text-gray-900">GreenLine ERP</h1>
         <p className="text-sm text-gray-500 mt-2">
-          {esCliente
-            ? 'Este panel es para el equipo interno. Tu cuenta es de cliente: la tienda y tu historial de pedidos estan en el sitio principal.'
-            : 'Panel interno de administración de Green Line. Accede con tu cuenta de equipo.'}
+          Panel interno de administración de Green Line. Accede con tu cuenta de equipo.
         </p>
-        {esCliente ? (
-          <>
-            <a
-              href="https://greenlineperu.com"
-              className="inline-block mt-5 px-4 py-2 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-dark transition-colors"
-            >
-              Ir a la tienda
-            </a>
+        {!esCliente && (
+          <div className="mt-5">
             <button
               type="button"
-              onClick={() => window.location.assign('/login')}
-              className="block w-full mt-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+              onClick={() => navigate('/login')}
+              className="mt-2 w-full px-4 py-2 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-dark transition-colors"
             >
-              Cambiar de cuenta
+              Iniciar sesión
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => navigate('/login')}
-            className="mt-5 w-full px-4 py-2 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-dark transition-colors"
-          >
-            Iniciar sesión
-          </button>
+          </div>
         )}
         <a
-          href="https://greenlineperu.com"
+          href={SITE_URL}
           className="block mt-3 text-sm text-gray-500 hover:text-gray-700"
         >
           Ir a la tienda
@@ -116,7 +113,17 @@ export default function App() {
             <Routes>
               <Route path="/" element={<RootPortal />} />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/change-password" element={<ChangePasswordPage />} />
+              {/* El cambio de contraseña exige sesión (lo arrastra el login
+                  cuando la contraseña es temporal). Sin ella se vuelve al
+                  login, que devuelve al destino que viniera en ?next=. */}
+              <Route
+                path="/change-password"
+                element={
+                  <ProtectedRoute>
+                    <ChangePasswordPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/activar"
                 element={

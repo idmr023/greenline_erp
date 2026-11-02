@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff, Calendar } from '../../lib/icons';
+import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff, Calendar, Tag } from '../../lib/icons';
 import { ColorDot } from '../ColorDot';
 import AdminStockImportar from './AdminStockImportar';
+import NuevaCategoria from './NuevaCategoria';
 import {
   estadoPublicacion,
   esFuturo,
@@ -19,6 +20,7 @@ export default function AdminProductos({ onEdit, onNew }) {
     const [categorias, setCategorias] = useState([]);
     const [colores, setColores] = useState([]);
     const [importando, setImportando] = useState(false);
+    const [nuevaCategoria, setNuevaCategoria] = useState(false);
 
   useEffect(() => {
     load();
@@ -191,6 +193,14 @@ export default function AdminProductos({ onEdit, onNew }) {
             Importar Excel
           </button>
           <button
+            onClick={() => setNuevaCategoria(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+            title="Crear una categoría de producto (por ejemplo, scooters)"
+          >
+            <Tag className="w-4 h-4" />
+            Nueva categoría
+          </button>
+          <button
             onClick={onNew}
             className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors"
           >
@@ -354,6 +364,13 @@ export default function AdminProductos({ onEdit, onNew }) {
         <AdminStockImportar
           onClose={() => setImportando(false)}
           onAplicado={load}
+        />
+      )}
+
+      {nuevaCategoria && (
+        <NuevaCategoria
+          onClose={() => setNuevaCategoria(false)}
+          onCreada={load}
         />
       )}
     </div>

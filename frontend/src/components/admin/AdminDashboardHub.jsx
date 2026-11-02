@@ -1,14 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LayoutDashboard, Wrench, Award, Package, TrendingUp, Users, ShieldCheck, FileText, RefreshCw, AlertTriangle, Image } from '../../lib/icons';
+import { useAbility } from '@casl/react';
+import { LayoutDashboard, Wrench, Award, Package, TrendingUp, AlertTriangle, Image } from '../../lib/icons';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+import { rolesDe } from '../../lib/roles';
+import { navVisibleDe } from '../../lib/nav';
 
+/**
+ * Accesos rápidos del hub. `perm` es el asunto CASL de la sección, igual
+ * que en la nav lateral: sin él, la tarjeta no se pinta. El hub no decide
+ * por rol, sólo filtra lo que `GET /auth/permissions` ya resolvió.
+ */
 const OPCIONES = [
   {
     id: 'dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
     description: 'Resumen de tu catálogo de productos',
-    permiso: 'menu:dashboard',
+    perm: 'menu:dashboard',
     vista: 'dashboard',
   },
   {
@@ -16,7 +25,7 @@ const OPCIONES = [
     label: 'Servicio Técnico por Sede',
     icon: Wrench,
     description: 'Indicadores de servicio, técnicos y cumplimiento por sede',
-    permiso: 'menu:servicio_tecnico',
+    perm: 'menu:servicio_tecnico',
     vista: 'servicio_tecnico',
   },
   {
@@ -24,7 +33,7 @@ const OPCIONES = [
     label: 'Evaluación de Incentivos',
     icon: Award,
     description: 'Puntaje y evaluaciones de armadores por mes y tienda',
-    permiso: 'menu:evaluacion-armadores',
+    perm: 'menu:evaluacion-armadores',
     vista: 'evaluaciones',
   },
   {
@@ -32,9 +41,15 @@ const OPCIONES = [
     label: 'Reporte Ensamblado',
     icon: Package,
     description: 'Registro de ensamblado y resumen por sede',
-    permiso: 'menu:ensamblado',
+    perm: 'menu:ensamblado',
     vista: 'ensamblado',
   },
+];
+
+/** Botones de pie del hub, con la sección que abren. */
+const ACCESOS_DIRECTOS = [
+  { id: 'productos', label: 'Gestionar Productos', vista: 'productos', perm: 'menu:productos', primario: true },
+  { id: 'colores', label: 'Gestionar Colores', vista: 'colores', perm: 'menu:colores', primario: false },
 ];
 
 export default function AdminDashboardHub({ onNavigate }) {
@@ -45,6 +60,18 @@ const [stats, setStats] = useState({
     destacados: 0,
   });
   const [loading, setLoading] = useState(true);
+
+  const ability = useAbility();
+  const { user } = useAuth();
+  const roles = rolesDe(user);
+  const can = (perm) => ability.can('read', perm);
+
+  // El hub sólo ofrece lo que la sesión puede abrir: sin este filtro, una
+  // tarjeta o un botón bastaban para llegar a una vista sin permiso
+  // (navigateTo ahora también redirige, pero no hay que enseñar lo inaccesible).
+  const opcionesVisibles = navVisibleDe(OPCIONES, can, roles);
+  const accesosVisibles = navVisibleDe(ACCESOS_DIRECTOS, can, roles);
+  const sinSecciones = opcionesVisibles.length === 0 && accesosVisibles.length === 0;
 
   const loadStats = useCallback(async () => {
     try {
@@ -103,45 +130,58 @@ const [stats, setStats] = useState({
       </div>
 
       {/* Opciones del portal */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {OPCIONES.map((op) => {
-          const Icon = op.icon;
-          return (
-            <button
-              key={op.id}
-              onClick={() => onNavigate(op.vista)}
-              className="group bg-white rounded-xl border border-gray-100 p-6 text-left hover:border-brand/40 hover:shadow-md transition-all duration-200"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center shrink-0 group-hover:bg-brand/20 transition-colors">
-                  <Icon className="w-6 h-6 text-brand" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-bold text-gray-900 group-hover:text-brand transition-colors">
-                    {op.label}
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">{op.description}</p>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {sinSecciones ? (
+        <p className="text-sm text-gray-500 bg-white rounded-xl border border-gray-100 p-6">
+          Tu perfil no tiene secciones habilitadas en este panel.
+        </p>
+      ) : (
+        <>
+          {opcionesVisibles.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {opcionesVisibles.map((op) => {
+                const Icon = op.icon;
+                return (
+                  <button
+                    key={op.id}
+                    onClick={() => onNavigate(op.vista)}
+                    className="group bg-white rounded-xl border border-gray-100 p-6 text-left hover:border-brand/40 hover:shadow-md transition-all duration-200"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center shrink-0 group-hover:bg-brand/20 transition-colors">
+                        <Icon className="w-6 h-6 text-brand" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-bold text-gray-900 group-hover:text-brand transition-colors">
+                          {op.label}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">{op.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-      <div className="mt-6 flex gap-3">
-        <button
-          onClick={() => onNavigate('productos')}
-          className="px-4 py-2 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-dark transition-colors"
-        >
-          Gestionar Productos
-        </button>
-        <button
-          onClick={() => onNavigate('colores')}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors"
-        >
-          Gestionar Colores
-        </button>
-      </div>
+          {accesosVisibles.length > 0 && (
+            <div className="mt-6 flex gap-3">
+              {accesosVisibles.map((acceso) => (
+                <button
+                  key={acceso.id}
+                  onClick={() => onNavigate(acceso.vista)}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    acceso.primario
+                      ? 'bg-brand text-white hover:bg-brand-dark'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {acceso.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

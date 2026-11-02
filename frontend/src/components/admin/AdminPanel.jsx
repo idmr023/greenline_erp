@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { conectarPanelDatos } from '../../lib/supabaseLink';
 import { authAPI } from '../../lib/api';
-import { PANEL_ROLES, rolesDe, tieneRol } from '../../lib/roles';
+import { PANEL_ROLES, rolesDe } from '../../lib/roles';
+import { navVisibleDe, resolverVista } from '../../lib/nav';
+import { loginDesdeLocation } from '../../lib/nextRoute';
 import AdminDashboard from './AdminDashboard';
 import AdminDashboardHub from './AdminDashboardHub';
 import DashboardEmbedded from '../../pages/DashboardEmbedded';
@@ -28,8 +32,8 @@ import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import AdminRoles from './AdminRoles';
 import AdminAjustes from './AdminAjustes';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, Gift, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar } from '../../lib/icons';
-import { toggleTemaAniversario, temaAniversarioActivo } from '../../lib/aniversario';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar } from '../../lib/icons';
+import PortalSwitch from '../PortalSwitch';
 
 const VIEWS = {
   DASHBOARD: 'dashboard',
@@ -106,32 +110,27 @@ const NAV_ITEMS = [
   { key: VIEWS.ROLES, label: 'Roles', icon: SlidersHorizontal, perm: 'menu:roles' },
   // Ajustes del SITIO PÚBLICO (site_config): lo que el visitante ve sin
   // redeploy — tema Halloween, banners. Escribir exige config:update.
-  { key: VIEWS.AJUSTES, label: 'Ajustes del sitio', icon: Settings, perm: 'menu:ajustes' },
+  { key: VIEWS.AJUSTES, label: 'Gestor de temas', icon: Settings, perm: 'menu:ajustes' },
 ];
 
 /**
- * Secciones visibles para la ability de ESTA sesión. La unión multi-rol ya
- * la resolvió el servidor al construir la matriz; el cliente sólo filtra.
+ * Subvistas que sólo existen dentro de una sección de la nav: no aparecen
+ * en la lista lateral, pero se abren desde ella (editar un producto).
+ * `resolverVista` sólo las deja pasar si la sección contenedora es visible.
  */
-/**
- * Roles que siempre ven Servicio Técnico aunque el backend aún no envíe
- * `menu:servicio_tecnico:read` en la matriz de permisos.
- */
-const ROLES_SERVICIO_TECNICO = ['ADMIN', 'DESARROLLADOR_WEB'];
-
-function navVisibleDe(ability, puedeVerST) {
-  return NAV_ITEMS.filter((i) => {
-    if (i.key === VIEWS.SERVICIO_TECNICO && puedeVerST) return true;
-    return ability.can('read', i.perm);
-  });
-}
+const SUBVISTAS = {
+  [VIEWS.PRODUCTO_FORM]: VIEWS.PRODUCTOS,
+};
 
 export default function AdminPanel() {
   const { logout, accessToken, user } = useAuth();
   const ability = useAbility();
-  // Bypass por rol: ADMIN y DESARROLLADOR_WEB ven Servicio Técnico siempre.
-  // El resto lo decide la matriz del backend (`menu:servicio_tecnico:read`).
-  const puedeVerST = tieneRol(ROLES_SERVICIO_TECNICO, rolesDe(user));
+  const roles = rolesDe(user);
+  const navigate = useNavigate();
+  // `can` es la ability de CASL de ESTA sesión; el bypass de Servicio
+  // Técnico (ADMIN/DESARROLLADOR_WEB) lo resuelve `seccionVisible` de
+  // lib/nav.js. Ni listas de roles ni casos por rol dentro de este archivo.
+  const can = (perm) => ability.can('read', perm);
 
   const getInitialView = () => {
     const path = window.location.pathname;
@@ -160,11 +159,9 @@ export default function AdminPanel() {
     else if (path.includes('/admin/dashboard')) candidata = VIEWS.DASHBOARD;
 
     // Una URL directa no debe abrir una sección que la sesión no ve (§40).
-    // El primer ítem permitido además resuelve la landing de quien sólo ve
-    // blog o distribuidores, sin casos especiales por rol.
-    const permitidas = navVisibleDe(ability, puedeVerST).map((i) => i.key);
-    if (permitidas.length === 0) return VIEWS.DASHBOARD;
-    return permitidas.includes(candidata) ? candidata : permitidas[0];
+    // La primera visible además resuelve la landing de quien sólo ve blog
+    // o distribuidores, sin casos especiales por rol.
+    return resolverVista(NAV_ITEMS, can, roles, candidata, SUBVISTAS, VIEWS.DASHBOARD);
   };
 
   const [view, setView] = useState(getInitialView);
@@ -176,11 +173,7 @@ export default function AdminPanel() {
 
   const canGrant = ability.can('acceso', 'panel');
 
-  const canManageAniv = ability.can('update', 'config');
-  const [anivOn, setAnivOn] = useState(() => temaAniversarioActivo());
-  const handleAnivToggle = () => setAnivOn(toggleTemaAniversario());
-
-  const visibleNav = navVisibleDe(ability, puedeVerST);
+  const visibleNav = navVisibleDe(NAV_ITEMS, can, roles);
 
   // Rótulo del sidebar según el perfil de permisos de la sesión.
   const subtitulo = canGrant
@@ -204,11 +197,34 @@ export default function AdminPanel() {
   }, [accessToken]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setHasSupabaseSession(!!data.session);
-      setSupabaseReady(true);
-    });
-  }, []);
+    let cancelado = false;
+    // Sesión de DATOS del panel (Supabase, rol `authenticated`): sin ella el
+    // RLS no deja leer nada. Si falta, se pide al backend en vez de dejar al
+    // usuario en el callejón sin salida ("No se pudo conectar el panel").
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        if (!cancelado) {
+          setHasSupabaseSession(true);
+          setSupabaseReady(true);
+        }
+        return;
+      }
+      try {
+        await conectarPanelDatos(accessToken);
+        if (!cancelado) {
+          setHasSupabaseSession(true);
+          setSupabaseReady(true);
+        }
+      } catch {
+        if (!cancelado) {
+          setHasSupabaseSession(false);
+          setSupabaseReady(true);
+        }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [accessToken]);
 
   useEffect(() => {
     if (canGrant) refreshGrants();
@@ -224,17 +240,28 @@ export default function AdminPanel() {
   };
 
   const navigateTo = (target, id = null) => {
-    setEditingId(id);
-    setView(target);
+    // Una sección que la sesión no ve no se abre ni se refleja en la URL:
+    // `resolverVista` la cambia por la primera visible (o por la reserva).
+    // Así el hub, los botones y los enlaces internos dejan de ser un
+    // atajo a vistas sin permiso.
+    const vista = resolverVista(NAV_ITEMS, can, roles, target, SUBVISTAS, VIEWS.DASHBOARD);
+    if (!vista) return;
+    setEditingId(vista === target ? id : null);
+    setView(vista);
     let newPath = '/admin/dashboard-embed';
-    if (target === VIEWS.SERVICIO_TECNICO) {
+    if (vista === VIEWS.SERVICIO_TECNICO) {
       newPath = '/admin/dashboard-embed?slug=servicio-tecnico';
-    } else if (target === VIEWS.DASHBOARD) {
+    } else if (vista === VIEWS.DASHBOARD) {
       newPath = '/admin/dashboard-embed';
     } else {
-      newPath = `/admin/${target}`;
+      newPath = `/admin/${vista}`;
     }
-    window.history.pushState({}, '', newPath);
+    // `navigate` del router (y no `window.history.pushState` a pelo): el
+    // router se entera del cambio de URL y su `location` deja de ir
+    // atrasado. Sin esto, al caducar la sesión el guard de las rutas
+    // protegidas devolvía al usuario a la vista anterior y no a la que
+    // tenía delante en pantalla.
+    navigate(newPath);
   };
 
   if (!supabaseReady) {
@@ -257,7 +284,7 @@ export default function AdminPanel() {
           </p>
           <button
             type="button"
-            onClick={() => window.location.assign('/login')}
+            onClick={() => window.location.assign(loginDesdeLocation(window.location))}
             className="mt-5 w-full py-2.5 bg-brand text-white font-semibold rounded-lg hover:bg-brand-dark transition-colors"
           >
             Volver a iniciar sesión
@@ -340,34 +367,8 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {canManageAniv && (
-          <div className="mx-3 mb-3 p-3 rounded-lg bg-rose-50 border border-rose-100">
-            <div className="flex items-center gap-2 mb-1">
-              <Gift className="w-4 h-4 text-rose-500" />
-              <p className="text-xs font-bold text-gray-700">Tema aniversario</p>
-            </div>
-            <p className="text-[10px] text-gray-400 mb-2">Solo administradores y desarrolladores</p>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-gray-600">{anivOn ? 'Activado' : 'Desactivado'}</span>
-              <button
-                type="button"
-                onClick={handleAnivToggle}
-                className={`relative w-9 h-5 rounded-full transition-colors ${
-                  anivOn ? 'bg-rose-500' : 'bg-gray-300'
-                } hover:opacity-80`}
-                title={anivOn ? 'Desactivar tema de aniversario' : 'Activar tema de aniversario'}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    anivOn ? 'translate-x-4' : ''
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="p-3 border-t border-gray-100">
+          <PortalSwitch user={user} />
           <button
             onClick={logout}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"

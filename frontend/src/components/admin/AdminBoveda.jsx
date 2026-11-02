@@ -15,6 +15,7 @@ import {
   eliminarBovedaPropia,
   eliminarItem,
   guardarClavePropia,
+  repararClaveDueno,
   guardarItem,
   guardarRecuperacion,
   listarCategorias,
@@ -175,6 +176,8 @@ export default function AdminBoveda() {
   /** §28.1 R122 — fichero de export elegido, ya parseado en memoria. */
   const [ficheroImport, setFicheroImport] = useState(null);
   const [passImport, setPassImport] = useState('');
+  const [formReparacion, setFormReparacion] = useState({ passwordActual: '', passwordDueno: '', confirmacion: '' });
+  const [errorReparacion, setErrorReparacion] = useState(null);
 
   // §28 exige step-up para exportar; §13 lo exige igual para activar una
   // recovery key, que es una puerta trasera permanente si alguien con la
@@ -480,6 +483,43 @@ useEffect(() => {
       verificarPasswordPanel,
     ],
   );
+
+  const alRepararClaveDueno = useCallback(async (e) => {
+    e?.preventDefault?.();
+    setErrorReparacion(null);
+    if (!bootstrap?.duenoSinClave || !bootstrap?.clavePropia) return;
+    if (!formReparacion.passwordActual || !formReparacion.passwordDueno) {
+      setErrorReparacion('Completa ambas contraseñas.');
+      return;
+    }
+    if (formReparacion.passwordDueno !== formReparacion.confirmacion) {
+      setErrorReparacion('La contraseña del dueño no coincide.');
+      return;
+    }
+    setTrabajando(true);
+    try {
+      const nueva = await obtenerCliente().reenvolverConPassword({
+        passwordActual: formReparacion.passwordActual,
+        passwordNueva: formReparacion.passwordDueno,
+        salt: bootstrap.salt,
+        parametros: bootstrap.parametros,
+        envoltura: bootstrap.clavePropia.envoltura,
+        contexto: bootstrap.clavePropia.contexto,
+      });
+      await repararClaveDueno({
+        vaultId: bootstrap.bovedaId,
+        keyVersion: nueva.contexto.keyVersion,
+        envoltura: nueva.envoltura,
+      });
+      setFormReparacion({ passwordActual: '', passwordDueno: '', confirmacion: '' });
+      await recargar();
+      setMensaje({ tipo: 'ok', texto: 'Acceso del dueño reparado. Ya puede abrir la bóveda con su contraseña.' });
+    } catch (err) {
+      setErrorReparacion(err?.message || 'No se pudo reparar el acceso del dueño.');
+    } finally {
+      setTrabajando(false);
+    }
+  }, [bootstrap, formReparacion, obtenerCliente, recargar]);
 
   const alCrear = useCallback(
     async (e) => {
@@ -1227,6 +1267,32 @@ useEffect(() => {
         <p className={`text-xs ${mensaje.tipo === 'error' ? 'text-red-600' : 'text-emerald-700'}`}>
           {mensaje.texto}
         </p>
+      )}
+
+      {bootstrap?.duenoSinClave && (
+        <form onSubmit={alRepararClaveDueno} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900">Reparar acceso del dueño</p>
+          <p className="mt-1 text-xs text-amber-800">
+            Esta bóveda no tiene envoltura para el dueño. Reenvuelve la DEK desde tu sesión y
+            escribe dos veces la contraseña de panel del dueño.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <input type="password" placeholder="Tu contraseña" value={formReparacion.passwordActual}
+              onChange={(e) => setFormReparacion((f) => ({ ...f, passwordActual: e.target.value }))}
+              className="rounded-lg border border-amber-300 px-3 py-2 text-xs" />
+            <input type="password" placeholder="Contraseña del dueño" value={formReparacion.passwordDueno}
+              onChange={(e) => setFormReparacion((f) => ({ ...f, passwordDueno: e.target.value }))}
+              className="rounded-lg border border-amber-300 px-3 py-2 text-xs" />
+            <input type="password" placeholder="Confirmar contraseña" value={formReparacion.confirmacion}
+              onChange={(e) => setFormReparacion((f) => ({ ...f, confirmacion: e.target.value }))}
+              className="rounded-lg border border-amber-300 px-3 py-2 text-xs" />
+          </div>
+          {errorReparacion && <p className="mt-2 text-xs text-red-700">{errorReparacion}</p>}
+          <button type="submit" disabled={trabajando}
+            className="mt-3 rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+            {trabajando ? 'Reparando…' : 'Reparar acceso'}
+          </button>
+        </form>
       )}
 
       {itemsRotos.length > 0 && (

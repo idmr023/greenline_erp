@@ -4,8 +4,9 @@ import { clearCache } from '../../lib/productos';
 import { versionarImagen } from '../../lib/images';
 import { imagenesAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, ArrowUp, ArrowDown, Save, Upload, X, GripVertical, Search, FolderOpen, Loader2, Eye, EyeOff, FileText, Calendar } from '../../lib/icons';
+import { ArrowLeft, ArrowUp, ArrowDown, Save, Upload, X, GripVertical, Search, FolderOpen, Loader2, Eye, EyeOff, FileText, Calendar, Plus } from '../../lib/icons';
 import ConfirmModal from './ConfirmModal';
+import NuevaCategoria from './NuevaCategoria';
 import {
   isoADatetimeLocal,
   datetimeLocalAIso,
@@ -20,6 +21,10 @@ const EMPTY_PRODUCT = {
   descripcion: '',
   precio_original: '',
   precio_actual: '',
+  // Precio por cuotas (categorías con precio_por_cuotas, p. ej. scooters):
+  // total a pagar en cuotas y valor de cada cuota.
+  precio_cuotas: '',
+  precio_cuota: '',
   destacado: false,
   disponible: true,
   video_id: '',
@@ -66,6 +71,9 @@ async function guardarProductoPrincipal(form, isEdit, productoId) {
     descripcion: form.descripcion || null,
     precio_original: form.precio_original ? Number(form.precio_original) : null,
     precio_actual: Number(form.precio_actual),
+    // Precio por cuotas: sólo aplican a las categorías con precio_por_cuotas.
+    precio_cuotas: form.precio_cuotas ? Number(form.precio_cuotas) : null,
+    precio_cuota: form.precio_cuota ? Number(form.precio_cuota) : null,
     destacado: form.destacado,
     video_id: form.video_id || null,
     categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
@@ -248,11 +256,17 @@ export default function AdminProductoForm({ productoId, onBack, onSaved }) {
   const [uploading, setUploading] = useState(false);
   const [exploradorAbierto, setExploradorAbierto] = useState(false);
   const [exploradorIndice, setExploradorIndice] = useState(null);
+  const [nuevaCategoria, setNuevaCategoria] = useState(false);
   // 'publicar' | 'programar' | 'borrador' | null — qué acción se está por confirmar.
   const [confirmGuardado, setConfirmGuardado] = useState(null);
 
   const { accessToken } = useAuth();
   const isEdit = !!productoId;
+
+  // Categoría elegida: si está marcada "por cuotas" (scooters), el producto
+  // se muestra en la web con precio, precio en cuotas y precio de cada cuota.
+  const categoriaPorCuotas =
+    categorias.find((c) => String(c.id) === String(form.categoria_id))?.precio_por_cuotas === true;
 
   useEffect(() => {
     async function init() {
@@ -286,6 +300,8 @@ export default function AdminProductoForm({ productoId, onBack, onSaved }) {
             descripcion: prod.descripcion || '',
             precio_original: prod.precio_original || '',
             precio_actual: prod.precio_actual || '',
+            precio_cuotas: prod.precio_cuotas || '',
+            precio_cuota: prod.precio_cuota || '',
             destacado: prod.destacado || false,
             disponible: prod.disponible !== false,
             video_id: prod.video_id || '',
@@ -753,10 +769,25 @@ potencia_bateria: ft.potencia_bateria || '',
             <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} className="input" />
           </Field>
           <Field label="Categoría">
-            <select value={form.categoria_id} onChange={(e) => setForm({ ...form, categoria_id: e.target.value })} className="input">
-              <option value="">Seleccionar...</option>
-              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
+            <div className="flex gap-2">
+              <select value={form.categoria_id} onChange={(e) => setForm({ ...form, categoria_id: e.target.value })} className="input flex-1">
+                <option value="">Seleccionar...</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}{c.precio_por_cuotas ? ' (por cuotas)' : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setNuevaCategoria(true)}
+                className="flex items-center gap-1.5 px-3 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+                title="Crear una categoría nueva (por ejemplo, scooters)"
+              >
+                <Plus className="w-4 h-4" />
+                Nueva
+              </button>
+            </div>
           </Field>
           <Field label="Precio Original (S/)">
             <input type="number" step="0.01" value={form.precio_original} onChange={(e) => setForm({ ...form, precio_original: e.target.value })} className="input" />
@@ -764,6 +795,37 @@ potencia_bateria: ft.potencia_bateria || '',
           <Field label="Precio Actual (S/) *">
             <input type="number" step="0.01" value={form.precio_actual} onChange={(e) => setForm({ ...form, precio_actual: e.target.value })} className="input" />
           </Field>
+          {categoriaPorCuotas && (
+            <>
+              <Field label="Precio en cuotas (S/) — total">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.precio_cuotas}
+                  onChange={(e) => setForm({ ...form, precio_cuotas: e.target.value })}
+                  className="input"
+                  placeholder="3840"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Total a pagar si se compra en cuotas (12 × 320 = 3840).
+                </p>
+              </Field>
+              <Field label="Precio de cada cuota (S/)">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.precio_cuota}
+                  onChange={(e) => setForm({ ...form, precio_cuota: e.target.value })}
+                  className="input"
+                  placeholder="320"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Valor de una cuota. El número de cuotas se calcula con estos dos
+                  importes.
+                </p>
+              </Field>
+            </>
+          )}
           <Field label="Video (YouTube)">
             <input value={form.video_id} onChange={(e) => setForm({ ...form, video_id: e.target.value })} className="input" placeholder="Pega el enlace: https://youtu.be/Zxkomo2Ccs0" />
             <p className="text-xs text-gray-400 mt-1">Acepta enlace completo o solo el ID. La miniatura aparece automáticamente.</p>
@@ -1106,6 +1168,20 @@ potencia_bateria: ft.potencia_bateria || '',
           accessToken={accessToken}
           onSelect={(url) => updateImage(exploradorIndice, 'url', url)}
           onClose={() => setExploradorAbierto(false)}
+        />
+      )}
+
+      {nuevaCategoria && (
+        <NuevaCategoria
+          onClose={() => setNuevaCategoria(false)}
+          onCreada={async (categoria) => {
+            // Se recarga el catálogo y se selecciona la categoría recién creada.
+            const { data } = await supabase.from('categorias').select('*').order('id');
+            setCategorias(data || []);
+            if (categoria?.id) {
+              setForm((f) => ({ ...f, categoria_id: String(categoria.id) }));
+            }
+          }}
         />
       )}
     </div>

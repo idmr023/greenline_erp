@@ -258,6 +258,9 @@ export async function cargarBoveda() {
   const legado = clavesVisibles.filter((f) => !esPropia(f));
   const filaPropia = mayorVersion(propias);
   const filaLegado = mayorVersion(legado);
+  const ownerId = boveda?.owner_id || null;
+  const duenoSinClave = Boolean(ownerId)
+    && !(clavesVisibles.some((fila) => fila.user_id === ownerId));
   // La que se usa para desbloquear: la propia si existe; si no, el legado.
   const filaClave = filaPropia || filaLegado;
 
@@ -306,6 +309,8 @@ export async function cargarBoveda() {
     // clave, con lo que el panel ofrece «Reparar bóveda» (borrarla).
     propiaId: propia?.id ?? null,
     propiaReparable,
+    ownerId,
+    duenoSinClave,
     // auth.uid() del que llama. Permite distinguir en UI si la bóveda es
     // suya (rekey §27 y recovery §25 son de propiedad en RLS).
     yo: uid,
@@ -461,6 +466,22 @@ export async function guardarClavePropia({ vaultId, keyVersion, envoltura }) {
     .upsert(fila, { onConflict: 'vault_id,user_id,key_version,proposito' });
   if (error) throw traducir(error, TABLAS.claves);
   return true;
+}
+
+export async function repararClaveDueno({ vaultId, keyVersion, envoltura }) {
+  if (!vaultId || !Number.isInteger(keyVersion)) {
+    throw new Error('repararClaveDueno: faltan vaultId o keyVersion');
+  }
+  const { data, error } = await supabase.rpc('boveda_reparar_clave_dueno', {
+    p_vault_id: vaultId,
+    p_key_version: keyVersion,
+    p_algorithm: envoltura.algorithm,
+    p_nonce: aTexto(envoltura.nonce),
+    p_ciphertext: aTexto(envoltura.ciphertext),
+    p_tag: aTexto(envoltura.tag),
+  });
+  if (error) throw traducir(error, TABLAS.claves);
+  return data;
 }
 
 /** §10 — alta de item cifrado. */

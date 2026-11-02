@@ -1,88 +1,106 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost } from '../../lib/icons';
+import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift } from '../../lib/icons';
 import { siteConfigAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
-
-// ============================================================
-// Ajustes del SITIO PÚBLICO (greenline)
-//
-// El tema Halloween cuelga de una sola clave de la tabla `site_config`.
-// Apagarlo aquí hace que el sitio deje de pintar cursor, sonidos y fantasmas
-// para TODOS los visitantes a la vez, sin redeploy.
-//
-// El interruptor maestro manda sobre el calendario: si está apagado, octubre
-// no enciende nada. Si está encendido, se puede ver incluso fuera de octubre
-// (útil para probar la campaña antes de tiempo).
-// ============================================================
+import { rolesDe, tieneRol } from '../../lib/roles';
 
 const CLAVE_HALLOWEEN = 'halloween';
-
+const CLAVE_ANIVERSARIO = 'aniversario';
 const VARIANTES = [
   { id: 'brand', etiqueta: 'Brand (verde)', color: '#009000' },
   { id: 'orange', etiqueta: 'Naranja FFB300', color: '#FFB300' },
   { id: 'black', etiqueta: 'Negro', color: '#0d0d0d' },
 ];
+const VALOR_HALLOWEEN = { activo: false, variante: 'orange' };
 
-const VALOR_POR_DEFECTO = { activo: false, variante: 'orange' };
+function Interruptor({ activo, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={activo}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+        activo ? 'bg-brand' : 'bg-gray-200'
+      }`}
+    >
+      <span
+        className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transform transition-transform ${
+          activo ? 'translate-x-5' : 'translate-x-0.5'
+        }`}
+      >
+        {activo ? <Eye className="w-3 h-3 text-brand" /> : <EyeOff className="w-3 h-3 text-gray-400" />}
+      </span>
+    </button>
+  );
+}
 
 export default function AdminAjustes() {
-  const { accessToken } = useAuth();
-
+  const { accessToken, user } = useAuth();
+  const puedeGestionarTemas = tieneRol(['ADMIN', 'DESARROLLADOR_WEB'], rolesDe(user));
   const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false); 
+  const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
-
-  const [activo, setActivo] = useState(VALOR_POR_DEFECTO.activo);
-  const [variante, setVariante] = useState(VALOR_POR_DEFECTO.variante);
+  const [activo, setActivo] = useState(VALOR_HALLOWEEN.activo);
+  const [variante, setVariante] = useState(VALOR_HALLOWEEN.variante);
+  const [aniversarioActivo, setAniversarioActivo] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError('');
     try {
-      const valor = await siteConfigAPI.obtener(CLAVE_HALLOWEEN, accessToken);
-      setActivo(Boolean(valor?.activo));
-      setVariante(valor?.variante || VALOR_POR_DEFECTO.variante);
+      const [halloween, aniversario] = await Promise.all([
+        siteConfigAPI.obtener(CLAVE_HALLOWEEN, accessToken).catch((err) => {
+          if (err?.status !== 404) throw err;
+          return VALOR_HALLOWEEN;
+        }),
+        siteConfigAPI.obtener(CLAVE_ANIVERSARIO, accessToken).catch((err) => {
+          if (err?.status !== 404) throw err;
+          return { activo: false };
+        }),
+      ]);
+      setActivo(Boolean(halloween?.activo));
+      setVariante(halloween?.variante || VALOR_HALLOWEEN.variante);
+      setAniversarioActivo(Boolean(aniversario?.activo));
     } catch (err) {
-      // 404 = nadie ha configurado el tema todavía: estado por defecto.
-      if (err?.status !== 404) {
-        setError(err?.message || 'No se pudo leer el ajuste del sitio');
-      }
+      setError(err?.message || 'No se pudo leer la configuración de temas');
     } finally {
       setCargando(false);
     }
   }, [accessToken]);
 
   useEffect(() => {
-    cargar();
-  }, [cargar]);
+    if (puedeGestionarTemas) cargar();
+  }, [cargar, puedeGestionarTemas]);
 
   const guardar = async () => {
     setGuardando(true);
     setError('');
     setExito('');
     try {
-      await siteConfigAPI.guardar(
-        CLAVE_HALLOWEEN,
-        { activo, variante },
-        accessToken,
-      );
-      setExito('Tema actualizado. El sitio público lo aplicará en su próxima carga.');
+      await Promise.all([
+        siteConfigAPI.guardar(CLAVE_HALLOWEEN, { activo, variante }, accessToken),
+        siteConfigAPI.guardar(CLAVE_ANIVERSARIO, { activo: aniversarioActivo }, accessToken),
+      ]);
+      setExito('Temas actualizados. El sitio público los aplicará en su próxima carga.');
       setTimeout(() => setExito(''), 4000);
     } catch (err) {
-      setError(err?.message || 'No se pudo guardar el ajuste');
+      setError(err?.message || 'No se pudo guardar la configuración de temas');
     } finally {
       setGuardando(false);
     }
   };
 
+  if (!puedeGestionarTemas) return null;
+
   return (
     <div>
       <div className="flex items-center justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Ajustes del sitio</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Gestor de temas</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Controla lo que el sitio público muestra a los visitantes, sin redeploy.
+            Controla qué temas y efectos del sitio público están visibles.
           </p>
         </div>
         <button
@@ -102,7 +120,6 @@ export default function AdminAjustes() {
           {error}
         </div>
       )}
-
       {exito && (
         <div className="flex items-center gap-2 bg-green-50 text-green-700 text-sm px-4 py-3 rounded-lg mb-4">
           <Check className="w-4 h-4 shrink-0" />
@@ -112,80 +129,68 @@ export default function AdminAjustes() {
 
       {cargando ? (
         <div className="flex items-center gap-2 text-sm text-gray-500 py-10">
-          <Loader2 className="w-4 h-4 animate-spin" /> Cargando ajustes…
+          <Loader2 className="w-4 h-4 animate-spin" /> Cargando temas…
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          {/* ---------- Halloween ---------- */}
-          <div className="flex items-start justify-between gap-4 pb-5 border-b border-gray-100">
-            <div className="flex items-start gap-3">
-              <span className="w-10 h-10 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
-                <Ghost className="w-5 h-5" />
-              </span>
-              <div>
-                <h2 className="font-semibold text-gray-900">Tema Halloween</h2>
-                <p className="text-sm text-gray-500 mt-1 max-w-lg">
-                  Cursor de calavera, sonidos de hoja seca y fantasmas escondidos.
-                  Apagarlo aquí detiene todo el tema para todos los visitantes.
-                </p>
-                <p className="text-xs text-gray-400 mt-2">
-                  Ventana natural: del 1 al 31 de octubre. Este interruptor manda
-                  sobre el calendario.
-                </p>
+        <div className="space-y-5">
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
+                  <Ghost className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-semibold text-gray-900">Tema Halloween</h2>
+                  <p className="text-sm text-gray-500 mt-1 max-w-lg">
+                    Cursor, sonidos y fantasmas del tema Halloween.
+                  </p>
+                </div>
               </div>
+              <Interruptor activo={activo} onChange={() => setActivo((actual) => !actual)} />
             </div>
-
-            <button
-              type="button"
-              role="switch"
-              aria-checked={activo}
-              onClick={() => setActivo((a) => !a)}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                activo ? 'bg-brand' : 'bg-gray-200'
-              }`}
-            >
-              <span
-                className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transform transition-transform ${
-                  activo ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              >
-                {activo ? <Eye className="w-3 h-3 text-brand" /> : <EyeOff className="w-3 h-3 text-gray-400" />}
-              </span>
-            </button>
-          </div>
-
-          {/* Variante de color: solo tiene sentido cuando está encendido */}
-          {activo && (
-            <div className="pt-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                Variante de color
-              </h3>
-              <div className="flex flex-wrap gap-3">
-                {VARIANTES.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => setVariante(v.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                      variante === v.id
-                        ? 'border-brand bg-brand/5 text-brand'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span
-                      className="w-4 h-4 rounded-full border border-black/10 shrink-0"
-                      style={{ background: v.color }}
-                    />
-                    {v.etiqueta}
-                  </button>
-                ))}
+            {activo && (
+              <div className="pt-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Variante de color</h3>
+                <div className="flex flex-wrap gap-3">
+                  {VARIANTES.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setVariante(item.id)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium ${
+                        variante === item.id
+                          ? 'border-brand bg-brand/5 text-brand'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full border border-black/10" style={{ background: item.color }} />
+                      {item.etiqueta}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-xs text-gray-400 mt-3">
-                Los tres colores se reparten por la página (fondos, acentos y
-                texto) según la variante elegida.
-              </p>
+            )}
+          </section>
+
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center shrink-0">
+                  <Gift className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-semibold text-gray-900">Tema aniversario</h2>
+                  <p className="text-sm text-gray-500 mt-1 max-w-lg">
+                    Atmósfera, efectos y promociones visuales de aniversario.
+                  </p>
+                </div>
+              </div>
+              <Interruptor
+                activo={aniversarioActivo}
+                onChange={() => setAniversarioActivo((actual) => !actual)}
+              />
             </div>
-          )}
+          </section>
         </div>
       )}
     </div>

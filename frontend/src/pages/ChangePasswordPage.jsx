@@ -5,7 +5,7 @@ import { useVault } from '../contexts/VaultContext';
 import { authAPI } from '../lib/api';
 import { PasswordSchema } from '../lib/password';
 import PasswordStrength from '../components/auth/PasswordStrength';
-import { linkSupabase } from '../lib/supabaseLink';
+import { linkSupabase, refreshSupabaseSession } from '../lib/supabaseLink';
 import { cargarBoveda, guardarClavePropia } from '../lib/vault/api';
 import { destinoPostLogin } from '../lib/nextRoute';
 import { Lock, AlertCircle, Loader2 } from '../lib/icons';
@@ -49,11 +49,10 @@ export default function ChangePasswordPage() {
     // escribió) se crea la sesión y todo pasa como `authenticated`.
     try {
       await linkSupabase(user.email, currentPassword, accessToken);
-    } catch {
-      // Sin sesión de datos no hay nada que re-envolver; el backend
-      // rechazará el cambio más abajo si la contraseña actual es mala.
-      // (Si la contraseña actual es correcta pero Supabase no está
-      // sincronizado, linkSupabase ya hace el sync y reintenta.)
+    } catch (err) {
+      setLoading(false);
+      setError(`No se pudo validar la sesión de la bóveda: ${err?.message || 'error de conexión'}`);
+      return;
     }
 
     // §11 — la bóveda se desbloquea con la contraseña de PANEL, así que al
@@ -65,16 +64,25 @@ export default function ChangePasswordPage() {
     let salt = null; // salt de bóveda (no rota con el cambio de panel)
     let parametros = null; // snapshot KDF de la bóveda
 
-    // Leer la bóveda. Si no hay sesión de Supabase (o los permisos no
-    // alcanzan), se trata como "sin bóveda": no hay nada que re-envolver y
-    // el cambio de contraseña del panel sigue igual.
+    // Leer la bóveda antes de cambiar la contraseña evita dejar su clave
+    // inaccesible si falla el re-envoltorio.
     let b = null;
     try {
       b = await cargarBoveda();
     } catch (err) {
-      const sinSesion = err?.name === 'ErrorRls'
-        || /permission denied|row-level security|No hay sesión/i.test(err?.message || '');
-      if (!sinSesion) {
+      if (/JWT issued at future/i.test(err?.message || '')) {
+        try {
+          await refreshSupabaseSession();
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          b = await cargarBoveda();
+        } catch (retryError) {
+          setLoading(false);
+          setError(
+            `Supabase rechazó temporalmente la sesión de la bóveda. Reintenta en unos segundos: ${retryError?.message || 'error de conexión'}`,
+          );
+          return;
+        }
+      } else {
         setLoading(false);
         setError(
           `No se pudo leer la bóveda: ${err?.message || 'error de conexión'}`,

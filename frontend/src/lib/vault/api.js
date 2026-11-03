@@ -456,10 +456,10 @@ export async function guardarClave(vaultId, keyVersion, envoltura, { fuente = 'u
  * bajo MI contraseña de panel.
  *
  * Es un upsert sobre el índice único (vault_id, user_id, key_version,
- * proposito): si ya existía mi fila (cambio de contraseña o recuperación)
+ * proposito, fuente): si ya existía mi fila (cambio de contraseña o recuperación)
  * se reemplaza el envoltorio; si no (migración, primera vez), se inserta.
- * `user_id` sale del DEFAULT auth.uid() y el RLS de miembro sólo admite
- * filas con `user_id = auth.uid()` y `proposito='dek'`.
+ * `user_id` se envía explícitamente desde la sesión actual y el RLS de miembro
+ * sólo admite filas con `user_id = auth.uid()` y `proposito='dek'`.
  *
  * @param {object} args
  * @param {string} args.vaultId
@@ -471,8 +471,10 @@ export async function guardarClavePropia({ vaultId, keyVersion, envoltura }) {
     throw new Error('guardarClavePropia: faltan vaultId o keyVersion');
   }
 
+  const userId = await obtenerOwnerId();
   const fila = {
     vault_id: vaultId,
+    user_id: userId,
     key_version: keyVersion,
     proposito: 'dek',
     fuente: 'usuario',

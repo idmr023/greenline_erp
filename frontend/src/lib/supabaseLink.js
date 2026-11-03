@@ -9,7 +9,10 @@ import { authAPI } from './api';
  */
 export async function linkSupabase(email, password, accessToken) {
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) return;
+  if (session) {
+    const refreshed = await supabase.auth.refreshSession();
+    if (!refreshed.error && refreshed.data.session) return;
+  }
 
   let res = await supabase.auth.signInWithPassword({ email, password });
   if (!res.error) return;
@@ -19,6 +22,13 @@ export async function linkSupabase(email, password, accessToken) {
   if (res.error) {
     throw new Error(res.error.message || 'No se pudo vincular el acceso de datos');
   }
+}
+
+export async function refreshSupabaseSession() {
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) throw new Error(error.message || 'No se pudo renovar la sesión de Supabase');
+  if (!data.session) throw new Error('Supabase no devolvió una sesión renovada');
+  return data.session;
 }
 
 /**

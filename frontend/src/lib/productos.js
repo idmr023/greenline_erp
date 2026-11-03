@@ -144,11 +144,6 @@ function adaptarVista(vista, catalogo = []) {
     descripcion: vista.descripcion,
     precio_original: vista.precio_original,
     precio_actual: vista.precio_actual,
-    // Precio por cuotas (categorías con `precio_por_cuotas`, p. ej. scooters):
-    // total a pagar en cuotas y valor de cada cuota. NULL = no aplica.
-    precio_cuotas: vista.precio_cuotas ?? null,
-    precio_cuota: vista.precio_cuota ?? null,
-    precio_por_cuotas: vista.categoria_precio_por_cuotas === true,
     destacado: vista.destacado,
     videoId: vista.video_id,
     created_at: vista.created_at,
@@ -233,6 +228,7 @@ export function esUltimasUnidades(producto) {
 
 export const CATEGORIAS = [
   'VMP',
+  'Scooters',
   'Motos Eléctricas',
   'Trimotos Eléctricas',
   'Cargueros',

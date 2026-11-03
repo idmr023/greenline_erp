@@ -174,15 +174,39 @@ function exigirFormato(exportacion) {
   return true;
 }
 
+export function extraerVaultIdExport(exportacion) {
+  exigirFormato(exportacion);
+  try {
+    const aad = JSON.parse(new TextDecoder().decode(desdeBase64Url(exportacion.aad)));
+    if (
+      !Array.isArray(aad) ||
+      aad[0] !== FORMATO_EXPORT ||
+      aad[1] !== VERSION_EXPORT ||
+      typeof aad[2] !== 'string' ||
+      aad[2].length === 0
+    ) {
+      throw new ErrorExport('El origen del export no es válido');
+    }
+    return aad[2];
+  } catch (error) {
+    if (error instanceof ErrorExport) throw error;
+    throw new ErrorExport('El origen del export no es válido');
+  }
+}
+
 /**
  * Abre un fichero exportado. `vaultId` debe coincidir con el del AAD: si
  * alguien reutiliza el ciphertext con otro vault, el descifrado falla.
  *
  * @returns {Promise<Array>} los items originales
  */
-export async function abrirExport({ exportacion, passphrase, vaultId }) {
+export async function abrirExport({ exportacion, passphrase, vaultId, sourceVaultId = vaultId }) {
   exigirFormato(exportacion);
   exigirPassphrase(passphrase);
+  const origen = extraerVaultIdExport(exportacion);
+  if (origen !== sourceVaultId) {
+    throw new ErrorExport('El origen del export no coincide con la bóveda indicada');
+  }
 
   const salt = desdeBase64Url(exportacion.kdf.salt);
   const clave = await claveDeExport(passphrase, salt, {
@@ -196,7 +220,7 @@ export async function abrirExport({ exportacion, passphrase, vaultId }) {
 
   try {
     const aad = construirAADExport({
-      vaultId,
+      vaultId: sourceVaultId,
       creadoEn: exportacion.created_at,
       itemCount: exportacion.item_count,
     });

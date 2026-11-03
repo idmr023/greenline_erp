@@ -13,6 +13,7 @@ import {
   contarEventos,
   crearBoveda,
   eliminarBovedaPropia,
+  eliminarBovedaAdministrativa,
   eliminarItem,
   guardarClavePropia,
   repararClaveDueno,
@@ -35,9 +36,10 @@ import {
   alternarRolVisible,
   borrar,
   detalleAuditoriaExport,
+  extraerVaultIdExport,
   etiquetaVisibilidad,
-  generarPassphraseExport,
   generarRecoveryKey,
+  generarPassphraseExport,
   normalizarRolesVisibles,
   parametrosUsados,
   parsearRecoveryKey,
@@ -133,6 +135,12 @@ export default function AdminBoveda() {
   const [errorCarga, setErrorCarga] = useState(null);
   const [sinMigracion, setSinMigracion] = useState(null);
   const [bootstrap, setBootstrap] = useState(null);
+  const [vaultIdPreferida, setVaultIdPreferida] = useState(null);
+  const [creandoNueva, setCreandoNueva] = useState(false);
+  const [bovedaAEliminar, setBovedaAEliminar] = useState('');
+  const [passwordEliminarBloqueada, setPasswordEliminarBloqueada] = useState('');
+  const [confirmacionEliminarBloqueada, setConfirmacionEliminarBloqueada] = useState('');
+  const [errorEliminarBloqueada, setErrorEliminarBloqueada] = useState(null);
 
   const [master, setMaster] = useState('');
   const [master2, setMaster2] = useState('');
@@ -185,6 +193,7 @@ export default function AdminBoveda() {
   // por eso comparten el mismo campo.
   const pasoExport = useStepUp({ proposito: 'export' });
   const pasoRecovery = useStepUp({ proposito: 'recovery' });
+  const pasoEliminar = useStepUp({ proposito: 'delete-vault' });
 
   // Los items descifrados sólo se muestran si corresponden a ESTE
   // desbloqueo: si la bóveda se bloquea, `desbloqueada` ya es false y al
@@ -201,7 +210,7 @@ export default function AdminBoveda() {
     () => (desbloqueada && datos?.gen === generacion ? datos.rotos || [] : []),
     [desbloqueada, datos, generacion],
   );
-  const creada = bootstrap && !bootstrap.boveda;
+  const creada = Boolean(bootstrap && !bootstrap.boveda) || creandoNueva;
   const soyDueno = esDuenoDe(bootstrap);
 
   // Bóveda visible pero sin envoltorio de DEK vigente: `cargarBoveda()`
@@ -223,10 +232,10 @@ export default function AdminBoveda() {
    * actualización del bootstrap pasa por aquí.
    */
   
-const leerBootstrap = useCallback(async () => {
+const leerBootstrap = useCallback(async (vaultId = vaultIdPreferida) => {
   console.log('[DEBUG BOOTSTRAP] Iniciando cargarBoveda');
 
-  const b = await cargarBoveda();
+  const b = await cargarBoveda({ vaultId });
 
   console.log('[DEBUG BOVEDA]', {
     bovedaId: b?.bovedaId,
@@ -261,7 +270,7 @@ const leerBootstrap = useCallback(async () => {
   console.log('[DEBUG BOOTSTRAP] Finalizado');
 
   return { ...b, recuperacion };
-}, []);
+}, [vaultIdPreferida]);
 
 const recargar = useCallback(async () => {
   console.log('[DEBUG RECARGAR] Iniciando lectura');
@@ -542,15 +551,11 @@ useEffect(() => {
     async (e) => {
       e?.preventDefault?.();
       setErrorMaestra(null);
-      if (master !== master2) {
-        setErrorMaestra('Las contraseñas no coinciden.');
+      if (!master || !master2) {
+        setErrorMaestra('Completa la contraseña maestra y tu contraseña de panel.');
         return;
       }
-      // §11 — la bóveda se envuelve con la contraseña de PANEL, así que
-      // debe ser la que el backend acepta (el mismo check del formulario de
-      // cambio de contraseña). Sin el check de 14 caracteres: la política
-      // del panel es la que manda.
-      if (!(await verificarPasswordPanel(master))) return;
+      if (!(await verificarPasswordPanel(master2))) return;
       try {
         const ownerId = await obtenerOwnerId();
         const vaultId = crypto.randomUUID();
@@ -575,6 +580,13 @@ useEffect(() => {
           salt,
           parametros: parametrosUsados(ARGON2),
           envolturaClave: creada.dek.envoltura,
+          fuente: 'maestra',
+        });
+        const propia = await cliente.migrarClaveUsuario({ passwordUsuario: master2 });
+        await guardarClavePropia({
+          vaultId,
+          keyVersion: propia.contexto.keyVersion,
+          envoltura: propia.envoltura,
         });
         await guardarItem({
           vaultId,
@@ -584,7 +596,8 @@ useEffect(() => {
         });
         await registrarEvento({ evento: 'BOVED_CREATE', vaultId });
 
-        const recienCreada = await leerBootstrap();
+        setVaultIdPreferida(vaultId);
+        const recienCreada = await leerBootstrap(vaultId);
         setBootstrap(recienCreada);
         setActivaRecovery(false);
         setDatos({
@@ -594,7 +607,8 @@ useEffect(() => {
         });
         setMaster('');
         setMaster2('');
-        setMensaje('Bóveda creada. Tu contraseña de panel no se ha guardado en ningún sitio.');
+        setCreandoNueva(false);
+        setMensaje('Bóveda creada. Guarda la contraseña maestra para migrar a los demás usuarios.');
       } catch (err) {
         setErrorMaestra(err?.message || 'No se pudo crear la bóveda.');
         bloquear();
@@ -602,6 +616,7 @@ useEffect(() => {
     },
     [bloquear, desbloquear, leerBootstrap, master, master2, obtenerCliente, verificarPasswordPanel],
   );
+
 
   /**
    * Borra la propia bóveda cuando está vacía y sin envoltorio de DEK (el
@@ -620,6 +635,80 @@ useEffect(() => {
       setReparando(false);
     }
   }, [bootstrap, recargar]);
+
+  const alEliminarBoveda = useCallback(async () => {
+    const vaultId = bootstrap?.bovedaId;
+    if (!puedeEscribir || !vaultId) return;
+    const confirmacion = window.prompt(
+      `Esta acción elimina la bóveda y todos sus secretos.\n\nEscribe ELIMINAR para continuar:`,
+    );
+    if (confirmacion !== 'ELIMINAR') return;
+    if (!(await pasoEliminar.autorizar(masterPanel))) return;
+    if (!window.confirm('Confirma por última vez: la eliminación no se puede deshacer.')) return;
+
+    setTrabajando(true);
+    try {
+      await registrarEvento({
+        evento: 'BOVED_DELETE',
+        vaultId,
+        detalle: JSON.stringify({ alcance: 'boveda_completa' }),
+      });
+      await eliminarBovedaAdministrativa(vaultId);
+      bloquear();
+      setDatos(null);
+      setBootstrap(await leerBootstrap());
+      setMensaje({ tipo: 'ok', texto: 'Bóveda eliminada correctamente.' });
+      setMasterPanel('');
+      setPanel(null);
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err?.message || 'No se pudo eliminar la bóveda.' });
+    } finally {
+      setTrabajando(false);
+    }
+  }, [bloquear, bootstrap, leerBootstrap, masterPanel, pasoEliminar, puedeEscribir]);
+
+  const alEliminarBovedaBloqueada = useCallback(async (e) => {
+    e?.preventDefault?.();
+    const vaultId = bovedaAEliminar || bootstrap?.boveda?.id;
+    if (!puedeEscribir || !vaultId) return;
+    setErrorEliminarBloqueada(null);
+    if (confirmacionEliminarBloqueada !== 'ELIMINAR') {
+      setErrorEliminarBloqueada('Escribe ELIMINAR para confirmar.');
+      return;
+    }
+    if (!(await verificarPasswordPanel(passwordEliminarBloqueada))) return;
+    if (!window.confirm('Confirma por última vez: la eliminación no se puede deshacer.')) return;
+
+    setTrabajando(true);
+    try {
+      await registrarEvento({
+        evento: 'BOVED_DELETE',
+        vaultId,
+        detalle: JSON.stringify({ alcance: 'boveda_completa' }),
+      });
+      await eliminarBovedaAdministrativa(vaultId);
+      setVaultIdPreferida(null);
+      setBovedaAEliminar('');
+      setPasswordEliminarBloqueada('');
+      setConfirmacionEliminarBloqueada('');
+      await recargar();
+      setMensaje({ tipo: 'ok', texto: 'Bóveda eliminada correctamente.' });
+    } catch (err) {
+      setErrorEliminarBloqueada(err?.message || 'No se pudo eliminar la bóveda.');
+    } finally {
+      setTrabajando(false);
+    }
+  }, [
+    bovedaAEliminar,
+    bootstrap,
+    confirmacionEliminarBloqueada,
+    passwordEliminarBloqueada,
+    puedeEscribir,
+    recargar,
+    registrarEvento,
+    eliminarBovedaAdministrativa,
+    verificarPasswordPanel,
+  ]);
 
   const alGuardar = useCallback(
     async (e) => {
@@ -856,7 +945,7 @@ useEffect(() => {
       if (datos?.format !== FORMATO_EXPORT || typeof datos?.format_version !== 'number') {
         return fallo(null, `«${archivo.name}» no es un export de bóveda de GreenLine.`);
       }
-      setFicheroImport({ nombre: archivo.name, datos });
+      setFicheroImport({ nombre: archivo.name, datos, sourceVaultId: extraerVaultIdExport(datos) });
     } catch {
       fallo(null, `No se pudo leer «${archivo.name}»: no es JSON válido.`);
     } finally {
@@ -879,8 +968,9 @@ useEffect(() => {
         // R52: el Argon2id de apertura va al worker, no a la página.
         const secretos = await cliente.abrirExport({
           exportacion: ficheroImport.datos,
-          passphrase: passImport,
+          passphrase: passImport.trim(),
           vaultId: bootstrap.bovedaId,
+          sourceVaultId: ficheroImport.sourceVaultId,
         });
 
         if (!Array.isArray(secretos) || secretos.length === 0) {
@@ -903,6 +993,12 @@ useEffect(() => {
         const ownerId = await obtenerOwnerId();
         let importados = 0;
         for (const bruto of secretos) {
+          const itemImportado = normalizarImportado(bruto);
+          if (!categorias.some((categoria) => categoria.clave === itemImportado.categoria)) {
+            throw new Error(
+              `El secreto «${itemImportado.title || 'sin título'}» no tiene una categoría válida para esta bóveda.`,
+            );
+          }
           const contexto = {
             vaultId: bootstrap.bovedaId,
             itemId: crypto.randomUUID(),
@@ -911,8 +1007,14 @@ useEffect(() => {
             revision: 1,
             keyVersion: 1,
           };
-          const envoltura = await cliente.cifrarItem(normalizarImportado(bruto), contexto);
-          await guardarItem({ vaultId: bootstrap.bovedaId, contexto, envoltura, tipo: null });
+          const envoltura = await cliente.cifrarItem(itemImportado, contexto);
+          await guardarItem({
+            vaultId: bootstrap.bovedaId,
+            contexto,
+            envoltura,
+            tipo: null,
+            categoria: itemImportado.categoria,
+          });
           importados += 1;
         }
 
@@ -1060,9 +1162,108 @@ useEffect(() => {
         </div>
         <p className="mt-2 text-sm text-gray-500">
           {creada
-            ? 'La bóveda se envuelve con tu contraseña de panel: se deriva aquí (Argon2id) y NUNCA se envía al servidor — sólo se verifica contra el backend. Si la pierdes, usa la recovery key.'
+            ? 'Define una contraseña maestra para esta bóveda y una contraseña de panel para tu acceso. La maestra se necesitará para migrar a cada usuario.'
             : 'Se deriva la clave en tu equipo (Argon2id) con tu contraseña de usuario y sólo se envía material cifrado.'}
         </p>
+
+        {bootstrap?.bovedas?.length > 0 && !creandoNueva && (
+          <div className="mt-4">
+            <label className="block">
+              <span className="text-xs font-medium text-gray-600">Bóveda</span>
+              <select
+                value={bootstrap.boveda?.id || ''}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setVaultIdPreferida(id || null);
+                  setBovedaAEliminar(id || '');
+                  setErrorEliminarBloqueada(null);
+                  void leerBootstrap(id || null).then((b) => {
+                    setBootstrap(b);
+                    setActivaRecovery(b.recuperacion.length > 0);
+                  }).catch((err) => setErrorCarga(err));
+                }}
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              >
+                {bootstrap.bovedas.map((vault) => (
+                  <option key={vault.id} value={vault.id}>
+                    {vault.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {puedeEscribir && (
+              <form onSubmit={alEliminarBovedaBloqueada} className="mt-3 space-y-2 rounded-lg border border-red-100 bg-red-50 p-3">
+                <p className="text-xs font-semibold text-red-800">Eliminar la bóveda seleccionada</p>
+                <input
+                  type="password"
+                  value={passwordEliminarBloqueada}
+                  onChange={(e) => setPasswordEliminarBloqueada(e.target.value)}
+                  placeholder="Contraseña de usuario"
+                  autoComplete="current-password"
+                  required
+                  className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs focus:border-red-400 focus:outline-none"
+                />
+                <input
+                  value={confirmacionEliminarBloqueada}
+                  onChange={(e) => setConfirmacionEliminarBloqueada(e.target.value)}
+                  placeholder="Escribe ELIMINAR"
+                  autoComplete="off"
+                  required
+                  className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs focus:border-red-400 focus:outline-none"
+                />
+                {errorEliminarBloqueada && (
+                  <p className="text-xs font-medium text-red-700" role="alert">
+                    {errorEliminarBloqueada}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={trabajando || !passwordEliminarBloqueada || confirmacionEliminarBloqueada !== 'ELIMINAR'}
+                  className="rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+                >
+                  Eliminar definitivamente
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {puedeEscribir && !creada && !creandoNueva && (
+          <button
+            type="button"
+            onClick={() => {
+              setCreandoNueva(true);
+              setMaster('');
+              setMaster2('');
+              setErrorMaestra(null);
+            }}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-brand/30 px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+          >
+            <Plus className="h-4 w-4" />
+            Crear otra bóveda
+          </button>
+        )}
+
+        {creandoNueva && (
+          <button
+            type="button"
+            onClick={() => {
+              setCreandoNueva(false);
+              setMaster('');
+              setMaster2('');
+              setErrorMaestra(null);
+            }}
+            className="mt-4 text-xs font-medium text-gray-500 underline hover:text-gray-700"
+          >
+            Cancelar creación
+          </button>
+        )}
+
+        {creada && !puedeEscribir && (
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Sólo ADMIN y DESARROLLADOR_WEB pueden crear bóvedas.
+          </p>
+        )}
 
         {sinClave && !bootstrap?.propiaReparable && (
           <p
@@ -1109,7 +1310,7 @@ useEffect(() => {
           <label className="block">
             <span className="text-xs font-medium text-gray-600">
               {creada
-                ? 'Tu contraseña de panel'
+                ? 'Contraseña maestra de la bóveda (guárdala)'
                 : migrando
                   ? 'Contraseña maestra (legado)'
                   : 'Tu contraseña de usuario (contraseña de panel)'}
@@ -1128,7 +1329,7 @@ useEffect(() => {
 
           {creada && (
             <label className="block">
-              <span className="text-xs font-medium text-gray-600">Repite tu contraseña de panel</span>
+              <span className="text-xs font-medium text-gray-600">Tu contraseña de panel</span>
               <input
                 type="password"
                 value={master2}
@@ -1163,7 +1364,8 @@ useEffect(() => {
             disabled={
               ocupado ||
               master.length === 0 ||
-              sinClave ||
+              (sinClave && !migrando) ||
+              (creada && !puedeEscribir) ||
               ((creada || migrando) && master2.length === 0)
             }
             className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
@@ -1377,6 +1579,16 @@ useEffect(() => {
                 Importar export
               </button>
             )}
+            {puedeEscribir && (
+              <button
+                type="button"
+                onClick={() => setPanel(panel === 'delete' ? null : 'delete')}
+                disabled={trabajando}
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                Eliminar bóveda
+              </button>
+            )}
           </div>
         </div>
 
@@ -1511,7 +1723,8 @@ useEffect(() => {
           <form onSubmit={alImportar} className="mt-4 space-y-3 border-t border-gray-100 pt-4">
             <p className="text-xs text-gray-600">
               Abre un fichero <code className="font-mono">GL-VAULT-EXPORT</code> y vuelve a cifrar
-              sus secretos con la clave de <strong>esta</strong> bóveda (R122). El contenido pasa
+              sus secretos con la clave de <strong>esta</strong> bóveda, incluso si procede de
+              otra bóveda (R122). El contenido pasa
               por tu navegador: el servidor nunca ve la passphrase de apertura.
             </p>
             <label className="block">
@@ -1555,6 +1768,46 @@ useEffect(() => {
               className="rounded-lg bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
             >
               {trabajando ? 'Descifrando e importando…' : 'Importar en esta bóveda'}
+            </button>
+          </form>
+        )}
+
+        {panel === 'delete' && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); void alEliminarBoveda(); }}
+            className="mt-4 space-y-3 border-t border-red-100 pt-4"
+          >
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+              <p className="font-semibold">Eliminar bóveda completa</p>
+              <p className="mt-1">
+                Se eliminarán la bóveda, sus envolturas, secretos y membresías. Esta acción no se
+                puede deshacer. Exporta antes si necesitas conservar los datos.
+              </p>
+            </div>
+            <label className="block">
+              <span className="text-xs font-medium text-gray-600">
+                Tu contraseña de usuario (step-up)
+              </span>
+              <input
+                type="password"
+                value={masterPanel}
+                onChange={(e) => setMasterPanel(e.target.value)}
+                autoComplete="current-password"
+                required
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-200"
+              />
+            </label>
+            {pasoEliminar.error && (
+              <p className="text-xs font-medium text-red-600" role="alert">
+                {pasoEliminar.error}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={trabajando || pasoEliminar.verificando || masterPanel.length === 0}
+              className="rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+            >
+              {trabajando || pasoEliminar.verificando ? 'Eliminando…' : 'Eliminar definitivamente'}
             </button>
           </form>
         )}

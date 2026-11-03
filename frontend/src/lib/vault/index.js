@@ -118,6 +118,7 @@ export {
   construirAADExport,
   crearExport,
   abrirExport,
+  extraerVaultIdExport,
   puedeExportar,
   detalleAuditoriaExport,
 } from './exportar.js';

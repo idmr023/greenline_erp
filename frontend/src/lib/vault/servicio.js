@@ -603,8 +603,14 @@ export function crearServicioBoveda() {
      * export. El que después se re-cifra cada item sí pasa por la DEK, y
      * esa operación sí la exige.
      */
-    abrirExport({ exportacion, passphrase, vaultId, parametros }) {
-      return abrirExportFichero({ exportacion, passphrase, vaultId, parametros });
+    abrirExport({ exportacion, passphrase, vaultId, sourceVaultId, parametros }) {
+      return abrirExportFichero({
+        exportacion,
+        passphrase,
+        vaultId,
+        sourceVaultId,
+        parametros,
+      });
     },
 
     // -----------------------------------------------------------------------

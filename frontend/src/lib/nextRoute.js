@@ -3,7 +3,7 @@
  *
  * El destino viaja en la URL y no en `location.state` porque así sobrevive a
  * una recarga del formulario de login, es compartible y se puede auditar.
- * El sitio público ya usa esta misma convención (`/login-cliente?next=/checkout`).
+ * El sitio público ya usa esta misma convención (`/login?next=/checkout`).
  *
  * Como el destino acaba en una redirección del navegador, se sanea con reglas
  * estrictas: sólo rutas relativas del mismo origen. Cualquier esquema

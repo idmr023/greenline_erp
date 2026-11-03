@@ -162,7 +162,7 @@ export async function obtenerOwnerId() {
  *
  * @returns {Promise<{boveda:object, propiaSinClave:boolean, propiaId:string|null, propiaReparable:boolean, clave:object|null, clavePropia:object|null, migracionPendiente:boolean, claves:Array, clavesPrevias:Array, items:Array, salt:Uint8Array|null}>}
  */
-export async function cargarBoveda() {
+export async function cargarBoveda({ vaultId = null } = {}) {
   // Con bóvedas de equipo el RLS devuelve varias filas (la propia y las
   // donde soy miembro): elegir con `limit(1)` era arbitrario y podía no
   // coincidir con los items/claves de abajo. La propia tiene prioridad.
@@ -228,14 +228,22 @@ export async function cargarBoveda() {
     ]);
     propiaReparable = !eClaves && !eItems && nClaves === 0 && nItems === 0;
   }
+  // La bóveda seleccionada debe compartir la misma DEK que las envolturas e
+  // ítems que se cargan debajo. Elegir sólo la primera fila puede seleccionar
+  // una bóveda vacía o sin una clave visible y provocar una creación paralela.
+  const bovedaPreferida = vaultId ? visibles.find((v) => v.id === vaultId) : null;
   const boveda =
+    (bovedaPreferida || null) ||
     (propia && conClave(propia) ? propia : null) ||
     visibles.find(conClave) ||
     propia ||
     visibles[0] ||
     null;
+
   const delVault = (fila) => Boolean(boveda) && fila.vault_id === boveda.id;
-  const clavesVisibles = (claves || []).filter(delVault);
+  const clavesVisibles = (claves || []).filter(
+    (fila) => delVault(fila) && (fila.user_id === uid || fila.fuente === 'maestra'),
+  );
   const previasVisibles = (previas || []).filter(delVault);
   const itemsVisibles = (items || []).filter(delVault);
 
@@ -255,7 +263,7 @@ export async function cargarBoveda() {
   const esPropia = (fila) => fila.user_id === uid && fila.fuente === 'usuario';
   const mayorVersion = (filas) => filas.slice().sort((a, b) => b.key_version - a.key_version)[0] || null;
   const propias = clavesVisibles.filter(esPropia);
-  const legado = clavesVisibles.filter((f) => !esPropia(f));
+  const legado = clavesVisibles.filter((f) => f.fuente === 'maestra');
   const filaPropia = mayorVersion(propias);
   const filaLegado = mayorVersion(legado);
   const ownerId = boveda?.owner_id || null;
@@ -303,6 +311,7 @@ export async function cargarBoveda() {
 
   return {
     boveda,
+    bovedas: visibles.map(({ id, owner_id, created_at }) => ({ id, owner_id, created_at })),
     // La propia existe pero no tiene DEK vigente y se ha usado otra bóveda.
     propiaSinClave,
     // id de la propia (puede no ser la seleccionada) y si está vacía y sin
@@ -382,7 +391,14 @@ export async function cargarBoveda() {
 }
 
 /** §22 — crea la bóveda con su DEK recién envuelta (un solo paso atómico de cliente). */
-export async function crearBoveda({ id, salt, parametros, envolturaClave, keyVersion = 1 }) {
+export async function crearBoveda({
+  id,
+  salt,
+  parametros,
+  envolturaClave,
+  keyVersion = 1,
+  fuente = 'usuario',
+}) {
   const fila = {
     ...(id ? { id } : {}),
     kdf_name: ARGON2.nombre,
@@ -408,7 +424,7 @@ export async function crearBoveda({ id, salt, parametros, envolturaClave, keyVer
   const idBoveda = creada?.id ?? id;
   try {
     if (!idBoveda) throw new Error('La bóveda se insertó pero no se devolvió su id.');
-    await guardarClave(idBoveda, keyVersion, envolturaClave);
+    await guardarClave(idBoveda, keyVersion, envolturaClave, { fuente });
   } catch (claveError) {
     // Compensación: una bóveda sin envoltorio no se puede abrir nunca
     // (§22). Si el borrado tampoco llega, queda la reparación manual.
@@ -454,6 +470,7 @@ export async function guardarClavePropia({ vaultId, keyVersion, envoltura }) {
   if (!vaultId || !Number.isInteger(keyVersion)) {
     throw new Error('guardarClavePropia: faltan vaultId o keyVersion');
   }
+
   const fila = {
     vault_id: vaultId,
     key_version: keyVersion,
@@ -463,7 +480,7 @@ export async function guardarClavePropia({ vaultId, keyVersion, envoltura }) {
   };
   const { error } = await supabase
     .from(TABLAS.claves)
-    .upsert(fila, { onConflict: 'vault_id,user_id,key_version,proposito' });
+    .upsert(fila, { onConflict: 'vault_id,user_id,key_version,proposito,fuente' });
   if (error) throw traducir(error, TABLAS.claves);
   return true;
 }
@@ -601,6 +618,20 @@ export async function eliminarBovedaPropia(vaultId) {
   }
   const { error } = await supabase.from(TABLAS.bovedas).delete().eq('id', vaultId);
   if (error) throw traducir(error, TABLAS.bovedas);
+  return true;
+}
+
+/** Elimina una bóveda completa sólo cuando el RLS administrativo lo permite. */
+export async function eliminarBovedaAdministrativa(vaultId) {
+  if (!vaultId) throw new Error('Falta el identificador de la bóveda.');
+  const { data, error } = await supabase
+    .from(TABLAS.bovedas)
+    .delete()
+    .eq('id', vaultId)
+    .select('id')
+    .single();
+  if (error) throw traducir(error, TABLAS.bovedas);
+  if (!data?.id) throw new Error('La bóveda no fue eliminada.');
   return true;
 }
 

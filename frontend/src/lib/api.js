@@ -151,6 +151,17 @@ export const authAPI = {
       body: JSON.stringify({ password }),
     }),
 
+  // ¿Es ésta la contraseña de OTRO usuario? La bóveda lo usa al reenvolver la
+  // DEK del dueño bajo su contraseña: sin la comprobación, un error de tipeo
+  // deja al dueño con una envoltura que no puede abrir. Sólo responde
+  // { valid }; no inicia sesión ni toca los contadores de intentos.
+  verifyUserPassword: (userId, password, accessToken) =>
+    request('/auth/verify-user-password', {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ userId, password }),
+    }),
+
   verifyOTP: (email, codigo) =>
     request('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ email, codigo }) }),
 

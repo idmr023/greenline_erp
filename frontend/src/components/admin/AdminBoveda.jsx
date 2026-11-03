@@ -498,6 +498,20 @@ useEffect(() => {
     }
     setTrabajando(true);
     try {
+      // Antes de reenvolver: comprobar que la contraseña escrita es
+      // REALMENTE la del dueño. Sin esto, un error de tipeo le deja una
+      // envoltura que no puede abrir y el mensaje de "ya podés abrir la
+      // bóveda con tu contraseña" sería falso.
+      const delDueno = await authAPI.verifyUserPassword(
+        bootstrap.ownerId,
+        formReparacion.passwordDueno,
+        accessToken,
+      );
+      if (!delDueno?.valid) {
+        setErrorReparacion('La contraseña del dueño no es correcta.');
+        return;
+      }
+
       const nueva = await obtenerCliente().reenvolverConPassword({
         passwordActual: formReparacion.passwordActual,
         passwordNueva: formReparacion.passwordDueno,
@@ -508,7 +522,10 @@ useEffect(() => {
       });
       await repararClaveDueno({
         vaultId: bootstrap.bovedaId,
-        keyVersion: nueva.contexto.keyVersion,
+        // `reenvolverConPassword` devuelve SÓLO la envoltura nueva (no el
+        // contexto): la versión vigente de la DEK se toma del contexto de
+        // la envoltura propia, que es la que se acaba de reenvolver.
+        keyVersion: bootstrap.clavePropia.keyVersion,
         envoltura: nueva.envoltura,
       });
       setFormReparacion({ passwordActual: '', passwordDueno: '', confirmacion: '' });

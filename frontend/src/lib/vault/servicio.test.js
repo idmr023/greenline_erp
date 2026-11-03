@@ -891,6 +891,31 @@ describe('Fase 3 §11 — KEK por usuario (contraseña de panel)', () => {
     );
   });
 
+  test('reenvolverConPassword NO devuelve contexto: el keyVersion sale del contexto de entrada', async () => {
+    // El consumidor (AdminBoveda) guarda la envoltura nueva con el keyVersion
+    // de la envoltura que reenvuelve. Si este contrato cambia, "Reparar acceso
+    // del dueño" vuelve a romperse en runtime con
+    // "Cannot read properties of undefined (reading 'keyVersion')".
+    const { salt, creada } = await conBovedaCreada();
+    const servicio = crearServicioBoveda(); // nunca desbloqueado
+
+    const r = await servicio.manejar({
+      tipo: 'reenvolverConPassword',
+      datos: {
+        passwordActual: MAESTRA,
+        passwordNueva: PANEL,
+        salt,
+        parametros: PARAMS,
+        envoltura: creada.dek.envoltura,
+        contexto: CONTEXTO_DEK,
+      },
+    });
+
+    assert.equal(r.contexto, undefined);
+    assert.ok(r.envoltura);
+    assert.equal(CONTEXTO_DEK.keyVersion, creada.dek.contexto.keyVersion);
+  });
+
   test('reenvolverConPassword con la contraseña actual equivocada no produce nada (R120)', async () => {
     const { salt, creada } = await conBovedaCreada();
     const servicio = crearServicioBoveda();

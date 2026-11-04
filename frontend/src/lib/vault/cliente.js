@@ -86,6 +86,8 @@ export function crearClienteBoveda({ fabricaWorker = workerPorDefecto } = {}) {
     migrarClaveUsuario: (datos) => pedir('migrarClaveUsuario', datos),
     /** §11 — reenvuelve la DEK de otra contraseña de panel a otra (sin desbloqueo). */
     reenvolverConPassword: (datos) => pedir('reenvolverConPassword', datos),
+    /** §11 — reenvuelve el par asimétrico del usuario (sin desbloqueo). */
+    reenvolverParConPassword: (datos) => pedir('reenvolverParConPassword', datos),
     /** §11 + §25 — desde la recovery key, la DEK pasa a la contraseña de panel. */
     reenvolverDesdeRecuperacion: (datos) => pedir('reenvolverDesdeRecuperacion', datos),
     /** §27 — devuelve el salt nuevo y las DEKs reenvueltas (R116/R120). */

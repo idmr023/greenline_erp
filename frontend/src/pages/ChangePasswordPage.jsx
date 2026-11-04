@@ -6,7 +6,7 @@ import { authAPI } from '../lib/api';
 import { PasswordSchema } from '../lib/password';
 import PasswordStrength from '../components/auth/PasswordStrength';
 import { linkSupabase, refreshSupabaseSession } from '../lib/supabaseLink';
-import { cargarBoveda, guardarClavePropia } from '../lib/vault/api';
+import { reenvolverTodasLasClavesPropias } from '../lib/vault/api';
 import { destinoPostLogin } from '../lib/nextRoute';
 import { Lock, AlertCircle, Loader2 } from '../lib/icons';
 
@@ -22,6 +22,7 @@ export default function ChangePasswordPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
+  const [aviso, setAviso] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fuerte = PasswordSchema.safeParse(newPassword).success;
@@ -55,26 +56,27 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    // §11 — la bóveda se desbloquea con la contraseña de PANEL, así que al
-    // cambiarla hay que re-envolver la DEK con la nueva ANTES de que el
-    // backend la acepte (save-first): si el re-envoltorio falla, NADA ha
-    // cambiado todavía; si el backend falla después, se revierte la fila.
-    let clave = null; // fila propia cargada antes de re-envolver
-    let reenvuelta = null; // envoltura bajo la contraseña NUEVA
-    let salt = null; // salt de bóveda (no rota con el cambio de panel)
-    let parametros = null; // snapshot KDF de la bóveda
-
-    // Leer la bóveda antes de cambiar la contraseña evita dejar su clave
-    // inaccesible si falla el re-envoltorio.
-    let b = null;
+    // §11 — reenvuelve TODAS las envolturas propias (todas las bóvedas) y el
+    // par asimétrico con la contraseña nueva ANTES de que el backend la
+    // acepte (save-first): si el re-envoltorio falla, NADA ha cambiado
+    // todavía; si el backend falla después, se revierte todo.
+    let reenvuelto = null;
     try {
-      b = await cargarBoveda();
+      reenvuelto = await reenvolverTodasLasClavesPropias({
+        passwordActual: currentPassword,
+        passwordNueva: newPassword,
+        cliente: obtenerCliente(),
+      });
     } catch (err) {
       if (/JWT issued at future/i.test(err?.message || '')) {
         try {
           await refreshSupabaseSession();
           await new Promise((resolve) => setTimeout(resolve, 5000));
-          b = await cargarBoveda();
+          reenvuelto = await reenvolverTodasLasClavesPropias({
+            passwordActual: currentPassword,
+            passwordNueva: newPassword,
+            cliente: obtenerCliente(),
+          });
         } catch (retryError) {
           setLoading(false);
           setError(
@@ -83,48 +85,10 @@ export default function ChangePasswordPage() {
           return;
         }
       } else {
+        // Nada abierto con la contraseña actual (incorrecta o daño previo):
+        // no se escribe nada y el cambio de contraseña no continúa.
         setLoading(false);
-        setError(
-          `No se pudo leer la bóveda: ${err?.message || 'error de conexión'}`,
-        );
-        return;
-      }
-    }
-
-    clave = b?.bovedaId ? b.clavePropia : null;
-    if (clave) {
-      salt = b.salt;
-      parametros = b.parametros;
-      let abrir;
-      try {
-        abrir = await obtenerCliente().reenvolverConPassword({
-          passwordActual: currentPassword,
-          passwordNueva: newPassword,
-          salt,
-          parametros,
-          envoltura: clave.envoltura,
-          contexto: clave.contexto,
-        });
-      } catch {
-        // Abrir con la contraseña vieja falló: o la contraseña actual es
-        // incorrecta o la muestra R120 no cuadra — en cualquier caso NO
-        // se toca nada (ni servidor ni fila).
-        setLoading(false);
-        setError('La contraseña actual no es correcta.');
-        return;
-      }
-      reenvuelta = abrir.envoltura;
-      try {
-        await guardarClavePropia({
-          vaultId: clave.contexto.vaultId,
-          keyVersion: clave.contexto.keyVersion,
-          envoltura: reenvuelta,
-        });
-      } catch (err) {
-        setLoading(false);
-        setError(
-          `No se pudo guardar la clave re-envuelta de la bóveda: ${err?.message || 'error guardándola'}`,
-        );
+        setError(err?.message || 'No se pudieron re-envolver las claves de la bóveda.');
         return;
       }
     }
@@ -132,22 +96,15 @@ export default function ChangePasswordPage() {
     try {
       await authAPI.changePassword(currentPassword, newPassword, accessToken);
     } catch (err) {
-      // El backend no aceptó el cambio: la fila ya está bajo la contraseña
-      // nueva, así que se revierte para que siga cuadrando con el panel.
-      if (clave && reenvuelta) {
+      // El backend no aceptó el cambio: se revierte el re-envoltorio (se
+      // vuelve a envolver con las contraseñas invertidas) para que las
+      // filas sigan cuadrando con la contraseña que sigue vigente.
+      if (reenvuelto && (reenvuelto.guardadas > 0 || reenvuelto.par)) {
         try {
-          const { envoltura } = await obtenerCliente().reenvolverConPassword({
+          await reenvolverTodasLasClavesPropias({
             passwordActual: newPassword,
             passwordNueva: currentPassword,
-            salt,
-            parametros,
-            envoltura: reenvuelta,
-            contexto: clave.contexto,
-          });
-          await guardarClavePropia({
-            vaultId: clave.contexto.vaultId,
-            keyVersion: clave.contexto.keyVersion,
-            envoltura,
+            cliente: obtenerCliente(),
           });
         } catch { /* el error real es el del backend */ }
       }
@@ -169,6 +126,22 @@ export default function ChangePasswordPage() {
       { ...user, mustChangePassword: false },
     );
     setLoading(false);
+
+    // Alguna clave no abrió con la contraseña actual (daño histórico): el
+    // cambio ya está hecho, pero el usuario debe enterarse ANTES de seguir.
+    if (reenvuelto?.fallidas?.length) {
+      const hechas = [];
+      if (reenvuelto.guardadas > 0) hechas.push(`${reenvuelto.guardadas} bóveda(s)`);
+      if (reenvuelto.par) hechas.push('el par asimétrico');
+      const listo = hechas.length
+        ? `Se re-envolvió ${hechas.join(' y ')}`
+        : 'No había claves propias que re-envolver';
+      setAviso(
+        `${listo}, pero ${reenvuelto.fallidas.length} clave(s) NO abrieron con la contraseña actual ` +
+          'y quedaron sin actualizar. Si alguna bóveda no desbloquea, pide reparación antes de seguir.',
+      );
+      return;
+    }
     navigate(destino, { replace: true });
   };
 
@@ -194,6 +167,21 @@ export default function ChangePasswordPage() {
             {error}
           </div>
         )}
+        {aviso && (
+          <div className="flex items-start gap-2 bg-amber-50 text-amber-800 text-sm px-4 py-3 rounded-lg mb-4">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            {aviso}
+          </div>
+        )}
+        {aviso ? (
+          <button
+            type="button"
+            onClick={() => navigate(destino, { replace: true })}
+            className="w-full py-2.5 bg-brand text-white font-semibold rounded-lg"
+          >
+            Continuar
+          </button>
+        ) : (
         <form onSubmit={submit} className="space-y-4">
           <input
             type="password"
@@ -232,6 +220,7 @@ export default function ChangePasswordPage() {
             {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Guardar contraseña'}
           </button>
         </form>
+        )}
       </div>
     </div>
   );

@@ -287,6 +287,11 @@ export function crearServicioBoveda() {
      * @param {Array} datos.envolturas      DEKs vigentes
      * @param {object} [datos.parAsimetrico] envolturas del par §6.2 (opcional:
      *        si no se envía, el usuario pierde su identidad firmante)
+     *
+     * Latente (sin UI): si se expone, debe encadenarse con
+     * reenvolverTodasLasClavesPropias (cambio de contraseña de panel) para
+     * no dejar envolturas propias de otras bóvedas ni el par asimétrico
+     * protegidos con la clave anterior.
      */
     async cambiarMasterPassword({ masterActual, masterNueva, vaultId, salt, parametros, envolturas, parAsimetrico }) {
       const actual = exigirDesbloqueada();
@@ -543,6 +548,55 @@ export function crearServicioBoveda() {
     },
 
     /**
+     * §11 — reenvuelve el PAR ASIMÉTRICO del usuario bajo OTRA contraseña de
+     * panel con el MISMO salt (no rota: el resto de la bóveda sigue derivando
+     * con él). NO exige desbloqueo ni par abierto: abre las mitades con
+     * `passwordActual` y devuelve las envolturas nuevas (R120 verificada).
+     *
+     * Lo usa el cambio de contraseña del panel: sin re-envolver la fila de
+     * `greenline_vault_user_keys`, cambiar la contraseña deja al usuario sin
+     * identidad firmante (no puede firmar ni abrir lo que le han compartido).
+     *
+     * @param {{passwordActual:string, passwordNueva:string, salt:Uint8Array,
+     *          parametros:object, vaultId:string, par:object}} datos
+     */
+    async reenvolverParConPassword({ passwordActual, passwordNueva, salt, parametros, vaultId, par }) {
+      validarMasterPassword(passwordActual);
+      validarMasterPassword(passwordNueva);
+      const bytesSalt = aBytes(salt, 'salt');
+      const kekActual = derivarMaterialMaestro(passwordActual, bytesSalt, parametros);
+      const kekNueva = derivarMaterialMaestro(passwordNueva, bytesSalt, parametros);
+      try {
+        const salida = {};
+        for (const mitad of ['firma', 'canje']) {
+          const origen = par[mitad];
+          const proposito = mitad === 'firma' ? PROPOSITOS.par_firma : PROPOSITOS.par_canje;
+          const contexto = { vaultId, keyVersion: origen.keyVersion, proposito };
+          const privada = await desenvolverClave(kekActual.kek, origen.envoltura, contexto);
+          try {
+            const nueva = await envolverClave(kekNueva.kek, privada, contexto);
+            const reabierta = await desenvolverClave(kekNueva.kek, nueva, contexto);
+            const coincide = igualdadConstante(reabierta, privada);
+            borrar(reabierta);
+            if (!coincide) {
+              throw new ErrorBoveda(
+                `Verificación post-re-envoltura del par asimétrico fallida (${mitad}) (R120)`,
+                CODIGOS.masterIncorrecta,
+              );
+            }
+            salida[mitad] = { keyVersion: origen.keyVersion, envoltura: nueva, publica: origen.publica };
+          } finally {
+            borrar(privada);
+          }
+        }
+        return { par: salida };
+      } finally {
+        borrarMaterial(kekActual);
+        borrarMaterial(kekNueva);
+      }
+    },
+
+    /**
      * §25 + §11 — recuperar con la recovery key: abre las DEKs con la KEK
      * de recuperación y las reenvuelve bajo la contraseña de panel con el
      * MISMO salt (no rota: el resto de usuarios de la bóveda siguen
@@ -736,6 +790,7 @@ export function crearServicioBoveda() {
         // --- §11 KEK por usuario (contraseña de panel) ---
         migrarClaveUsuario: this.migrarClaveUsuario,
         reenvolverConPassword: this.reenvolverConPassword,
+        reenvolverParConPassword: this.reenvolverParConPassword,
         reenvolverDesdeRecuperacion: this.reenvolverDesdeRecuperacion,
         cambiarMasterPassword: this.cambiarMasterPassword,
         activarRecuperacion: this.activarRecuperacion,

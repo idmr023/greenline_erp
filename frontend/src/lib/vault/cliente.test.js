@@ -182,6 +182,9 @@ describe('cliente del worker (§9, §15.1)', () => {
     pendientes.push(cliente.reenvolverConPassword({ passwordActual: 'a', passwordNueva: 'b' }));
     assert.equal(worker.enviados.at(-1).mensaje.tipo, 'reenvolverConPassword');
 
+    pendientes.push(cliente.reenvolverParConPassword({ passwordActual: 'a', passwordNueva: 'b' }));
+    assert.equal(worker.enviados.at(-1).mensaje.tipo, 'reenvolverParConPassword');
+
     pendientes.push(cliente.reenvolverDesdeRecuperacion({ recoveryKey: new Uint8Array(32) }));
     assert.equal(worker.enviados.at(-1).mensaje.tipo, 'reenvolverDesdeRecuperacion');
 

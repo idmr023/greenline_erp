@@ -258,8 +258,8 @@ export async function cargarBoveda({ vaultId = null } = {}) {
   //  • PROPIA (user_id == yo, fuente='usuario'): se abre con MI contraseña
   //    de panel. Es la que desbloquea.
   //  • LEGADO (fuente='maestra'): la maestra de la bóveda. Sólo se usa en
-  //    el modo de migración (la primera vez que entro) y queda ahí como
-  //    respaldo (p. ej. tras un reset de contraseña de panel).
+  //    el modo de migración: tras un reset de contraseña se borran las
+  //    envolturas propias y esta fila permite re-crearlas con la maestra.
   const esPropia = (fila) => fila.user_id === uid && fila.fuente === 'usuario';
   const mayorVersion = (filas) => filas.slice().sort((a, b) => b.key_version - a.key_version)[0] || null;
   const propias = clavesVisibles.filter(esPropia);
@@ -311,7 +311,7 @@ export async function cargarBoveda({ vaultId = null } = {}) {
 
   return {
     boveda,
-    bovedas: visibles.map(({ id, owner_id, created_at }) => ({ id, owner_id, created_at })),
+    bovedas: visibles.map(({ id, owner_id, created_at, nombre }) => ({ id, owner_id, created_at, nombre: nombre ?? null })),
     // La propia existe pero no tiene DEK vigente y se ha usado otra bóveda.
     propiaSinClave,
     // id de la propia (puede no ser la seleccionada) y si está vacía y sin
@@ -398,9 +398,12 @@ export async function crearBoveda({
   envolturaClave,
   keyVersion = 1,
   fuente = 'usuario',
+  nombre = null,
 }) {
+  const nombreLimpio = typeof nombre === 'string' ? nombre.trim().slice(0, 80) : '';
   const fila = {
     ...(id ? { id } : {}),
+    ...(nombreLimpio ? { nombre: nombreLimpio } : {}),
     kdf_name: ARGON2.nombre,
     kdf_salt: aTexto(salt),
     kdf_m: parametros.m,
@@ -432,6 +435,15 @@ export async function crearBoveda({
     throw claveError;
   }
   return { boveda: creada, bovedaId: creada.id };
+}
+
+/** C1 — renombra la bóveda (sólo el dueño: RLS `vault_owner`). */
+export async function renombrarBoveda(vaultId, nombre) {
+  const limpio = String(nombre ?? '').trim().slice(0, 80);
+  if (!limpio) throw new Error('El nombre no puede estar vacío.');
+  const { error } = await supabase.from(TABLAS.bovedas).update({ nombre: limpio }).eq('id', vaultId);
+  if (error) throw traducir(error, TABLAS.bovedas);
+  return limpio;
 }
 
 /** §7 + §11 — guarda una DEK envuelta. `AAD` ya lleva `key_version` (R10). */
@@ -651,6 +663,24 @@ export async function listarCategorias() {
     .order('nombre');
   if (error) throw traducir(error, TABLAS.categorias);
   return (data || []).map((c) => ({ clave: c.clave, nombre: c.nombre }));
+}
+
+/**
+ * C2 — ¿ninguno de los roles del usuario tiene categorías en la matriz?
+ * Distingue «sin acceso» de «bóveda vacía». ADMIN/DESARROLLADOR_WEB ven todo.
+ * Devuelve null si no se puede saber (RLS o red): no se muestra aviso.
+ */
+export async function rolesSinCategorias(roles) {
+  const lista = (roles || []).filter(Boolean);
+  if (lista.some((r) => r === 'ADMIN' || r === 'DESARROLLADOR_WEB')) return false;
+  if (lista.length === 0) return null;
+  const { data, error } = await supabase
+    .from('boveda_rol_categorias')
+    .select('rol')
+    .in('rol', lista)
+    .limit(1);
+  if (error) return null;
+  return (data || []).length === 0;
 }
 
 /**
@@ -921,6 +951,183 @@ export async function guardarParAsimetrico({ vaultId, keyVersion, par }) {
   if (errorPub) throw traducir(errorPub, TABLAS.pubs);
 
   return { guardado: true, userId };
+}
+
+/**
+ * §11 — reenvuelve TODAS las envolturas propias del usuario (todas las
+ * bóvedas visibles) y el par asimétrico bajo OTRA contraseña de panel con
+ * el MISMO salt de cada bóveda. Es lo que exige el cambio de contraseña
+ * del panel: con la KEK por usuario, cambiar la contraseña sin tocar las
+ * demás bóvedas las dejaría cifradas para siempre.
+ *
+ * Guarda-first por fases: primero se reenvuela TODO en el worker (nada
+ * escrito) y después se guardan las filas; si un guardado falla se
+ * revierten los ya escritos. Una fila que no abre con `passwordActual`
+ * (daño histórico) no bloquea el cambio: se omite y se devuelve en
+ * `fallidas` para que la UI avise.
+ *
+ * @param {{passwordActual:string, passwordNueva:string, cliente:object}} args
+ * @returns {Promise<{guardadas:number, par:boolean, fallidas:Array<{tipo:string, vaultId:string|null, motivo:string}>}>}
+ */
+export async function reenvolverTodasLasClavesPropias({ passwordActual, passwordNueva, cliente }) {
+  if (!cliente?.reenvolverConPassword) {
+    throw new Error('reenvolverTodasLasClavesPropias: falta el cliente de bóveda');
+  }
+
+  const uid = await obtenerOwnerId();
+  const [{ data: bovedas, error: e1 }, { data: claves, error: e2 }] = await Promise.all([
+    supabase.from(TABLAS.bovedas).select('*').order('created_at', { ascending: true }),
+    supabase
+      .from(TABLAS.claves)
+      .select('*')
+      .eq('user_id', uid)
+      .eq('fuente', 'usuario')
+      .eq('proposito', 'dek')
+      .is('revoked_at', null),
+  ]);
+  if (e1) throw traducir(e1, TABLAS.bovedas);
+  if (e2) throw traducir(e2, TABLAS.claves);
+
+  const porBoveda = new Map((bovedas || []).map((v) => [v.id, v]));
+  const aParametros = (v) => ({
+    nombre: v.kdf_name,
+    m: v.kdf_m,
+    t: v.kdf_t,
+    p: v.kdf_p,
+    dkLen: v.kdf_dklen,
+    saltBytes: 16,
+    version: v.kdf_version,
+  });
+  const fallidas = [];
+
+  // --- Fase de cómputo: NADA se escribe todavía ---
+  const plan = [];
+  for (const fila of claves || []) {
+    const boveda = porBoveda.get(fila.vault_id);
+    if (!boveda) {
+      fallidas.push({ tipo: 'dek', vaultId: fila.vault_id, motivo: 'la bóveda no es visible para esta sesión' });
+      continue;
+    }
+    try {
+      const r = await cliente.reenvolverConPassword({
+        passwordActual,
+        passwordNueva,
+        salt: aBytes(boveda.kdf_salt),
+        parametros: aParametros(boveda),
+        envoltura: envolturaDeFila(fila),
+        contexto: { vaultId: fila.vault_id, keyVersion: fila.key_version },
+      });
+      plan.push({
+        tipo: 'dek',
+        vaultId: fila.vault_id,
+        keyVersion: fila.key_version,
+        envoltura: r.envoltura,
+      });
+    } catch (err) {
+      fallidas.push({
+        tipo: 'dek',
+        vaultId: fila.vault_id,
+        motivo: err?.message || 'no abre con la contraseña actual',
+      });
+    }
+  }
+
+  // El par asimétrico es UNA fila por usuario, protegida con el salt de la
+  // bóveda que lo guarda: si no se reenvuelve, cambiar la contraseña deja al
+  // usuario sin identidad firmante (§6.2/§26).
+  let parOriginal = null;
+  try {
+    parOriginal = await cargarParAsimetrico();
+  } catch (err) {
+    // Sin la tabla del par (migración aún no aplicada) no hay nada que
+    // re-envular: no se avisa. Cualquier OTRO fallo de lectura sí se avisa
+    // (una fila que quede bajo la contraseña vieja se perdería al cambiar).
+    if (err?.name !== 'ErrorSinMigracion') {
+      fallidas.push({ tipo: 'par', vaultId: null, motivo: err?.message || 'no se pudo leer la fila del par' });
+    }
+  }
+  if (parOriginal) {
+    const boveda = porBoveda.get(parOriginal.vaultId);
+    if (!boveda) {
+      fallidas.push({ tipo: 'par', vaultId: parOriginal.vaultId, motivo: 'la bóveda del par no es visible para esta sesión' });
+    } else if (cliente.reenvolverParConPassword) {
+      try {
+        const par = {
+          firma: { ...parOriginal.par.firma, keyVersion: parOriginal.keyVersion },
+          canje: { ...parOriginal.par.canje, keyVersion: parOriginal.keyVersion },
+        };
+        const r = await cliente.reenvolverParConPassword({
+          passwordActual,
+          passwordNueva,
+          salt: aBytes(boveda.kdf_salt),
+          parametros: aParametros(boveda),
+          vaultId: parOriginal.vaultId,
+          par,
+        });
+        plan.push({ tipo: 'par', vaultId: parOriginal.vaultId, keyVersion: parOriginal.keyVersion, par: r.par });
+      } catch (err) {
+        fallidas.push({
+          tipo: 'par',
+          vaultId: parOriginal.vaultId,
+          motivo: err?.message || 'no abre con la contraseña actual',
+        });
+      }
+    }
+  }
+
+  const filasDek = plan.filter((p) => p.tipo === 'dek');
+  if ((claves || []).length > 0 && filasDek.length === 0) {
+    // Nada abre con `passwordActual`: contraseña incorrecta o daño previo.
+    // NO se escribe nada y el cambio de contraseña no debe continuar.
+    throw new Error('Ninguna clave de bóveda abre con la contraseña actual: no se cambia nada.');
+  }
+
+  // --- Fase de guardado con rollback ---
+  const escritas = [];
+  const parPlan = plan.find((p) => p.tipo === 'par');
+  try {
+    for (const p of filasDek) {
+      await guardarClavePropia({ vaultId: p.vaultId, keyVersion: p.keyVersion, envoltura: p.envoltura });
+      escritas.push(p);
+    }
+    if (parPlan) {
+      await guardarParAsimetrico({ vaultId: parPlan.vaultId, keyVersion: parPlan.keyVersion, par: parPlan.par });
+    }
+  } catch (err) {
+    // Vuelve a envolver lo ya escrito con la contraseña vieja (best-effort):
+    // el error real es el del guardado original.
+    for (const p of escritas.reverse()) {
+      try {
+        const boveda = porBoveda.get(p.vaultId);
+        const r = await cliente.reenvolverConPassword({
+          passwordActual: passwordNueva,
+          passwordNueva: passwordActual,
+          salt: aBytes(boveda.kdf_salt),
+          parametros: aParametros(boveda),
+          envoltura: p.envoltura,
+          contexto: { vaultId: p.vaultId, keyVersion: p.keyVersion },
+        });
+        await guardarClavePropia({ vaultId: p.vaultId, keyVersion: p.keyVersion, envoltura: r.envoltura });
+      } catch { /* el error real es el del guardado original */ }
+    }
+    if (parPlan) {
+      try {
+        const boveda = porBoveda.get(parPlan.vaultId);
+        const r = await cliente.reenvolverParConPassword({
+          passwordActual: passwordNueva,
+          passwordNueva: passwordActual,
+          salt: aBytes(boveda.kdf_salt),
+          parametros: aParametros(boveda),
+          vaultId: parPlan.vaultId,
+          par: parPlan.par,
+        });
+        await guardarParAsimetrico({ vaultId: parPlan.vaultId, keyVersion: parPlan.keyVersion, par: r.par });
+      } catch { /* el error real es el del guardado original */ }
+    }
+    throw err;
+  }
+
+  return { guardadas: filasDek.length, par: Boolean(parPlan), fallidas };
 }
 
 /** Devuelve el par ENVIOLTO del usuario actual, o `null` si aún no existe. */

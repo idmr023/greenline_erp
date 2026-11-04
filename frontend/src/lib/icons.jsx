@@ -129,6 +129,8 @@ import {
   faCar,
   faCamera,
   faClipboard,
+  faMoneyBill,
+  faCommentsDollar,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -146,6 +148,10 @@ export default function Icon({ icon, size = 24, className, color, ...rest }) {
     />
   );
 }
+
+export const CommentsDollar = (props) => <Icon icon={faCommentsDollar} {...props} />;
+export const MoneyBill = (props) => <Icon icon={faMoneyBill} {...props} />;
+export const Cards = (props) => <Icon icon={faCreditCard} {...props} />;
 export const Globe = (props) => <Icon icon={faGlobe} {...props} />;
 export const Lightbulb = (props) => <Icon icon={faLightbulb} {...props} />; 
 export const FolderOpen = (props) => <Icon icon={faFolderOpen} {...props} />;

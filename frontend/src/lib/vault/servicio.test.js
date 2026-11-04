@@ -587,6 +587,7 @@ describe('Fase 4 §28 — export e import en el worker', () => {
       // --- Fase 3 §11 (KEK por usuario) ---
       'migrarClaveUsuario',
       'reenvolverConPassword',
+      'reenvolverParConPassword',
       'reenvolverDesdeRecuperacion',
       // --- Fase 5.1 ---
       'generarParAsimetrico',
@@ -932,6 +933,85 @@ describe('Fase 3 §11 — KEK por usuario (contraseña de panel)', () => {
           parametros: PARAMS,
           envoltura: creada.dek.envoltura,
           contexto: CONTEXTO_DEK,
+        },
+      }),
+    );
+  });
+
+  test('reenvolverParConPassword no exige desbloqueo y conserva las públicas (R120)', async () => {
+    const { salt, servicio: generadora } = await conBovedaCreada();
+    const CONTEXTO_PAR = { vaultId: 'v-1', keyVersion: 1 };
+
+    // El par se genera en una sesión desbloqueada con EL MISMO salt (como
+    // en producción: el par se envuelve con la KEK de esa bóveda).
+    const par = await generadora.manejar({ tipo: 'generarParAsimetrico', datos: CONTEXTO_PAR });
+    const filaPar = {
+      firma: { keyVersion: 1, envoltura: par.firma.envoltura, publica: par.firma.publica },
+      canje: { keyVersion: 1, envoltura: par.canje.envoltura, publica: par.canje.publica },
+    };
+
+    // Se reenvuelve en una sesión NUNCA desbloqueada (como ChangePasswordPage).
+    const servicio = crearServicioBoveda();
+    const r = await servicio.manejar({
+      tipo: 'reenvolverParConPassword',
+      datos: {
+        passwordActual: MAESTRA,
+        passwordNueva: PANEL,
+        salt,
+        parametros: PARAMS,
+        vaultId: 'v-1',
+        par: filaPar,
+      },
+    });
+    assert.notDeepEqual(r.par.firma.envoltura.nonce, filaPar.firma.envoltura.nonce);
+    assert.notDeepEqual(r.par.canje.envoltura.nonce, filaPar.canje.envoltura.nonce);
+    // La pública no cambia: sólo se rota quién protege la privada (R9).
+    assert.deepEqual(r.par.firma.publica, filaPar.firma.publica);
+    assert.deepEqual(r.par.canje.publica, filaPar.canje.publica);
+    assert.equal(r.par.firma.keyVersion, 1);
+
+    const estado = await servicio.estado();
+    assert.equal(estado.desbloqueado, false);
+
+    // Con la contraseña NUEVA el par abre y las públicas cuadran…
+    const nueva = crearServicioBoveda();
+    await nueva.manejar({ tipo: 'desbloquear', datos: { masterPassword: PANEL, salt, parametros: PARAMS } });
+    const abierta = await nueva.manejar({
+      tipo: 'abrirPar',
+      datos: { envolturas: r.par, ...CONTEXTO_PAR },
+    });
+    assert.deepEqual(abierta.publicas.firma, filaPar.firma.publica);
+
+    // …y con la VIEJA ya no: no queda ventana de doble acceso.
+    const antes = crearServicioBoveda();
+    await antes.manejar({ tipo: 'desbloquear', datos: { masterPassword: MAESTRA, salt, parametros: PARAMS } });
+    await assert.rejects(
+      antes.manejar({ tipo: 'abrirPar', datos: { envolturas: r.par, ...CONTEXTO_PAR } }),
+    );
+  });
+
+  test('reenvolverParConPassword con la contraseña actual equivocada no produce nada (R120)', async () => {
+    const { salt, servicio: generadora } = await conBovedaCreada();
+    const par = await generadora.manejar({
+      tipo: 'generarParAsimetrico',
+      datos: { vaultId: 'v-1', keyVersion: 1 },
+    });
+    const filaPar = {
+      firma: { keyVersion: 1, envoltura: par.firma.envoltura, publica: par.firma.publica },
+      canje: { keyVersion: 1, envoltura: par.canje.envoltura, publica: par.canje.publica },
+    };
+
+    const servicio = crearServicioBoveda();
+    await assert.rejects(
+      servicio.manejar({
+        tipo: 'reenvolverParConPassword',
+        datos: {
+          passwordActual: 'esta-no-es-la-contraseña',
+          passwordNueva: PANEL,
+          salt,
+          parametros: PARAMS,
+          vaultId: 'v-1',
+          par: filaPar,
         },
       }),
     );

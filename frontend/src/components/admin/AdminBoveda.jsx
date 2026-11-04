@@ -16,10 +16,12 @@ import {
   eliminarBovedaAdministrativa,
   eliminarItem,
   guardarClavePropia,
+  renombrarBoveda,
   repararClaveDueno,
   guardarItem,
   guardarRecuperacion,
   listarCategorias,
+  rolesSinCategorias,
   obtenerOwnerId,
   registrarEvento,
   revocarOtrasSesiones,
@@ -46,7 +48,7 @@ import {
   puedeExportar,
   saltAleatorio,
 } from '../../lib/vault';
-import { ROLES_RESPALDO, ROLES_GESTORES_BOVEDA } from '../../lib/roles';
+import { ROLES_RESPALDO, ROLES_GESTORES_BOVEDA, rolesDe } from '../../lib/roles';
 
 /** §28.1 R123 — la descarga sólo nace del clic del usuario, nunca antes. */
 function descargar(nombre, contenido, mime = 'application/json') {
@@ -81,6 +83,12 @@ const ITEM_VACIO = {
  *    privilegio máximo sólo tiene SELECT sobre esas filas.
  */
 const esDuenoDe = (b) => Boolean(b && (!b.boveda || b.boveda.owner_id === b.yo));
+
+const NOMBRE_POR_DEFECTO = 'Bóveda del equipo';
+
+/** C1 — etiqueta de una bóveda: su nombre o, si no tiene, «Mi bóveda» / «Bóveda del equipo». */
+const etiquetaBoveda = (vault, yo) =>
+  vault?.nombre || (vault && yo && vault.owner_id === yo ? 'Mi bóveda' : NOMBRE_POR_DEFECTO);
 
 /** §40 — D1: ver y copiar es de todo el staff; escribir, no. */
 const SOLO_ESCRITURA = 'Sólo ADMIN y DESARROLLADOR_WEB pueden modificar los secretos (§40).';
@@ -124,8 +132,9 @@ function normalizarImportado(bruto) {
  */
 export default function AdminBoveda() {
   const { estado, ocupado, generacion, desbloquear, bloquear, obtenerCliente } = useVault();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const desbloqueada = estado === 'activa';
+  const [rolSinCategorias, setRolSinCategorias] = useState(null);
   // §40 — D1: el RLS sólo acepta escritura de ADMIN/DESARROLLADOR_WEB; la UI
   // no debe ni ofrecerla a los demás roles (permiso único: boveda:write).
   const ability = useAbility();
@@ -137,6 +146,8 @@ export default function AdminBoveda() {
   const [bootstrap, setBootstrap] = useState(null);
   const [vaultIdPreferida, setVaultIdPreferida] = useState(null);
   const [creandoNueva, setCreandoNueva] = useState(false);
+  const [nombreNueva, setNombreNueva] = useState(NOMBRE_POR_DEFECTO);
+  const [editandoNombre, setEditandoNombre] = useState(null);
   const [bovedaAEliminar, setBovedaAEliminar] = useState('');
   const [passwordEliminarBloqueada, setPasswordEliminarBloqueada] = useState('');
   const [confirmacionEliminarBloqueada, setConfirmacionEliminarBloqueada] = useState('');
@@ -212,6 +223,19 @@ export default function AdminBoveda() {
   );
   const creada = Boolean(bootstrap && !bootstrap.boveda) || creandoNueva;
   const soyDueno = esDuenoDe(bootstrap);
+
+  const sinItemsVisibles = desbloqueada && items.length === 0;
+  useEffect(() => {
+    let vivo = true;
+    if (!sinItemsVisibles) {
+      setRolSinCategorias(null);
+      return undefined;
+    }
+    rolesSinCategorias(rolesDe(user))
+      .then((r) => { if (vivo) setRolSinCategorias(r); })
+      .catch(() => { if (vivo) setRolSinCategorias(null); });
+    return () => { vivo = false; };
+  }, [sinItemsVisibles, user]);
 
   // Bóveda visible pero sin envoltorio de DEK vigente: `cargarBoveda()`
   // devuelve `clave: null` (api.js) y `bootstrap.clave.envoltura` revienta
@@ -581,6 +605,7 @@ useEffect(() => {
           parametros: parametrosUsados(ARGON2),
           envolturaClave: creada.dek.envoltura,
           fuente: 'maestra',
+          nombre: nombreNueva,
         });
         const propia = await cliente.migrarClaveUsuario({ passwordUsuario: master2 });
         await guardarClavePropia({
@@ -614,7 +639,7 @@ useEffect(() => {
         bloquear();
       }
     },
-    [bloquear, desbloquear, leerBootstrap, master, master2, obtenerCliente, verificarPasswordPanel],
+    [bloquear, desbloquear, leerBootstrap, master, master2, nombreNueva, obtenerCliente, verificarPasswordPanel],
   );
 
 
@@ -1186,7 +1211,7 @@ useEffect(() => {
               >
                 {bootstrap.bovedas.map((vault) => (
                   <option key={vault.id} value={vault.id}>
-                    {vault.id}
+                    {etiquetaBoveda(vault, bootstrap.yo)}
                   </option>
                 ))}
               </select>
@@ -1305,6 +1330,19 @@ useEffect(() => {
               contraseña de panel. Al guardar, la bóveda queda envuelta bajo TÚ contraseña y después
               sólo pedirá ésta.
             </p>
+          )}
+
+          {creada && (
+            <label className="block">
+              <span className="text-xs font-medium text-gray-600">Nombre de la bóveda</span>
+              <input
+                type="text"
+                value={nombreNueva}
+                onChange={(e) => setNombreNueva(e.target.value)}
+                maxLength={80}
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              />
+            </label>
           )}
 
           <label className="block">
@@ -1456,7 +1494,48 @@ useEffect(() => {
     <div className="space-y-4 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Bóveda segura</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            {editandoNombre === null ? (
+              <>
+                {etiquetaBoveda(bootstrap?.boveda, bootstrap?.yo)}
+                {soyDueno && bootstrap?.boveda && (
+                  <button
+                    type="button"
+                    onClick={() => setEditandoNombre(bootstrap.boveda.nombre || '')}
+                    className="ml-2 text-xs font-medium text-gray-400 underline hover:text-gray-600"
+                  >
+                    Renombrar
+                  </button>
+                )}
+              </>
+            ) : (
+              <form
+                className="flex items-center gap-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await renombrarBoveda(bootstrap.boveda.id, editandoNombre);
+                    setEditandoNombre(null);
+                    await recargar();
+                  } catch (err) {
+                    setMensaje({ tipo: 'error', texto: err?.message || 'No se pudo renombrar la bóveda.' });
+                  }
+                }}
+              >
+                <input
+                  value={editandoNombre}
+                  onChange={(e) => setEditandoNombre(e.target.value)}
+                  maxLength={80}
+                  autoFocus
+                  className="rounded-lg border border-gray-200 px-2 py-1 text-sm font-normal"
+                />
+                <button type="submit" className="text-xs font-semibold text-brand">Guardar</button>
+                <button type="button" onClick={() => setEditandoNombre(null)} className="text-xs text-gray-400">
+                  Cancelar
+                </button>
+              </form>
+            )}
+          </h2>
           <p className="text-xs text-gray-500">
             {items.length} secreto(s) · descifrado local con AES-256-GCM + AAD
             {!puedeEscribir && ' · sólo lectura: ver y copiar (§40)'}
@@ -1953,7 +2032,12 @@ useEffect(() => {
       )}
 
       <div className="space-y-3">
-        {items.length === 0 && (
+        {items.length === 0 && rolSinCategorias === true && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Tu rol no tiene categorías asignadas — pide a un admin que revise Accesos de la Bóveda.
+          </p>
+        )}
+        {items.length === 0 && rolSinCategorias !== true && (
           <p className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">
             Aún no hay secretos. Crea el primero con «Nuevo».
           </p>

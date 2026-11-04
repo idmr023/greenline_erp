@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift } from '../../lib/icons';
+import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift, Zap } from '../../lib/icons';
 import { siteConfigAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { rolesDe, tieneRol } from '../../lib/roles';
 
 const CLAVE_HALLOWEEN = 'halloween';
 const CLAVE_ANIVERSARIO = 'aniversario';
+const CLAVE_CYBERWOW = 'cyberwow';
 const VARIANTES = [
   { id: 'brand', etiqueta: 'Brand (verde)', color: '#009000' },
   { id: 'orange', etiqueta: 'Naranja FFB300', color: '#FFB300' },
   { id: 'black', etiqueta: 'Negro', color: '#0d0d0d' },
 ];
 const VALOR_HALLOWEEN = { activo: false, variante: 'orange' };
+const VALOR_CYBERWOW = { activo: false, variante: 'expo' };
+const VARIANTES_CYBERWOW = [
+  { id: 'expo', etiqueta: 'Expo China (azul + amarillo)', color: '#0a2cff' },
+  { id: 'midnight', etiqueta: 'Midnight (navy sobrio)', color: '#04092e' },
+  { id: 'brand', etiqueta: 'Brand (verde dominante)', color: '#009000' },
+];
 
 function Interruptor({ activo, onChange }) {
   return (
@@ -45,12 +52,14 @@ export default function AdminAjustes() {
   const [activo, setActivo] = useState(VALOR_HALLOWEEN.activo);
   const [variante, setVariante] = useState(VALOR_HALLOWEEN.variante);
   const [aniversarioActivo, setAniversarioActivo] = useState(false);
+  const [cyberActivo, setCyberActivo] = useState(VALOR_CYBERWOW.activo);
+  const [cyberVariante, setCyberVariante] = useState(VALOR_CYBERWOW.variante);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError('');
     try {
-      const [halloween, aniversario] = await Promise.all([
+      const [halloween, aniversario, cyberwow] = await Promise.all([
         siteConfigAPI.obtener(CLAVE_HALLOWEEN, accessToken).catch((err) => {
           if (err?.status !== 404) throw err;
           return VALOR_HALLOWEEN;
@@ -59,10 +68,16 @@ export default function AdminAjustes() {
           if (err?.status !== 404) throw err;
           return { activo: false };
         }),
+        siteConfigAPI.obtener(CLAVE_CYBERWOW, accessToken).catch((err) => {
+          if (err?.status !== 404) throw err;
+          return VALOR_CYBERWOW;
+        }),
       ]);
       setActivo(Boolean(halloween?.activo));
       setVariante(halloween?.variante || VALOR_HALLOWEEN.variante);
       setAniversarioActivo(Boolean(aniversario?.activo));
+      setCyberActivo(Boolean(cyberwow?.activo));
+      setCyberVariante(cyberwow?.variante || VALOR_CYBERWOW.variante);
     } catch (err) {
       setError(err?.message || 'No se pudo leer la configuración de temas');
     } finally {
@@ -82,6 +97,7 @@ export default function AdminAjustes() {
       await Promise.all([
         siteConfigAPI.guardar(CLAVE_HALLOWEEN, { activo, variante }, accessToken),
         siteConfigAPI.guardar(CLAVE_ANIVERSARIO, { activo: aniversarioActivo }, accessToken),
+        siteConfigAPI.guardar(CLAVE_CYBERWOW, { activo: cyberActivo, variante: cyberVariante }, accessToken),
       ]);
       setExito('Temas actualizados. El sitio público los aplicará en su próxima carga.');
       setTimeout(() => setExito(''), 4000);
@@ -172,6 +188,44 @@ export default function AdminAjustes() {
             )}
           </section>
 
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Zap className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-semibold text-gray-900">Tema Cyber Wow — Expo China</h2>
+                  <p className="text-sm text-gray-500 mt-1 max-w-lg">
+                    Afiche de feria: azul eléctrico y amarillo con el brand verde mandando en los botones, rojizo Expo en descuentos. Vigencia del 12 al 14 de noviembre (o mientras esté activo aquí).
+                  </p>
+                </div>
+              </div>
+              <Interruptor activo={cyberActivo} onChange={() => setCyberActivo((actual) => !actual)} />
+            </div>
+            {cyberActivo && (
+              <div className="pt-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Variante de color</h3>
+                <div className="flex flex-wrap gap-3">
+                  {VARIANTES_CYBERWOW.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setCyberVariante(item.id)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium ${
+                        cyberVariante === item.id
+                          ? 'border-brand bg-brand/5 text-brand'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full border border-black/10" style={{ background: item.color }} />
+                      {item.etiqueta}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
           <section className="bg-white rounded-xl border border-gray-200 p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">

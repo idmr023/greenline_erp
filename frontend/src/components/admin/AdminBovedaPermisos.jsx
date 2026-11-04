@@ -6,7 +6,7 @@ import { bovedaAPI } from '../../lib/api';
 const mensajeDe = (error, fallback) => error?.error || error?.message || fallback;
 const mismasCategorias = (a, b) => [...a].sort().join('|') === [...b].sort().join('|');
 
-function RolAccesoCard({ rol, categorias, guardando, onGuardar }) {
+function RolAccesoCard({ rol, categorias, guardando, onGuardar, sinCategorias = false }) {
   const [seleccion, setSeleccion] = useState(rol.categorias || []);
 
   useEffect(() => {
@@ -21,12 +21,17 @@ function RolAccesoCard({ rol, categorias, guardando, onGuardar }) {
   const cambiado = !mismasCategorias(seleccion, rol.categorias || []);
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
+    <section className={`rounded-xl border bg-white p-4 ${sinCategorias ? 'border-amber-300' : 'border-gray-200'}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">{rol.etiqueta || rol.nombre}</h3>
           <p className="mt-0.5 text-[11px] text-gray-400">{rol.nombre}</p>
         </div>
+        {sinCategorias && (
+          <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700">
+            Sin categorías
+          </span>
+        )}
         {rol.accesoTotal && (
           <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700">
             Acceso total
@@ -239,6 +244,7 @@ export default function AdminBovedaPermisos() {
                 <RolAccesoCard
                   key={rol.nombre}
                   rol={rol}
+                  sinCategorias={!rol.accesoTotal && (rol.categorias || []).length === 0}
                   categorias={datos.categorias}
                   guardando={guardando === `rol:${rol.nombre}`}
                   onGuardar={(nombre, categorias) => ejecutar(

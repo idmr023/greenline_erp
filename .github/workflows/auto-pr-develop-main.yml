@@ -173,10 +173,6 @@ jobs:
           # dispara workflows), pero el job termina en verde.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # "ours" = al haber conflicto, develop (los cambios que se están
-          # enviando) gana sobre main. Cualquier otro valor recupera el
-          # comportamiento de siempre: comentar el conflicto y fallar.
-          CONFLICT_STRATEGY: ours
         run: |
           set -euo pipefail
           REPO="${{ github.repository }}"
@@ -206,116 +202,9 @@ jobs:
             exit 1
           }
 
-          # $1 = sha del head del PR. Fusiona `main` en `develop` favoreciendo
-          # OURS (develop = los cambios que se están enviando), pushea y corta
-          # con éxito: el push dispara CI (`verify`) + este workflow, que
-          # reutiliza el PR y continúa con el squash.
-          #
-          # El push DEBE ir con AUTO_MERGE_PAT: un push con GITHUB_TOKEN no
-          # dispara `on: push` (mismo motivo documentado en el paso "Resolver
-          # token de GitHub"), así que no correría `ci.yml` (el check `verify`
-          # que exige la ruleset `merge_verfication`) ni este workflow, y el
-          # PR se quedaría colgado hasta el timeout de 15 min.
-          #
-          # Si algo no se puede resolver (PAT ausente, conflicto que `-X ours`
-          # no cubre, push rechazado) se vuelve a `fail_conflict`: se comenta
-          # el conflicto y el job falla, como siempre.
-          auto_merge_ours() {
-            local sha="$1" files pendientes f
-            if [ "${CONFLICT_STRATEGY:-ours}" != "ours" ]; then
-              fail_conflict "$sha"
-            fi
-            if [ -z "${AUTO_MERGE_PAT:-}" ]; then
-              echo "::warning::Sin AUTO_MERGE_PAT no puedo auto-mergear (un push con GITHUB_TOKEN no dispararía verify ni este workflow)."
-              fail_conflict "$sha"
-            fi
-            git fetch origin main develop --quiet 2>/dev/null || true
-            # Carrera: si develop avanzó mientras comprobábamos, no se mezcla
-            # sobre un árbol viejo; lo resuelve la siguiente ejecución.
-            if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/develop)" ]; then
-              echo "::notice::develop avanzó mientras comprobábamos conflictos; lo resuelve la siguiente ejecución."
-              exit 0
-            fi
-            files=$(git merge-tree --write-tree --name-only origin/main "$sha" 2>/dev/null \
-              | awk 'NR > 1 && /^$/{exit} NR > 1{print}' || true)
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            # SHA de develop ANTES de fusionar main: si el PAT no puede tocar
-            # .github/workflows/**, la fusión se rehace sin esos archivos.
-            antes=$(git rev-parse HEAD)
-            if ! git merge --no-edit --strategy-option ours origin/main; then
-              # `-X ours` sólo resuelve conflictos de CONTENIDO: lo que quede
-              # (modify/delete, add/add…) se fuerza también hacia OURS.
-              pendientes=$(git diff --name-only --diff-filter=U || true)
-              if [ -n "$pendientes" ]; then
-                while IFS= read -r f; do
-                  if [ -z "$f" ]; then continue; fi
-                  # ¿OURS (develop) tiene el archivo? Mira la etapa 2 del
-                  # índice, no HEAD: el borrado puede estar sólo en el índice.
-                  if git ls-files --stage -- "$f" | awk '{print $3}' | grep -qx 2; then
-                    # Lo tenía develop: nos quedamos con SU versión.
-                    git checkout --ours -- "$f" 2>/dev/null \
-                      || git restore --source=HEAD --worktree -- "$f" 2>/dev/null \
-                      || true
-                    git add -- "$f" 2>/dev/null || true
-                  else
-                    # Sólo lo tenía main: gana develop, que lo había borrado.
-                    git rm -f -- "$f" 2>/dev/null \
-                      || git update-index --force-remove -- "$f" 2>/dev/null \
-                      || true
-                    rm -f -- "$f" 2>/dev/null || true
-                  fi
-                done <<< "$pendientes"
-              fi
-              if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
-                git merge --abort 2>/dev/null || git reset --hard HEAD
-                fail_conflict "$sha"
-              fi
-              if ! git commit --no-edit --no-verify; then
-                git merge --abort 2>/dev/null || git reset --hard HEAD
-                fail_conflict "$sha"
-              fi
-            fi
-            # El PAT sólo puede pushear .github/workflows/** si tiene el scope
-            # `workflow`. Sin él, GitHub rechaza el push ENTERO ("refusing to
-            # allow a GitHub App to create or update workflow ... without
-            # `workflows` permission"). En ese caso la fusión se rehace
-            # dejando la versión de develop de esos archivos (el código sí
-            # entra) y se avisa de que los workflows hay que sincronizarlos a
-            # mano con una cuenta que tenga el scope.
-            if [ "${{ steps.token.outputs.workflow }}" != "1" ]; then
-              if git diff --name-only "$antes" HEAD -- .github/workflows | grep -q .; then
-                echo "::warning::AUTO_MERGE_PAT no tiene el scope 'workflow': la fusión deja fuera .github/workflows/** (GitHub rechazaría el push)."
-                git checkout "$antes" -- .github/workflows/
-                git add .github/workflows/ 2>/dev/null || true
-                git commit --no-edit --no-verify --allow-empty
-              fi
-            fi
-            if ! push_out=$(git push "https://x-access-token:${AUTO_MERGE_PAT}@github.com/${REPO}.git" HEAD:develop 2>&1); then
-              if printf '%s' "$push_out" | grep -qi "workflows\` permission"; then
-                echo "$push_out"
-                echo "::error::El push a develop fue rechazado por el scope 'workflow' de AUTO_MERGE_PAT (GitHub no deja modificar .github/workflows/** sin ese scope). Súbele el scope al PAT y re-lanza el workflow."
-                gh pr comment "$PR" --body "⛔ El push del merge a \`develop\` fue rechazado: \`AUTO_MERGE_PAT\` no tiene el scope \`workflow\` (classic PAT) ni el permiso *Workflows: Read and write* (fine-grained). Sin eso GitHub no deja modificar \`.github/workflows/**\`. Súbele el permiso al PAT y re-lanza este workflow."
-                exit 1
-              fi
-              echo "$push_out"
-              echo "::error::Merge local hecho pero el push a develop fue rechazado (permisos o carrera con otro push)."
-              fail_conflict "$sha"
-            fi
-            {
-              echo "🔀 Conflictos resueltos automáticamente en \`develop\` con estrategia \`-X ours\` (ganan los cambios de esta rama):"
-              echo
-              echo '```'
-              printf '%s\n' "$files"
-              echo '```'
-              echo
-              echo "La siguiente ejecución de este workflow continúa con \`verify\` y el squash."
-            } > /tmp/auto-merge.md
-            gh pr comment "$PR" --body-file /tmp/auto-merge.md || true
-            echo "::notice::main fusionado en develop (-X ours) y pusheado: la siguiente ejecución del workflow continúa."
-            exit 0
-          }
-
+          # Ante conflicto develop ↔ main el workflow NUNCA pushea a develop:
+          # falla y comenta el PR para que un humano fusione `main` en
+          # `develop` localmente y pushee (ver fail_conflict).
           EXISTING=$(gh pr list --base main --head develop --json number --jq '.[0].number // empty')
           if [ -z "$EXISTING" ]; then
             if ! out=$(gh pr create \
@@ -356,7 +245,7 @@ jobs:
             sleep 5
           done
           if [ "$MERGEABLE" = "CONFLICTING" ]; then
-            auto_merge_ours "$(git rev-parse HEAD)"
+            fail_conflict "$(git rev-parse HEAD)"
           fi
 
           # Espera a que TODOS los check-runs "verify" del head estén completos.
@@ -383,7 +272,7 @@ jobs:
               # Reconfirma head y mergeable por si hubo push nuevo
               MERGEABLE=$(gh pr view "$PR" --json mergeable --jq '.mergeable')
               if [ "$MERGEABLE" = "CONFLICTING" ]; then
-                auto_merge_ours "$HEAD"
+                fail_conflict "$HEAD"
               fi
               if [ "$MERGEABLE" = "UNKNOWN" ]; then
                 # Cálculo en background: no intento merge con estado dudoso.

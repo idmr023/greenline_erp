@@ -27,31 +27,31 @@
 fuentes:
   - id: evaluacion-armadores
     nombre: "Evaluación Armadores (Cierre de Mes)"
-    url: "https://docs.google.com/spreadsheets/d/1HD0Kvvcv07C72OIP4oTN46nnB8boyczDOOsV12s_nIY/edit?usp=sharing"
+    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
     hojas: "*"
     activa: true
 
   - id: servicio-tecnico
     nombre: "Servicio Técnico por Sede"
-    url: "https://docs.google.com/spreadsheets/d/11ICzmdhDtUSMQ79DKJMLkxwCFrjfjynv_EzcwOyfqNU/edit?usp=sharing"
+    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
     hojas: "*"
     activa: true
 
   - id: garantias
     nombre: "Registro de Garantías"
-    url: "https://docs.google.com/spreadsheets/d/1QOVC7a2OObCoArFScjfyJDwgjHVdhl46cuw4iP5dLkw/edit"
+    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
     hojas: "*"
     activa: true
 
   - id: evaluacion-emp
     nombre: "Evaluación Mensual Armados"
-    url: "https://docs.google.com/spreadsheets/d/1siYce_vZU_fRvORUWLymk25DxajUQFoUBhWti-PFIOE/edit?usp=sharing"
+    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
     hojas: "*"
     activa: true
 
   - id: armado-despacho
     nombre: "Registro Armado y Despacho"
-    url: "https://docs.google.com/spreadsheets/d/1Ro2UChVGcXzxQ972g8Hn7Q2dNHqASV4Hx3hdd7G663s/edit"
+    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
     hojas: "*"
     activa: true
 

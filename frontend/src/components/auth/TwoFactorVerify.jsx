@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { authAPI } from '../../lib/api';
 import { mensajeDeError } from '../../lib/apiErrors';
 import EmailFactorVerify from './EmailFactorVerify';
-import { ShieldCheck, ArrowLeft, AlertCircle, Loader2, Mail } from '../../lib/icons';
+import { ShieldCheck, ArrowLeft, AlertCircle, Loader2 } from '../../lib/icons';
 
 /**
  * Segundo factor del login. Dos vías sobre el MISMO tempToken:
@@ -172,16 +172,6 @@ export default function TwoFactorVerify({ tempToken, onVerified, onBack }) {
                   {verificando ? 'Verificando...' : 'Verificar código'}
                 </button>
               </form>
-
-              <div className="flex justify-center text-sm pt-1">
-                <button
-                  type="button"
-                  onClick={() => cambiarModo('email')}
-                  className="flex items-center gap-1 text-brand hover:underline"
-                >
-                  <Mail className="w-3 h-3" /> Enviar código por correo
-                </button>
-              </div>
             </div>
           )}
         </div>

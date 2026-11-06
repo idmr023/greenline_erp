@@ -24,36 +24,59 @@
 # Para `hojas: "*"`, además se necesita GOOGLE_SHEETS_API_KEY en .env / env vars.
 # ============================================================
 
+# FUENTE ÚNICA: todas las fuentes leen este Sheet. Cambiar esta url (o la
+# env GREENLINE_SHEET_URL, que tiene prioridad) actualiza todos los datos.
+# Las pestañas deben mantener las mismas columnas. Una fuente puede usar otro
+# Sheet definiendo su propio `url` y `url_propia: true`.
+url: "https://docs.google.com/spreadsheets/d/1Gg4jDyWDgd8g28qsVhQy1ZJ1aGgdzuBM7m7KMEm3Qxk/edit?usp=sharing"
+
 fuentes:
   - id: evaluacion-armadores
     nombre: "Evaluación Armadores (Cierre de Mes)"
+<<<<<<< HEAD
+=======
     url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
+>>>>>>> origin/main
     hojas: "*"
     activa: true
 
   - id: servicio-tecnico
     nombre: "Servicio Técnico por Sede"
+<<<<<<< HEAD
+=======
     url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
+>>>>>>> origin/main
     hojas: "*"
     activa: true
 
   - id: garantias
     nombre: "Registro de Garantías"
+<<<<<<< HEAD
+=======
     url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
+>>>>>>> origin/main
     hojas: "*"
     activa: true
 
   - id: evaluacion-emp
     nombre: "Evaluación Mensual Armados"
+<<<<<<< HEAD
+=======
     url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
+>>>>>>> origin/main
     hojas: "*"
     activa: true
 
   - id: armado-despacho
     nombre: "Registro Armado y Despacho"
+<<<<<<< HEAD
+=======
     url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
+>>>>>>> origin/main
     hojas: "*"
     activa: true
 
-
-#Ver cuales faltan
+  - id: ventas
+    nombre: "Ventas por Tienda"
+    hojas: "*"
+    activa: true

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift, Zap } from '../../lib/icons';
+import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift, Zap, Sparkles } from '../../lib/icons';
 import { siteConfigAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { rolesDe, tieneRol } from '../../lib/roles';
@@ -7,6 +7,7 @@ import { rolesDe, tieneRol } from '../../lib/roles';
 const CLAVE_HALLOWEEN = 'halloween';
 const CLAVE_ANIVERSARIO = 'aniversario';
 const CLAVE_CYBERWOW = 'cyberwow';
+const CLAVE_EXPOCHINA = 'expochina';
 const VARIANTES = [
   { id: 'brand', etiqueta: 'Brand (verde)', color: '#009000' },
   { id: 'orange', etiqueta: 'Naranja FFB300', color: '#FFB300' },
@@ -14,6 +15,7 @@ const VARIANTES = [
 ];
 const VALOR_HALLOWEEN = { activo: false, variante: 'orange' };
 const VALOR_CYBERWOW = { activo: false, variante: 'expo', hasta: null };
+const VALOR_EXPOCHINA = { activo: false, hasta: null };
 const VARIANTES_CYBERWOW = [
   { id: 'expo', etiqueta: 'Cyber Wow (verde + rojizo)', color: '#009000' },
   { id: 'midnight', etiqueta: 'Midnight (verde oscuro)', color: '#02140a' },
@@ -70,12 +72,14 @@ export default function AdminAjustes() {
   const [cyberActivo, setCyberActivo] = useState(VALOR_CYBERWOW.activo);
   const [cyberVariante, setCyberVariante] = useState(VALOR_CYBERWOW.variante);
   const [cyberHasta, setCyberHasta] = useState('');
+  const [expoActivo, setExpoActivo] = useState(VALOR_EXPOCHINA.activo);
+  const [expoHasta, setExpoHasta] = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError('');
     try {
-      const [halloween, aniversario, cyberwow] = await Promise.all([
+      const [halloween, aniversario, cyberwow, expochina] = await Promise.all([
         siteConfigAPI.obtener(CLAVE_HALLOWEEN, accessToken).catch((err) => {
           if (err?.status !== 404) throw err;
           return VALOR_HALLOWEEN;
@@ -88,6 +92,10 @@ export default function AdminAjustes() {
           if (err?.status !== 404) throw err;
           return VALOR_CYBERWOW;
         }),
+        siteConfigAPI.obtener(CLAVE_EXPOCHINA, accessToken).catch((err) => {
+          if (err?.status !== 404) throw err;
+          return VALOR_EXPOCHINA;
+        }),
       ]);
       setActivo(Boolean(halloween?.activo));
       setVariante(halloween?.variante || VALOR_HALLOWEEN.variante);
@@ -95,6 +103,8 @@ export default function AdminAjustes() {
       setCyberActivo(Boolean(cyberwow?.activo));
       setCyberVariante(cyberwow?.variante || VALOR_CYBERWOW.variante);
       setCyberHasta(isoALocal(cyberwow?.hasta));
+      setExpoActivo(Boolean(expochina?.activo));
+      setExpoHasta(isoALocal(expochina?.hasta));
     } catch (err) {
       setError(err?.message || 'No se pudo leer la configuración de temas');
     } finally {
@@ -117,6 +127,11 @@ export default function AdminAjustes() {
         siteConfigAPI.guardar(
           CLAVE_CYBERWOW,
           { activo: cyberActivo, variante: cyberVariante, hasta: localAIso(cyberHasta) },
+          accessToken,
+        ),
+        siteConfigAPI.guardar(
+          CLAVE_EXPOCHINA,
+          { activo: expoActivo, hasta: localAIso(expoHasta) },
           accessToken,
         ),
       ]);
@@ -284,6 +299,42 @@ export default function AdminAjustes() {
                 activo={aniversarioActivo}
                 onChange={() => setAniversarioActivo((actual) => !actual)}
               />
+            </div>
+          </section>
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-lg bg-red-50 text-[#8e2c2b] flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-semibold text-gray-900">Tema ExpoChina</h2>
+                  <p className="text-sm text-gray-500 mt-1 max-w-lg">
+                    Masa roja con acentos brand, sello EXPOCHINA y loader propio. Se apaga solo al llegar la fecha limite.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <label className="flex flex-col text-xs font-medium text-gray-500">
+                  Se desactiva el
+                  <input
+                    type="datetime-local"
+                    value={expoHasta}
+                    onChange={(e) => setExpoHasta(e.target.value)}
+                    className="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-700"
+                  />
+                </label>
+                {expoHasta && (
+                  <button
+                    type="button"
+                    onClick={() => setExpoHasta('')}
+                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Quitar
+                  </button>
+                )}
+                <Interruptor activo={expoActivo} onChange={() => setExpoActivo((actual) => !actual)} />
+              </div>
             </div>
           </section>
         </div>

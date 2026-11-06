@@ -122,6 +122,12 @@ def cargar_fuentes(solo_activas: bool = True) -> list[dict]:
     fuentes = datos.get("fuentes") or []
     if not isinstance(fuentes, list):
         raise FuenteError("fuentes.yaml debe contener una lista bajo la clave `fuentes:`")
+    url_global = (os.environ.get("GREENLINE_SHEET_URL") or str(datos.get("url") or "")).strip()
+    if url_global:
+        fuentes = [
+            {**f, "url": url_global} if isinstance(f, dict) and not f.get("url_propia") else f
+            for f in fuentes
+        ]
     validadas = [_validar(f) for f in fuentes]
     if solo_activas:
         validadas = [f for f in validadas if f["activa"]]
@@ -143,6 +149,8 @@ def _validar(fuente: dict) -> dict:
     if not isinstance(fuente, dict):
         raise FuenteError("Cada fuente de fuentes.yaml debe ser un bloque con `id`, `nombre` y `url`.")
     for campo in ("id", "nombre", "url"):
+        if campo == "url" and not fuente.get(campo):
+            raise FuenteError("Falta `url:` (nivel superior de fuentes.yaml, o GREENLINE_SHEET_URL).")
         if not fuente.get(campo):
             raise FuenteError(f"Falta el campo `{campo}` en una fuente de fuentes.yaml.")
     if not re.fullmatch(r"[a-z0-9_-]+", str(fuente["id"])):

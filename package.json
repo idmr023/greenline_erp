@@ -23,7 +23,9 @@
     "test:vault": "node --test frontend/src/lib/vault/*.test.js",
     "pdf:ceo": "node scripts/generar-pdf-ceo.mjs",
     "emails:limpiar": "node scripts/limpiar-emails.mjs",
-    "emails:lote": "node scripts/gen-lote-n8n.mjs"
+    "emails:lote": "node scripts/gen-lote-n8n.mjs",
+    "commit:push": "node scripts/commit-push.mjs"
+
   },
   "devDependencies": {
     "concurrently": "^10.0.6",

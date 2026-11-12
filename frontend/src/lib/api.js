@@ -130,6 +130,12 @@ function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export const stockHojaAPI = {
+  estructura: (token) => request('/stock/hoja/estructura', {
+    headers: authHeaders(token),
+  }),
+};
+
 export const authAPI = {
   login: (email, password) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),

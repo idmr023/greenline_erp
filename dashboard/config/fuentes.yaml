@@ -33,46 +33,36 @@ url: "https://docs.google.com/spreadsheets/d/1Gg4jDyWDgd8g28qsVhQy1ZJ1aGgdzuBM7m
 fuentes:
   - id: evaluacion-armadores
     nombre: "Evaluación Armadores (Cierre de Mes)"
-<<<<<<< HEAD
-=======
-    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
->>>>>>> origin/main
+    url: "https://docs.google.com/spreadsheets/d/1HD0Kvvcv07C72OIP4oTN46nnB8boyczDOOsV12s_nIY/edit?usp=sharing"
+    url_propia: true
     hojas: "*"
     activa: true
 
   - id: servicio-tecnico
     nombre: "Servicio Técnico por Sede"
-<<<<<<< HEAD
-=======
-    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
->>>>>>> origin/main
+    url: "https://docs.google.com/spreadsheets/d/11ICzmdhDtUSMQ79DKJMLkxwCFrjfjynv_EzcwOyfqNU/edit?usp=sharing"
+    url_propia: true
     hojas: "*"
     activa: true
 
   - id: garantias
     nombre: "Registro de Garantías"
-<<<<<<< HEAD
-=======
-    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
->>>>>>> origin/main
+    url: "https://docs.google.com/spreadsheets/d/1QOVC7a2OObCoArFScjfyJDwgjHVdhl46cuw4iP5dLkw/edit?usp=sharing"
+    url_propia: true
     hojas: "*"
     activa: true
 
   - id: evaluacion-emp
     nombre: "Evaluación Mensual Armados"
-<<<<<<< HEAD
-=======
-    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
->>>>>>> origin/main
+    url: "https://docs.google.com/spreadsheets/d/1siYce_vZU_fRvORUWLymk25DxajUQFoUBhWti-PFIOE/edit?usp=sharing"
+    url_propia: true
     hojas: "*"
     activa: true
 
   - id: armado-despacho
     nombre: "Registro Armado y Despacho"
-<<<<<<< HEAD
-=======
-    url: "https://docs.google.com/spreadsheets/d/1ZEV20vl-4H5cvHV_KsYehsMx183hPW138z-6Fctcbps/edit?usp=drivesdk"
->>>>>>> origin/main
+    url: "https://docs.google.com/spreadsheets/d/1Ro2UChVGcXzxQ972g8Hn7Q2dNHqASV4Hx3hdd7G663s/edit?usp=sharing"
+    url_propia: true
     hojas: "*"
     activa: true
 

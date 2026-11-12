@@ -131,6 +131,7 @@ import {
   faClipboard,
   faMoneyBill,
   faCommentsDollar,
+  faWarehouse,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons';
@@ -296,6 +297,7 @@ export const Users = (props) => <Icon icon={faUsers} {...props} />;
 export const Volume2 = (props) => <Icon icon={faVolumeHigh} {...props} />;
 export const VolumeX = (props) => <Icon icon={faVolumeXmark} {...props} />;
 export const Wallet = (props) => <Icon icon={faWallet} {...props} />;
+export const Warehouse = (props) => <Icon icon={faWarehouse} {...props} />;
 export const Weight = (props) => <Icon icon={faWeightHanging} {...props} />;
 export const Wrench = (props) => <Icon icon={faWrench} {...props} />;
 export const X = (props) => <Icon icon={faXmark} {...props} />;

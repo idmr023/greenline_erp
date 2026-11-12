@@ -136,6 +136,32 @@ export const stockHojaAPI = {
   }),
 };
 
+// Pedidos por tienda: solicitudes al almacén central y liberación de stock.
+export const stockAPI = {
+  estructuraHoja: (token) => request('/stock/hoja/estructura', {
+    headers: authHeaders(token),
+  }),
+  solicitudesAlmacen: (token, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.estado) query.set('estado', params.estado);
+    if (params.tiendaId) query.set('tiendaId', params.tiendaId);
+    const qs = query.toString();
+    return request(`/stock/solicitudes-almacen${qs ? `?${qs}` : ''}`, {
+      headers: authHeaders(token),
+    });
+  },
+  atenderSolicitud: (token, id, items) => request(`/stock/solicitudes-almacen/${id}/atender`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ items }),
+  }),
+  cancelarPedido: (token, pedidoId) => request('/stock/pedidos/cancelar', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ pedidoId }),
+  }),
+};
+
 export const authAPI = {
   login: (email, password) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),

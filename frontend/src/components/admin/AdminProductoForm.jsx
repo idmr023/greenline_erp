@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, ArrowUp, ArrowDown, Save, Upload, X, GripVertical, Search, FolderOpen, Loader2, Eye, EyeOff, FileText, Calendar, Plus } from '../../lib/icons';
 import ConfirmModal from './ConfirmModal';
 import NuevaCategoria from './NuevaCategoria';
+import StockPorTienda from './StockPorTienda';
 import {
   isoADatetimeLocal,
   datetimeLocalAIso,
@@ -959,6 +960,8 @@ potencia_bateria: ft.potencia_bateria || '',
         </div>
         </Section>
 
+      {isEdit && <StockPorTienda productoId={productoId} colores={productoColores} imagenes={imagenes} />}
+
       {/* Sección: Colores y stock */}
       {/* Stock NUMÉRICO por producto×color activo (`prod_color_rel.stock`).
           El stock por sucursal (`prod_color_stock`) sigue comentado. */}
@@ -1016,7 +1019,7 @@ potencia_bateria: ft.potencia_bateria || '',
                   placeholder="0"
                 />
                 <span className="text-[11px] text-gray-400">
-                  Unidades de este color en almacén (modelo × color).
+                  Stock actual por modelo y color; todavía no está integrado por ubicación.
                 </span>
               </div>
             </div>
@@ -1027,7 +1030,7 @@ potencia_bateria: ft.potencia_bateria || '',
         </button>
         {productoColores.length > 0 && (
           <p className="text-xs text-gray-500 mt-2">
-            Stock total:{' '}
+            Stock actual por colores (sin integrar por ubicación):{' '}
             <span className="font-semibold text-gray-900">{stockTotal}</span> unidad(es)
           </p>
         )}

@@ -600,3 +600,30 @@ p, span, a, li, button, input, textarea {
   background: #fafafa;
   font-weight: 600;
 }
+
+.erp-main {
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .erp-main .p-8,
+  .erp-main .p-6 {
+    padding: 1rem;
+  }
+
+  .erp-main .grid-cols-2,
+  .erp-main .grid-cols-3,
+  .erp-main .grid-cols-4,
+  .erp-main .grid-cols-5 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .erp-main table {
+    display: block;
+    width: max-content;
+    min-width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

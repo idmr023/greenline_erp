@@ -220,6 +220,12 @@ export const authAPI = {
   refresh: (refreshToken) =>
     request('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
 
+  staffSessionStatus: (refreshToken) =>
+    request('/auth/staff-session-status', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    }),
+
   logout: (refreshToken, accessToken) =>
     request('/auth/logout', {
       method: 'POST',

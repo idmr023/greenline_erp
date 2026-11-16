@@ -263,10 +263,47 @@ export function AuthProvider({ children }) {
   // cada refresh, y reiniciar el intervalo anularía la renovación periódica).
   const refrescarRef = useRef(refreshAccessToken);
   const logoutRef = useRef(logout);
+  const tokensRef = useRef({ accessToken, refreshToken });
   useEffect(() => {
     refrescarRef.current = refreshAccessToken;
     logoutRef.current = logout;
+    tokensRef.current = { accessToken, refreshToken };
   });
+
+  useEffect(() => {
+    if (!user || !refreshToken) return undefined;
+    let active = true;
+    const verificar = async () => {
+      const tokens = tokensRef.current;
+      if (!tokens.accessToken || !tokens.refreshToken) return;
+      try {
+        await authAPI.staffSessionStatus(tokens.refreshToken);
+      } catch (error) {
+        if (error?.status !== 401) {
+          console.error('No se pudo verificar la sesión del panel:', error);
+          return;
+        }
+        await esperar(1500);
+        if (!active || tokensRef.current.refreshToken !== tokens.refreshToken) return;
+        try {
+          await authAPI.staffSessionStatus(tokens.refreshToken);
+        } catch (retryError) {
+          if (retryError?.status === 401 && active && tokensRef.current.refreshToken === tokens.refreshToken) {
+            await logoutRef.current();
+          } else if (retryError?.status !== 401) {
+            console.error('No se pudo verificar la sesión del panel:', retryError);
+          }
+        }
+      }
+    };
+    const intervalo = setInterval(verificar, 120_000);
+    window.addEventListener('focus', verificar);
+    return () => {
+      active = false;
+      clearInterval(intervalo);
+      window.removeEventListener('focus', verificar);
+    };
+  }, [user, refreshToken]);
 
   /**
    * Ventana de 1 hora + renovación del access token (§ sesión).

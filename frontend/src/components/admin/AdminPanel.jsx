@@ -32,7 +32,7 @@ import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import AdminRoles from './AdminRoles';
 import AdminAjustes from './AdminAjustes';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar } from '../../lib/icons';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar, Menu, X, ChevronLeft, ChevronRight } from '../../lib/icons';
 import PortalSwitch from '../PortalSwitch';
 
 const VIEWS = {
@@ -171,10 +171,23 @@ export default function AdminPanel() {
   const [hasSupabaseSession, setHasSupabaseSession] = useState(false);
   const [grants, setGrants] = useState([]);
   const [grantsLoading, setGrantsLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const canGrant = ability.can('acceso', 'panel');
 
   const visibleNav = navVisibleDe(NAV_ITEMS, can, roles);
+  const activeNav = NAV_ITEMS.find((item) => item.key === view)
+    || NAV_ITEMS.find((item) => view === VIEWS.PRODUCTO_FORM && item.key === VIEWS.PRODUCTOS);
+
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [sidebarOpen]);
 
   // Rótulo del sidebar según el perfil de permisos de la sesión.
   const subtitulo = canGrant
@@ -250,6 +263,7 @@ export default function AdminPanel() {
     if (!vista) return;
     setEditingId(vista === target ? id : null);
     setView(vista);
+    setSidebarOpen(false);
     let newPath = '/admin/dashboard-embed';
     if (vista === VIEWS.SERVICIO_TECNICO) {
       newPath = '/admin/dashboard-embed?slug=servicio-tecnico';
@@ -298,22 +312,44 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-dvh bg-gray-50 md:flex">
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-gray-950/40 md:hidden"
+          aria-label="Cerrar menú"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
-        <div className="p-4 border-b border-gray-100">
+      <aside
+        id="erp-sidebar"
+        aria-label="Navegación principal"
+        className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-72 max-w-[85vw] flex-col border-r border-gray-200 bg-white transition-transform duration-200 md:sticky md:top-0 md:h-screen md:max-w-none md:translate-x-0 md:shrink-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${sidebarCollapsed ? 'md:w-16' : 'md:w-56'}`}
+      >
+        <div className={`flex items-center justify-between gap-2 border-b border-gray-100 p-4 ${sidebarCollapsed ? 'md:justify-center md:px-2' : ''}`}>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-brand rounded-lg flex items-center justify-center">
               <span className="text-white text-xs font-bold">GL</span>
             </div>
-            <div>
+            <div className={sidebarCollapsed ? 'md:hidden' : ''}>
               <p className="text-sm font-bold text-gray-900">GreenLine</p>
               <p className="text-[10px] text-gray-400">{subtitulo}</p>
             </div>
           </div>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 md:hidden"
+            aria-label="Cerrar menú"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = view === item.key || (item.key === VIEWS.PRODUCTOS && view === VIEWS.PRODUCTO_FORM);
@@ -321,21 +357,22 @@ export default function AdminPanel() {
           <button
             key={item.key}
             onClick={() => navigateTo(item.key)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+            title={sidebarCollapsed ? item.label : undefined}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${sidebarCollapsed ? 'md:justify-center md:px-2' : ''} ${
               active
                 ? 'bg-brand/10 text-brand font-semibold'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-                <Icon className="w-4 h-4" />
-                {item.label}
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className={sidebarCollapsed ? 'md:hidden' : ''}>{item.label}</span>
               </button>
             );
           })}
         </nav>
 
         {canGrant && (
-          <div className="mx-3 mb-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
+          <div className={`mx-3 mb-3 rounded-lg border border-gray-100 bg-gray-50 p-3 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
             <div className="flex items-center gap-2 mb-1">
               <ShieldCheck className="w-4 h-4 text-brand" />
               <p className="text-xs font-bold text-gray-700">Acceso al panel</p>
@@ -370,20 +407,51 @@ export default function AdminPanel() {
           </div>
         )}
 
-        <div className="p-3 border-t border-gray-100">
-          <PortalSwitch user={user} />
+        <div className="border-t border-gray-100 p-3">
+          <PortalSwitch user={user} compact={sidebarCollapsed} className={sidebarCollapsed ? 'md:justify-center md:px-2' : ''} />
           <button
+            type="button"
             onClick={logout}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+            aria-label="Cerrar sesión"
+            title={sidebarCollapsed ? 'Cerrar sesión' : undefined}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 ${sidebarCollapsed ? 'md:justify-center md:px-2' : ''}`}
           >
-            <LogOut className="w-4 h-4" />
-            Cerrar sesión
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className={sidebarCollapsed ? 'md:hidden' : ''}>Cerrar sesión</span>
           </button>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="erp-main min-w-0 flex-1 overflow-auto">
+        <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b border-gray-200 bg-white/95 px-4 py-2 backdrop-blur sm:px-6">
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 md:hidden"
+            aria-label="Abrir menú"
+            aria-controls="erp-sidebar"
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 md:inline-flex"
+            aria-label={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+            aria-controls="erp-sidebar"
+            aria-expanded={!sidebarCollapsed}
+            title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          >
+            {sidebarCollapsed
+              ? <ChevronRight className="h-5 w-5" />
+              : <ChevronLeft className="h-5 w-5" />}
+          </button>
+          <h1 className="min-w-0 truncate text-sm font-semibold text-gray-800">
+            {activeNav?.label || 'GreenLine ERP'}
+          </h1>
+        </header>
         {view === VIEWS.DASHBOARD && (
           <AdminDashboardHub onNavigate={navigateTo} />
         )}

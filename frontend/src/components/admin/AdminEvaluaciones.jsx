@@ -46,7 +46,7 @@ export default function AdminEvaluaciones() {
     try {
       const [t, tec, cr] = await Promise.all([
         prestamosVehiculoAPI.listarTiendas(accessToken),
-        tallerAPI.listarTecnicos({}, accessToken),
+        tallerAPI.listarTecnicos({ activo: false }, accessToken),
         tallerAPI.listarCriterios(accessToken),
       ]);
       setTiendas(t.tiendas || []);
@@ -58,6 +58,8 @@ export default function AdminEvaluaciones() {
   }, [accessToken]);
 
   useEffect(() => { cargarCatalogos(); }, [cargarCatalogos]);
+
+  const tecnicosActivos = tecnicos.filter((tecnico) => tecnico.activo);
 
   return (
     <div className="p-8 max-w-6xl">
@@ -87,6 +89,7 @@ export default function AdminEvaluaciones() {
           { key: 'registrar', label: 'Registrar evaluación' },
           { key: 'historial', label: 'Historial' },
           { key: 'puntajes', label: 'Puntaje general' },
+          { key: 'tecnicos', label: 'Técnicos' },
           { key: 'rotacion', label: 'Rotación de técnicos' },
           { key: 'criterios', label: 'Condiciones' },
         ].map((t) => (
@@ -121,7 +124,7 @@ export default function AdminEvaluaciones() {
           accessToken={accessToken}
           puedeEditar={puedeEditar}
           tiendas={tiendas}
-          tecnicos={tecnicos}
+          tecnicos={tecnicosActivos}
           criterios={criterios}
           onSaved={async (mensaje) => { setAviso(mensaje); await cargarCatalogos(); }}
           onError={setError}
@@ -151,12 +154,24 @@ export default function AdminEvaluaciones() {
         />
       )}
 
+      {tab === 'tecnicos' && (
+        <Tecnicos
+          accessToken={accessToken}
+          puedeEditar={puedeEditar}
+          tiendas={tiendas}
+          tecnicos={tecnicos}
+          onRecargar={cargarCatalogos}
+          onError={(mensaje) => { setAviso(null); setError(mensaje); }}
+          onAviso={(mensaje) => { setError(null); setAviso(mensaje); }}
+        />
+      )}
+
       {tab === 'rotacion' && (
         <Rotacion
           accessToken={accessToken}
           puedeEditar={puedeEditar}
           tiendas={tiendas}
-          tecnicos={tecnicos}
+          tecnicos={tecnicosActivos}
           onRecargar={cargarCatalogos}
           onError={setError}
           onAviso={setAviso}
@@ -480,7 +495,7 @@ function Historial({ accessToken, puedeEditar, mes, onMes, tiendas, tecnicos, cr
             className="block mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white"
           >
             <option value="">Todos</option>
-            {tecnicos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            {tecnicos.map((t) => <option key={t.id} value={t.id}>{t.nombre}{t.activo ? '' : ' (Inactivo)'}</option>)}
           </select>
         </label>
         <label className="text-xs text-gray-500">
@@ -805,6 +820,126 @@ function Puntajes({ accessToken, mes, onMes, tiendas }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onError, onAviso }) {
+  const [nombre, setNombre] = useState('');
+  const [tiendaId, setTiendaId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function crear(event) {
+    event.preventDefault();
+    const nombreLimpio = nombre.trim();
+    if (nombreLimpio.length < 2) {
+      onError('Indica un nombre de al menos dos caracteres.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await tallerAPI.crearTecnico({ nombre: nombreLimpio, tiendaId: tiendaId || null }, accessToken);
+      setNombre('');
+      setTiendaId('');
+      onAviso('Técnico registrado.');
+      await onRecargar();
+    } catch (err) {
+      onError(err?.error || err?.message || 'No se pudo registrar el técnico.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function alternar(tecnico) {
+    const activo = !tecnico.activo;
+    if (!activo && !window.confirm(`¿Dar de baja a «${tecnico.nombre}»? Se conservará su historial.`)) return;
+    setSaving(true);
+    try {
+      await tallerAPI.actualizarTecnico(tecnico.id, { activo }, accessToken);
+      onAviso(activo ? 'Técnico reactivado.' : 'Técnico dado de baja. Se conserva su historial.');
+      await onRecargar();
+    } catch (err) {
+      onError(err?.error || err?.message || 'No se pudo actualizar el técnico.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-gray-500">
+        Los técnicos activos se utilizan en evaluaciones, rotaciones y ensamblado. Al dar de baja a uno se conserva su historial.
+      </p>
+      {puedeEditar && (
+        <form onSubmit={crear} className="max-w-3xl rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Agregar técnico</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium text-gray-700">
+              Nombre *
+              <input
+                value={nombre}
+                onChange={(event) => setNombre(event.target.value)}
+                maxLength={120}
+                required
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Tienda base
+              <select
+                value={tiendaId}
+                onChange={(event) => setTiendaId(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              >
+                <option value="">Sin tienda base</option>
+                {tiendas.map((tienda) => <option key={tienda.id} value={tienda.id}>{tienda.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button type="submit" disabled={saving} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              {saving ? 'Guardando…' : 'Agregar técnico'}
+            </button>
+          </div>
+        </form>
+      )}
+      <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase text-gray-500">
+              <th className="p-4">Técnico</th>
+              <th className="p-4">Tienda base</th>
+              <th className="p-4">Estado</th>
+              {puedeEditar && <th className="p-4 text-right">Acciones</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {tecnicos.length === 0 && (
+              <tr><td colSpan={puedeEditar ? 4 : 3} className="p-8 text-center text-gray-500">No hay técnicos registrados.</td></tr>
+            )}
+            {tecnicos.map((tecnico) => (
+              <tr key={tecnico.id}>
+                <td className="p-4 font-medium text-gray-900">{tecnico.nombre}</td>
+                <td className="p-4 text-gray-600">{tecnico.tienda?.name || '—'}</td>
+                <td className="p-4 text-gray-600">{tecnico.activo ? 'Activo' : 'Inactivo'}</td>
+                {puedeEditar && (
+                  <td className="p-4 text-right">
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => alternar(tecnico)}
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      aria-label={`${tecnico.activo ? 'Dar de baja a' : 'Reactivar a'} ${tecnico.nombre}`}
+                    >
+                      {tecnico.activo ? 'Dar de baja' : 'Reactivar'}
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

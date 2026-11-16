@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift, Zap, Sparkles } from '../../lib/icons';
+import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift, Zap, Sparkles, Wallet } from '../../lib/icons';
 import { siteConfigAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { rolesDe, tieneRol } from '../../lib/roles';
@@ -8,6 +8,7 @@ const CLAVE_HALLOWEEN = 'halloween';
 const CLAVE_ANIVERSARIO = 'aniversario';
 const CLAVE_CYBERWOW = 'cyberwow';
 const CLAVE_EXPOCHINA = 'expochina';
+const CLAVE_CTS = 'cts';
 const VARIANTES = [
   { id: 'brand', etiqueta: 'Brand (verde)', color: '#009000' },
   { id: 'orange', etiqueta: 'Naranja FFB300', color: '#FFB300' },
@@ -16,6 +17,14 @@ const VARIANTES = [
 const VALOR_HALLOWEEN = { activo: false, variante: 'orange' };
 const VALOR_CYBERWOW = { activo: false, variante: 'expo', hasta: null };
 const VALOR_EXPOCHINA = { activo: false, hasta: null };
+// Tema CTS: `activo: null` = automático (el sitio sigue el calendario
+// de fases: CTS 16-19 y Black Friday 23-28 de noviembre).
+const VALOR_CTS = { activo: null, fase: null, hasta: null };
+const FASES_CTS = [
+  { id: 'auto', etiqueta: 'Automática (por fecha)' },
+  { id: 'cts', etiqueta: 'CTS (16 - 19 nov)' },
+  { id: 'blackfriday', etiqueta: 'Black Friday (23 - 28 nov)' },
+];
 const VARIANTES_CYBERWOW = [
   { id: 'expo', etiqueta: 'Cyber Wow (verde + rojizo)', color: '#009000' },
   { id: 'midnight', etiqueta: 'Midnight (verde oscuro)', color: '#02140a' },
@@ -74,12 +83,15 @@ export default function AdminAjustes() {
   const [cyberHasta, setCyberHasta] = useState('');
   const [expoActivo, setExpoActivo] = useState(VALOR_EXPOCHINA.activo);
   const [expoHasta, setExpoHasta] = useState('');
+  const [ctsActivo, setCtsActivo] = useState(VALOR_CTS.activo);
+  const [ctsFase, setCtsFase] = useState('auto');
+  const [ctsHasta, setCtsHasta] = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError('');
     try {
-      const [halloween, aniversario, cyberwow, expochina] = await Promise.all([
+      const [halloween, aniversario, cyberwow, expochina, cts] = await Promise.all([
         siteConfigAPI.obtener(CLAVE_HALLOWEEN, accessToken).catch((err) => {
           if (err?.status !== 404) throw err;
           return VALOR_HALLOWEEN;
@@ -96,6 +108,10 @@ export default function AdminAjustes() {
           if (err?.status !== 404) throw err;
           return VALOR_EXPOCHINA;
         }),
+        siteConfigAPI.obtener(CLAVE_CTS, accessToken).catch((err) => {
+          if (err?.status !== 404) throw err;
+          return VALOR_CTS;
+        }),
       ]);
       setActivo(Boolean(halloween?.activo));
       setVariante(halloween?.variante || VALOR_HALLOWEEN.variante);
@@ -105,6 +121,9 @@ export default function AdminAjustes() {
       setCyberHasta(isoALocal(cyberwow?.hasta));
       setExpoActivo(Boolean(expochina?.activo));
       setExpoHasta(isoALocal(expochina?.hasta));
+      setCtsActivo(typeof cts?.activo === 'boolean' ? cts.activo : null);
+      setCtsFase(cts?.fase || 'auto');
+      setCtsHasta(isoALocal(cts?.hasta));
     } catch (err) {
       setError(err?.message || 'No se pudo leer la configuración de temas');
     } finally {
@@ -135,6 +154,23 @@ export default function AdminAjustes() {
           accessToken,
         ),
       ]);
+
+      // Tema CTS: en "automático" se borra la clave para que el sitio
+      // siga el calendario de fases; con la clave escrita manda el panel.
+      if (ctsActivo === null) {
+        await siteConfigAPI.borrar(CLAVE_CTS, accessToken);
+      } else {
+        await siteConfigAPI.guardar(
+          CLAVE_CTS,
+          {
+            activo: ctsActivo,
+            fase: ctsFase === 'auto' ? null : ctsFase,
+            hasta: localAIso(ctsHasta),
+          },
+          accessToken,
+        );
+      }
+
       setExito('Temas actualizados. El sitio público los aplicará en su próxima carga.');
       setTimeout(() => setExito(''), 4000);
     } catch (err) {
@@ -334,6 +370,87 @@ export default function AdminAjustes() {
                   </button>
                 )}
                 <Interruptor activo={expoActivo} onChange={() => setExpoActivo((actual) => !actual)} />
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-lg bg-emerald-50 text-brand flex items-center justify-center shrink-0">
+                  <Wallet className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-semibold text-gray-900">Tema CTS</h2>
+                  <p className="text-sm text-gray-500 mt-1 max-w-lg">
+                    Barra rotativa sobre el menú, banners por perfil de inversión en la
+                    cuadrícula de productos y botón de WhatsApp con asesoría. En
+                    automático sigue el calendario: CTS 16-19 y Black Friday 23-28 de
+                    noviembre.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <label className="flex flex-col text-xs font-medium text-gray-500">
+                  Se desactiva el
+                  <input
+                    type="datetime-local"
+                    value={ctsHasta}
+                    onChange={(e) => setCtsHasta(e.target.value)}
+                    className="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-700"
+                  />
+                </label>
+                {ctsHasta && (
+                  <button
+                    type="button"
+                    onClick={() => setCtsHasta('')}
+                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Estado</h3>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: null, etiqueta: 'Automático (fechas)' },
+                  { id: true, etiqueta: 'Encendido' },
+                  { id: false, etiqueta: 'Apagado' },
+                ].map((opcion) => (
+                  <button
+                    key={String(opcion.id)}
+                    type="button"
+                    onClick={() => setCtsActivo(opcion.id)}
+                    className={`px-4 py-2.5 rounded-lg border text-sm font-medium ${
+                      ctsActivo === opcion.id
+                        ? 'border-brand bg-brand/5 text-brand'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opcion.etiqueta}
+                  </button>
+                ))}
+              </div>
+
+              <h3 className="text-sm font-semibold text-gray-700 mt-5 mb-3">Fase</h3>
+              <div className="flex flex-wrap gap-2">
+                {FASES_CTS.map((fase) => (
+                  <button
+                    key={fase.id}
+                    type="button"
+                    onClick={() => setCtsFase(fase.id)}
+                    className={`px-4 py-2.5 rounded-lg border text-sm font-medium ${
+                      ctsFase === fase.id
+                        ? 'border-brand bg-brand/5 text-brand'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {fase.etiqueta}
+                  </button>
+                ))}
               </div>
             </div>
           </section>

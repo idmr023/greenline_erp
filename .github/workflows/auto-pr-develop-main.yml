@@ -38,7 +38,7 @@ jobs:
         id: diff
         run: |
           git fetch origin develop main
-          # Diff por CONTENIDO: tras squash, rev-list siempre ve develop "ahead"
+          # Diff por CONTENIDO: con squash (histórico) rev-list veía develop "ahead"
           # aunque el árbol sea idéntico → PRs vacíos y carreras innecesarias.
           if git diff --quiet origin/main origin/develop; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
@@ -165,7 +165,7 @@ jobs:
           echo "::error::Ni AUTO_MERGE_PAT ni GITHUB_TOKEN leen los check-runs 'verify'. Revisa el bloque permissions: de este workflow (checks: read) y el PAT."
           exit 1
 
-      - name: Create PR, wait for verify, merge (squash)
+      - name: Create PR, wait for verify, merge (merge commit)
         if: steps.diff.outputs.has_changes == 'true'
         env:
           AUTO_MERGE_PAT: ${{ secrets.AUTO_MERGE_PAT }}
@@ -211,7 +211,7 @@ jobs:
               --base main \
               --head develop \
               --title "Auto-PR: develop -> main" \
-              --body "PR automático develop -> main. Merge (squash) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml" 2>&1); then
+              --body "PR automático develop -> main. Merge (merge commit) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml" 2>&1); then
               if [ "${{ steps.token.outputs.token }}" = "pat" ] \
                 && printf '%s' "$out" | grep -q "Resource not accessible by personal access token (createPullRequest)"; then
                 echo "::warning::AUTO_MERGE_PAT no puede crear PR (createPullRequest). Reintento con GITHUB_TOKEN."
@@ -219,7 +219,7 @@ jobs:
                   --base main \
                   --head develop \
                   --title "Auto-PR: develop -> main" \
-                  --body "PR automático develop -> main. Merge (squash) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml"
+                  --body "PR automático develop -> main. Merge (merge commit) cuando el check verify (ruleset merge_verfication) esté en verde. Creado por .github/workflows/auto-pr-develop-main.yml"
               else
                 echo "$out"
                 exit 1
@@ -280,13 +280,13 @@ jobs:
                 sleep 15
                 continue
               fi
-              echo "verify verde → squash merge PR #$PR (--admin + retry: ruleset puede ver verify aún queued)"
+              echo "verify verde → merge commit PR #$PR (--admin + retry: ruleset puede ver verify aún queued)"
               # --admin: la ruleset merge_verfication bloquea al PAT fine-grained.
               # Retry: al crear el PR, GitHub puede encolar un verify nuevo y el
               # primer intento falla con "verify is in progress/queued".
               MERGED=0
               for attempt in 1 2 3 4 5; do
-                if merge_out=$(gh pr merge "$PR" --squash --admin 2>&1); then
+                if merge_out=$(gh pr merge "$PR" --merge --admin 2>&1); then
                   MERGED=1
                   break
                 fi

@@ -242,6 +242,29 @@ export const CATEGORIAS = [
 
 export const BATERIAS = ['Litio', 'Plomo Ácido', 'Plomo Grafeno'];
 
+// Minúsculas, sin acentos y sin signos: "TC2-160" y "tc2 160" coinciden.
+export function normalizarTexto(texto) {
+  return String(texto ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Respaldo de la búsqueda cuando la API no responde: todas las palabras de
+// la consulta deben aparecer en nombre, categoría, motor, batería o descripción.
+export function buscarLocal(productos, q) {
+  const palabras = normalizarTexto(q).split(' ').filter(Boolean);
+  if (!palabras.length) return productos;
+  return productos.filter((p) => {
+    const texto = normalizarTexto(
+      [p.nombre, p.categoria, p.motor, p.bateria, p.descripcion].filter(Boolean).join(' '),
+    );
+    return palabras.every((w) => texto.includes(w));
+  });
+}
+
 export function sortProducts(products, sortBy = 'price_asc') {
   const sorted = [...products];
   switch (sortBy) {

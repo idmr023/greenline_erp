@@ -33,7 +33,6 @@ import AdminUsuarios from './AdminUsuarios';
 import AdminRoles from './AdminRoles';
 import AdminAjustes from './AdminAjustes';
 import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar, Menu, X, ChevronLeft, ChevronRight } from '../../lib/icons';
-import PortalSwitch from '../PortalSwitch';
 
 const VIEWS = {
   DASHBOARD: 'dashboard',
@@ -408,7 +407,6 @@ export default function AdminPanel() {
         )}
 
         <div className="border-t border-gray-100 p-3">
-          <PortalSwitch user={user} compact={sidebarCollapsed} className={sidebarCollapsed ? 'md:justify-center md:px-2' : ''} />
           <button
             type="button"
             onClick={logout}

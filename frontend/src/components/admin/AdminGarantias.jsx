@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { garantiasAPI, prestamosVehiculoAPI } from '../../lib/api';
 import { mesActual, nombreMes, ultimosMeses } from '../../utils/meses';
+import { CATEGORIAS } from '../../lib/productos';
 import {
   ShieldCheck, Plus, RefreshCw, Trash2, X, Pencil, Copy, Check,
   Search, Clipboard,
@@ -28,6 +29,16 @@ const ESTADO_BADGE = {
 };
 
 const ESTADO_LABEL = Object.fromEntries(ESTADOS.map((e) => [e.valor, e.label]));
+
+const CATEGORIAS_GARANTIA = [...CATEGORIAS, 'Repuestos'];
+
+function opcionesCategoria(actual) {
+  return actual && !CATEGORIAS_GARANTIA.includes(actual) ? [actual, ...CATEGORIAS_GARANTIA] : CATEGORIAS_GARANTIA;
+}
+
+function enlaceSeguro(url) {
+  return /^https?:\/\//i.test(url || '') ? url : null;
+}
 
 function formatFecha(iso) {
   if (!iso) return '—';
@@ -233,11 +244,11 @@ export default function AdminGarantias() {
                   <th className="p-3">Fecha</th>
                   <th className="p-3">Cliente</th>
                   <th className="p-3">Tienda</th>
-                  <th className="p-3">Producto</th>
+                  <th className="p-3">Categoría</th>
                   <th className="p-3">Placa / VIN</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Estado</th>
                   <th className="p-3">Diagnóstico</th>
+                  <th className="p-3">Estado</th>
+                  <th className="p-3">Vídeo de evidencia</th>
                   <th className="p-3 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -299,7 +310,6 @@ function FilaGarantia({
         clienteNombre: garantia.clienteNombre || '',
         clienteDocumento: garantia.clienteDocumento || '',
         clienteTelefono: garantia.clienteTelefono || '',
-        clienteEmail: garantia.clienteEmail || '',
         tiendaId: garantia.tiendaId,
         producto: garantia.producto || '',
         modelo: garantia.modelo || '',
@@ -310,11 +320,8 @@ function FilaGarantia({
         numeroSerie: garantia.numeroSerie || '',
         tipoGarantia: garantia.tipoGarantia || '',
         fechaCompra: garantia.fechaCompra ? String(garantia.fechaCompra).slice(0, 10) : '',
-        plazoMeses: garantia.plazoMeses ?? '',
         descripcion: garantia.descripcion || '',
-        diagnostico: garantia.diagnostico || '',
         causa: garantia.causa || '',
-        taller: garantia.taller || '',
         piezas: garantia.piezas || '',
         costo: garantia.costo ?? '',
         estado: garantia.estado,
@@ -347,9 +354,9 @@ function FilaGarantia({
         </td>
         <td className="p-2 space-y-1">
           <input value={borrador.clienteNombre || ''} onChange={(e) => set('clienteNombre', e.target.value)} className="w-40 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Cliente" />
-          <input value={borrador.clienteDocumento || ''} onChange={(e) => set('clienteDocumento', e.target.value)} className="w-40 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Documento" />
+          <input value={borrador.clienteDocumento || ''} onChange={(e) => set('clienteDocumento', e.target.value)} className="w-40 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Boleta de compra" />
           <input value={borrador.clienteTelefono || ''} onChange={(e) => set('clienteTelefono', e.target.value)} className="w-40 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Teléfono" />
-          <input value={borrador.clienteEmail || ''} onChange={(e) => set('clienteEmail', e.target.value)} className="w-40 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Correo" />
+          <input type="date" value={borrador.fechaCompra || ''} onChange={(e) => set('fechaCompra', e.target.value)} title="Fecha de boleta de compra" className="w-40 border border-gray-200 rounded px-2 py-1 text-xs" />
         </td>
         <td className="p-2">
           <select value={borrador.tiendaId || ''} onChange={(e) => set('tiendaId', e.target.value)} className="w-32 border border-gray-200 rounded px-2 py-1 text-xs">
@@ -357,7 +364,10 @@ function FilaGarantia({
           </select>
         </td>
         <td className="p-2 space-y-1">
-          <input value={borrador.producto || ''} onChange={(e) => set('producto', e.target.value)} className="w-36 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Producto" />
+          <select value={borrador.producto || ''} onChange={(e) => set('producto', e.target.value)} className="w-36 border border-gray-200 rounded px-2 py-1 text-xs">
+            <option value="">Categoría…</option>
+            {opcionesCategoria(garantia.producto).map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
           <input value={borrador.modelo || ''} onChange={(e) => set('modelo', e.target.value)} className="w-36 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Modelo" />
           <input value={borrador.color || ''} onChange={(e) => set('color', e.target.value)} className="w-36 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Color" />
         </td>
@@ -368,9 +378,7 @@ function FilaGarantia({
           <input value={borrador.numeroSerie || ''} onChange={(e) => set('numeroSerie', e.target.value)} className="w-36 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="N° serie" />
         </td>
         <td className="p-2 space-y-1">
-          <input value={borrador.tipoGarantia || ''} onChange={(e) => set('tipoGarantia', e.target.value)} className="w-32 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Tipo" />
-          <input type="number" value={borrador.plazoMeses ?? ''} onChange={(e) => set('plazoMeses', e.target.value)} className="w-20 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Meses" />
-          <input type="date" value={borrador.fechaCompra || ''} onChange={(e) => set('fechaCompra', e.target.value)} className="w-32 border border-gray-200 rounded px-2 py-1 text-xs" />
+          <textarea value={borrador.tipoGarantia || ''} onChange={(e) => set('tipoGarantia', e.target.value)} rows={2} className="w-40 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Diagnóstico" />
         </td>
         <td className="p-2">
           <select value={borrador.estado || ''} onChange={(e) => set('estado', e.target.value)} className="w-32 border border-gray-200 rounded px-2 py-1 text-xs">
@@ -380,9 +388,7 @@ function FilaGarantia({
         </td>
         <td className="p-2 space-y-1">
           <textarea value={borrador.descripcion || ''} onChange={(e) => set('descripcion', e.target.value)} rows={2} className="w-48 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Descripción" />
-          <textarea value={borrador.diagnostico || ''} onChange={(e) => set('diagnostico', e.target.value)} rows={2} className="w-48 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Diagnóstico" />
-          <textarea value={borrador.causa || ''} onChange={(e) => set('causa', e.target.value)} rows={2} className="w-48 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Causa" />
-          <input value={borrador.taller || ''} onChange={(e) => set('taller', e.target.value)} className="w-48 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Taller" />
+          <input type="url" value={borrador.causa || ''} onChange={(e) => set('causa', e.target.value)} className="w-48 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Vídeo de evidencia (enlace de Drive)" />
           <input value={borrador.piezas || ''} onChange={(e) => set('piezas', e.target.value)} className="w-48 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Piezas" />
           <input type="number" step="0.01" value={borrador.costo ?? ''} onChange={(e) => set('costo', e.target.value)} className="w-28 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Costo" />
           <textarea value={borrador.observaciones || ''} onChange={(e) => set('observaciones', e.target.value)} rows={2} className="w-48 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="Observaciones" />
@@ -425,15 +431,20 @@ function FilaGarantia({
         <p className="text-xs">{garantia.placa || '—'}</p>
         <p className="text-xs text-gray-400">{garantia.vin || ''}</p>
       </td>
-      <td className="p-3 text-gray-600 text-xs">{garantia.tipoGarantia}</td>
+      <td className="p-3 text-gray-600 text-xs max-w-[220px]">
+        <p className="line-clamp-3" title={garantia.tipoGarantia || ''}>{garantia.tipoGarantia}</p>
+      </td>
       <td className="p-3">
         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_BADGE[garantia.estado] || ''}`}>
           {ESTADO_LABEL[garantia.estado] || garantia.estado}
         </span>
       </td>
       <td className="p-3 text-gray-600 text-xs max-w-[220px]">
-        <p className="truncate" title={garantia.diagnostico || ''}>{garantia.diagnostico || '—'}</p>
-        {garantia.causa && <p className="truncate text-gray-400" title={garantia.causa}>Causa: {garantia.causa}</p>}
+        {enlaceSeguro(garantia.causa) ? (
+          <a href={enlaceSeguro(garantia.causa)} target="_blank" rel="noopener noreferrer" className="text-brand underline">Ver vídeo</a>
+        ) : (
+          <p className="truncate" title={garantia.causa || ''}>{garantia.causa || '—'}</p>
+        )}
       </td>
       <td className="p-3 text-right">
         <div className="flex justify-end gap-1">
@@ -479,7 +490,7 @@ function ModalGarantia({ tiendas, accessToken, onClose, onSaved, onError }) {
     clienteNombre: '',
     clienteDocumento: '',
     clienteTelefono: '',
-    clienteEmail: '',
+    fechaCompra: '',
     tiendaId: tiendas[0]?.id || '',
     producto: '',
     modelo: '',
@@ -488,11 +499,8 @@ function ModalGarantia({ tiendas, accessToken, onClose, onSaved, onError }) {
     numeroMotor: '',
     placa: '',
     tipoGarantia: '',
-    plazoMeses: '',
     descripcion: '',
-    diagnostico: '',
     causa: '',
-    taller: '',
     observaciones: '',
   });
   const [saving, setSaving] = useState(false);
@@ -535,8 +543,11 @@ function ModalGarantia({ tiendas, accessToken, onClose, onSaved, onError }) {
               </select>
             </label>
             <label className="text-xs text-gray-500">
-              Tipo de garantía *
-              <input value={form.tipoGarantia} onChange={(e) => set('tipoGarantia', e.target.value)} placeholder="Ej: Batería 12 meses" className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
+              Categoría *
+              <select value={form.producto} onChange={(e) => set('producto', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required>
+                <option value="">Seleccionar…</option>
+                {CATEGORIAS_GARANTIA.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </label>
           </div>
 
@@ -546,7 +557,7 @@ function ModalGarantia({ tiendas, accessToken, onClose, onSaved, onError }) {
               <input value={form.clienteNombre} onChange={(e) => set('clienteNombre', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
             </label>
             <label className="text-xs text-gray-500">
-              Documento
+              Boleta de compra
               <input value={form.clienteDocumento} onChange={(e) => set('clienteDocumento', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </label>
             <label className="text-xs text-gray-500">
@@ -554,16 +565,12 @@ function ModalGarantia({ tiendas, accessToken, onClose, onSaved, onError }) {
               <input value={form.clienteTelefono} onChange={(e) => set('clienteTelefono', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </label>
             <label className="text-xs text-gray-500">
-              Correo
-              <input type="email" value={form.clienteEmail} onChange={(e) => set('clienteEmail', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              Fecha de boleta de compra
+              <input type="date" value={form.fechaCompra} onChange={(e) => set('fechaCompra', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </label>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <label className="text-xs text-gray-500">
-              Producto *
-              <input value={form.producto} onChange={(e) => set('producto', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
-            </label>
             <label className="text-xs text-gray-500">
               Modelo
               <input value={form.modelo} onChange={(e) => set('modelo', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
@@ -584,10 +591,6 @@ function ModalGarantia({ tiendas, accessToken, onClose, onSaved, onError }) {
               N° motor
               <input value={form.numeroMotor} onChange={(e) => set('numeroMotor', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </label>
-            <label className="text-xs text-gray-500">
-              Plazo (meses)
-              <input type="number" value={form.plazoMeses} onChange={(e) => set('plazoMeses', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            </label>
           </div>
 
           <label className="block text-xs text-gray-500">
@@ -596,22 +599,18 @@ function ModalGarantia({ tiendas, accessToken, onClose, onSaved, onError }) {
           </label>
           <div className="grid grid-cols-3 gap-3">
             <label className="text-xs text-gray-500">
-              Diagnóstico
-              <textarea value={form.diagnostico} onChange={(e) => set('diagnostico', e.target.value)} rows={2} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              Diagnóstico *
+              <textarea value={form.tipoGarantia} onChange={(e) => set('tipoGarantia', e.target.value)} rows={2} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
             </label>
             <label className="text-xs text-gray-500">
-              Causa
-              <textarea value={form.causa} onChange={(e) => set('causa', e.target.value)} rows={2} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              Vídeo de evidencia
+              <input type="url" value={form.causa} onChange={(e) => set('causa', e.target.value)} placeholder="https://drive.google.com/..." className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </label>
             <label className="text-xs text-gray-500">
               Observaciones
               <textarea value={form.observaciones} onChange={(e) => set('observaciones', e.target.value)} rows={2} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </label>
           </div>
-          <label className="block text-xs text-gray-500">
-            Taller
-            <input value={form.taller} onChange={(e) => set('taller', e.target.value)} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-          </label>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">

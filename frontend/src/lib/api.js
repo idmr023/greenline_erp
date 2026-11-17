@@ -627,6 +627,8 @@ export const prestamosVehiculoAPI = {
 
 /** Taller: técnicos, rotaciones, criterios y evaluaciones de incentivos. */
 export const tallerAPI = {
+  listarTiendas: (accessToken) =>
+    request('/taller/tiendas', { headers: authHeaders(accessToken) }),
   // técnicos
   listarTecnicos: (params = {}, accessToken) => {
     const q = new URLSearchParams();

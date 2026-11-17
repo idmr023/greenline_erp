@@ -30,7 +30,7 @@ jobs:
     steps:
       # Solo develop puede mergear a main: un PR que no sale de develop queda
       # BLOQUEADO aquí. El pase develop -> main lo hace
-      # auto-pr-develop-main.yml (Auto-PR + auto-merge con squash).
+      # auto-pr-develop-main.yml (Auto-PR + auto-merge con merge commit).
       - name: Origen del PR (a main sólo desde develop)
         if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref != 'develop' && !startsWith(github.head_ref, 'copilot/')
         env:

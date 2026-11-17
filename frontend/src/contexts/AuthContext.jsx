@@ -243,7 +243,11 @@ export function AuthProvider({ children }) {
           setRefreshToken(stored.tokens.refreshToken);
           setUser(userData);
           persist({ tokens: stored.tokens, user: userData });
-          if (!leerInicio()) escribirInicio(Date.now());
+          // Un traspaso es un login NUEVO: la ventana de 1 h empieza ahora.
+          // Reusar el inicio viejo de esta pestaña (reutilizada por nombre
+          // desde el sitio) cerraba la sesión al instante y, con ella,
+          // revocaba la familia y la sesión del staff en el sitio.
+          escribirInicio(Date.now());
           await cargarPermisos(stored.tokens.accessToken);
           await conectarDatos(stored.tokens.accessToken);
         })

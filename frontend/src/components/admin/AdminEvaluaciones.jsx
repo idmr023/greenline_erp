@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { tallerAPI, prestamosVehiculoAPI } from '../../lib/api';
+import { tallerAPI } from '../../lib/api';
 import { mesActual, nombreMes, ultimosMeses } from '../../utils/meses';
 import {
   Award, Plus, RefreshCw, Trash2, X, Pencil, Star, Users, MapPin,
@@ -45,7 +45,7 @@ export default function AdminEvaluaciones() {
   const cargarCatalogos = useCallback(async () => {
     try {
       const [t, tec, cr] = await Promise.all([
-        prestamosVehiculoAPI.listarTiendas(accessToken),
+        tallerAPI.listarTiendas(accessToken),
         tallerAPI.listarTecnicos({ activo: false }, accessToken),
         tallerAPI.listarCriterios(accessToken),
       ]);
@@ -632,7 +632,7 @@ function ModalEditarEvaluacion({ evaluacion, accessToken, onClose, onSaved, onEr
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    prestamosVehiculoAPI.listarTiendas(accessToken)
+    tallerAPI.listarTiendas(accessToken)
       .then((d) => setTiendas(d.tiendas || []))
       .catch(() => {});
   }, [accessToken]);
@@ -824,10 +824,45 @@ function Puntajes({ accessToken, mes, onMes, tiendas }) {
   );
 }
 
+const BASE_ALMACEN = '__almacen__';
+
+function baseTecnico(valor) {
+  return valor === BASE_ALMACEN
+    ? { tiendaId: null, baseAlmacen: true }
+    : { tiendaId: valor || null, baseAlmacen: false };
+}
+
+function valorBase(tecnico) {
+  return tecnico.baseAlmacen ? BASE_ALMACEN : tecnico.tiendaId || '';
+}
+
+function SelectTiendaBase({ value, onChange, tiendas, className, disabled, ariaLabel }) {
+  return (
+    <select value={value} onChange={(event) => onChange(event.target.value)} className={className} disabled={disabled} aria-label={ariaLabel}>
+      <option value="">Sin tienda base</option>
+      <option value={BASE_ALMACEN}>Almacén</option>
+      {tiendas.map((tienda) => <option key={tienda.id} value={tienda.id}>{tienda.name}</option>)}
+    </select>
+  );
+}
+
 function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onError, onAviso }) {
   const [nombre, setNombre] = useState('');
   const [tiendaId, setTiendaId] = useState('');
   const [saving, setSaving] = useState(false);
+
+  async function cambiarBase(tecnico, valor) {
+    setSaving(true);
+    try {
+      await tallerAPI.actualizarTecnico(tecnico.id, baseTecnico(valor), accessToken);
+      onAviso('Tienda base actualizada.');
+      await onRecargar();
+    } catch (err) {
+      onError(err?.error || err?.message || 'No se pudo actualizar la tienda base.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function crear(event) {
     event.preventDefault();
@@ -838,7 +873,7 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
     }
     setSaving(true);
     try {
-      await tallerAPI.crearTecnico({ nombre: nombreLimpio, tiendaId: tiendaId || null }, accessToken);
+      await tallerAPI.crearTecnico({ nombre: nombreLimpio, ...baseTecnico(tiendaId) }, accessToken);
       setNombre('');
       setTiendaId('');
       onAviso('Técnico registrado.');
@@ -886,14 +921,12 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
             </label>
             <label className="text-sm font-medium text-gray-700">
               Tienda base
-              <select
+              <SelectTiendaBase
                 value={tiendaId}
-                onChange={(event) => setTiendaId(event.target.value)}
+                onChange={setTiendaId}
+                tiendas={tiendas}
                 className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              >
-                <option value="">Sin tienda base</option>
-                {tiendas.map((tienda) => <option key={tienda.id} value={tienda.id}>{tienda.name}</option>)}
-              </select>
+              />
             </label>
           </div>
           <div className="mt-4 flex justify-end">
@@ -920,7 +953,18 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
             {tecnicos.map((tecnico) => (
               <tr key={tecnico.id}>
                 <td className="p-4 font-medium text-gray-900">{tecnico.nombre}</td>
-                <td className="p-4 text-gray-600">{tecnico.tienda?.name || '—'}</td>
+                <td className="p-4 text-gray-600">
+                  {puedeEditar ? (
+                    <SelectTiendaBase
+                      value={valorBase(tecnico)}
+                      onChange={(valor) => cambiarBase(tecnico, valor)}
+                      tiendas={tiendas}
+                      disabled={saving}
+                      ariaLabel={`Tienda base de ${tecnico.nombre}`}
+                      className="w-full max-w-xs rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                    />
+                  ) : (tecnico.baseAlmacen ? 'Almacén' : tecnico.tienda?.name || '—')}
+                </td>
                 <td className="p-4 text-gray-600">{tecnico.activo ? 'Activo' : 'Inactivo'}</td>
                 {puedeEditar && (
                   <td className="p-4 text-right">

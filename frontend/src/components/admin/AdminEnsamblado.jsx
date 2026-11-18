@@ -41,6 +41,9 @@ function formatFecha(iso) {
   }
 }
 
+// Valor del select y del filtro ?tiendaId= para el almacén central.
+const ALMACEN = 'almacen';
+
 export default function AdminEnsamblado() {
   const { accessToken, ability } = useAuth();
   const puedeEditar = ability.can('write', 'ensamblado');
@@ -250,6 +253,7 @@ export default function AdminEnsamblado() {
               className="block mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white"
             >
               <option value="">Todas</option>
+              <option value={ALMACEN}>Almacén</option>
               {tiendas.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </label>
@@ -293,7 +297,7 @@ export default function AdminEnsamblado() {
                   <tr key={r.id} className="hover:bg-gray-50/50">
                     <td className="p-4 text-gray-600 whitespace-nowrap">{formatFecha(r.fecha)}</td>
                     <td className="p-4 font-mono text-xs text-gray-700">{r.orden || '—'}</td>
-                    <td className="p-4 text-gray-600">{r.tienda?.name}</td>
+                    <td className="p-4 text-gray-600">{r.almacen ? 'Almacén' : r.tienda?.name}</td>
                     <td className="p-4">
                       <p className="font-medium text-gray-900">{r.cliente || '—'}</p>
                       <p className="text-xs text-gray-400">{[r.modelo, r.color].filter(Boolean).join(' · ') || '—'}</p>
@@ -367,7 +371,7 @@ export default function AdminEnsamblado() {
 function ModalRegistro({ registro, tiendas, tecnicos, accessToken, onClose, onSaved, onError }) {
   const [form, setForm] = useState({
     fecha: registro ? String(registro.fecha).slice(0, 10) : new Date().toISOString().slice(0, 10),
-    tiendaId: registro?.tiendaId || tiendas[0]?.id || '',
+    tiendaId: registro?.almacen ? ALMACEN : registro?.tiendaId || tiendas[0]?.id || '',
     orden: registro?.orden || '',
     cliente: registro?.cliente || '',
     modelo: registro?.modelo || '',
@@ -390,6 +394,8 @@ function ModalRegistro({ registro, tiendas, tecnicos, accessToken, onClose, onSa
     try {
       const payload = {
         ...form,
+        almacen: form.tiendaId === ALMACEN,
+        tiendaId: form.tiendaId === ALMACEN ? null : form.tiendaId,
         cantidad: Number(form.cantidad) || 1,
         responsableId: form.responsableId || null,
         fechaDespacho: form.fechaDespacho || null,
@@ -424,6 +430,7 @@ function ModalRegistro({ registro, tiendas, tecnicos, accessToken, onClose, onSa
               Tienda *
               <select value={form.tiendaId} onChange={(e) => set('tiendaId', e.target.value)} className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required>
                 <option value="">Seleccionar…</option>
+                <option value={ALMACEN}>Almacén</option>
                 {tiendas.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </label>

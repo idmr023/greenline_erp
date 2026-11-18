@@ -885,6 +885,24 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
     }
   }
 
+  async function eliminar(tecnico) {
+    const aviso = `¿Eliminar a «${tecnico.nombre}» de forma definitiva?
+
+`
+      + 'Se borran también sus evaluaciones, rotaciones y registros de ensamblado. No se puede deshacer.';
+    if (!window.confirm(aviso)) return;
+    setSaving(true);
+    try {
+      const r = await tallerAPI.eliminarTecnico(tecnico.id, accessToken);
+      onAviso(`Técnico eliminado (${r.evaluaciones ?? 0} evaluaciones y ${r.registros ?? 0} registros de ensamblado).`);
+      await onRecargar();
+    } catch (err) {
+      onError(err?.error || err?.message || 'No se pudo eliminar el técnico.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function alternar(tecnico) {
     const activo = !tecnico.activo;
     if (!activo && !window.confirm(`¿Dar de baja a «${tecnico.nombre}»? Se conservará su historial.`)) return;
@@ -903,7 +921,7 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
   return (
     <div className="space-y-6">
       <p className="text-sm text-gray-500">
-        Los técnicos activos se utilizan en evaluaciones, rotaciones y ensamblado. Al dar de baja a uno se conserva su historial.
+        Los técnicos activos se utilizan en evaluaciones, rotaciones y ensamblado. Al dar de baja a uno se conserva su historial; eliminarlo borra también sus registros.
       </p>
       {puedeEditar && (
         <form onSubmit={crear} className="max-w-3xl rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -976,6 +994,16 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
                       aria-label={`${tecnico.activo ? 'Dar de baja a' : 'Reactivar a'} ${tecnico.nombre}`}
                     >
                       {tecnico.activo ? 'Dar de baja' : 'Reactivar'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => eliminar(tecnico)}
+                      title="Eliminar con sus registros"
+                      className="ml-1 inline-flex items-center rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      aria-label={`Eliminar a ${tecnico.nombre}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </td>
                 )}
@@ -1114,7 +1142,7 @@ function Rotacion({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
             {tecnicos.map((t) => (
               <tr key={t.id} className="hover:bg-gray-50/50 align-top">
                 <td className="p-4 font-medium text-gray-900">{t.nombre}</td>
-                <td className="p-4 text-gray-600">{t.tienda?.name || '—'}</td>
+                <td className="p-4 text-gray-600">{t.baseAlmacen ? 'Almacén' : t.tienda?.name || '—'}</td>
                 <td className="p-4">
                   {t.rotaciones?.length ? (
                     <ul className="space-y-1">

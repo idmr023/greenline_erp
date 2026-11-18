@@ -3,7 +3,7 @@ import { useAbility } from '@casl/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { rolesAPI, usuariosAPI } from '../../lib/api';
 import { rolesDe, ROLES_RESPALDO } from '../../lib/roles';
-import { Check, Loader2, RefreshCw, Pencil, Plus, Search, ShieldCheck, ShieldOff, Trash2, Users, X } from '../../lib/icons';
+import { Check, Loader2, RefreshCw, RotateCcw, Pencil, Plus, Search, ShieldCheck, ShieldOff, Trash2, Users, X } from '../../lib/icons';
 
 const LIMITE = 20;
 
@@ -329,6 +329,31 @@ export default function AdminUsuarios() {
     }
   };
 
+  /**
+   * Recuperación del 2FA (SEC-03, sólo ADMIN): para quien perdió el celular
+   * y los códigos de respaldo. No exime: en su próximo ingreso, tras la
+   * contraseña, se le pide escanear un QR nuevo. Cierra sus sesiones.
+   */
+  const restablecer2FA = async (u) => {
+    const seguro = window.confirm(
+      `¿Restablecer el 2FA de "${u.nombre} ${u.apellido}"?\n\n` +
+        'Se borra su aplicación de autenticación y sus códigos de respaldo y se cierran sus sesiones. ' +
+        'En su próximo ingreso deberá configurar el 2FA de nuevo. Verifica su identidad antes de confirmar.',
+    );
+    if (!seguro) return;
+    setAccionando(u.id);
+    setMensaje(null);
+    try {
+      await usuariosAPI.restablecer2FA(u.id, accessToken);
+      setMensaje({ tipo: 'ok', texto: `${u.email} configurará un 2FA nuevo en su próximo ingreso.` });
+      await cargar();
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: mensajeDe(err, 'No se pudo restablecer el 2FA.') });
+    } finally {
+      setAccionando(null);
+    }
+  };
+
   const eliminar = async (u) => {
     const seguro = window.confirm(
       `¿Eliminar DEFINITIVAMENTE a "${u.nombre} ${u.apellido}"?\n\n` +
@@ -510,6 +535,18 @@ export default function AdminUsuarios() {
                         title={u.twoFactorExento ? 'Quitar exención de 2FA' : 'Exentar del 2FA'}
                       >
                         {u.twoFactorExento ? <ShieldCheck className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+                      </button>
+                    )}
+                    {/* Recuperación del 2FA: sólo ADMIN, cuentas con 2FA activo, nunca la propia. */}
+                    {esAdmin && u.twoFactorEnabled && u.id !== user?.id && (
+                      <button
+                        type="button"
+                        onClick={() => restablecer2FA(u)}
+                        disabled={accionando === u.id}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        title="Restablecer 2FA (perdió el celular)"
+                      >
+                        <RotateCcw className="w-4 h-4" />
                       </button>
                     )}
                     <button

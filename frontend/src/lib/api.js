@@ -349,6 +349,13 @@ export const usuariosAPI = {
       headers: authHeaders(accessToken),
     }),
 
+  /** Recuperación del 2FA (SEC-03): borra el secreto; al entrar monta uno nuevo. */
+  restablecer2FA: (id, accessToken) =>
+    request(`/users/${encodeURIComponent(id)}/reset-2fa`, {
+      method: 'POST',
+      headers: authHeaders(accessToken),
+    }),
+
 };
 
 /**

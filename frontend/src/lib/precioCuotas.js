@@ -25,6 +25,16 @@ export function numeroCuotas(producto) {
 }
 
 /**
+ * Cuota sin intereses: el total es el precio al contado, sólo se divide.
+ * Redondeada hacia arriba al céntimo para que n cuotas nunca sumen menos.
+ */
+export function cuotaSinIntereses(precio, n) {
+  const p = Number(precio);
+  if (!(p > 0) || !(n > 0)) return null;
+  return Math.ceil((p / n) * 100) / 100;
+}
+
+/**
  * Datos de precio por cuotas listos para pintar. `total` y `cuota` pueden
  * venir null (el admin aún no los cargó): la UI oculta la línea que falte.
  */

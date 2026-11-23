@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift, Zap, Sparkles, Wallet } from '../../lib/icons';
+import { Loader2, Save, Check, AlertCircle, Eye, EyeOff, Ghost, Gift, Zap, Sparkles, Wallet, Tag } from '../../lib/icons';
 import { siteConfigAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { rolesDe, tieneRol } from '../../lib/roles';
@@ -9,6 +9,7 @@ const CLAVE_ANIVERSARIO = 'aniversario';
 const CLAVE_CYBERWOW = 'cyberwow';
 const CLAVE_EXPOCHINA = 'expochina';
 const CLAVE_CTS = 'cts';
+const CLAVE_BLACKFRIDAY = 'blackfriday';
 const VARIANTES = [
   { id: 'brand', etiqueta: 'Brand (verde)', color: '#009000' },
   { id: 'orange', etiqueta: 'Naranja FFB300', color: '#FFB300' },
@@ -18,13 +19,20 @@ const VALOR_HALLOWEEN = { activo: false, variante: 'orange' };
 const VALOR_CYBERWOW = { activo: false, variante: 'expo', hasta: null };
 const VALOR_EXPOCHINA = { activo: false, hasta: null };
 // Tema CTS: `activo: null` = automático (el sitio sigue el calendario
-// de fases: CTS 16-19 y Black Friday 23-28 de noviembre).
+// de fases: CTS 16-19 y previa 20-22 de noviembre).
 const VALOR_CTS = { activo: null, fase: null, hasta: null };
 const FASES_CTS = [
   { id: 'auto', etiqueta: 'Automática (por fecha)' },
   { id: 'cts', etiqueta: 'CTS (16 - 19 nov)' },
-  { id: 'blackfriday', etiqueta: 'Black Friday (23 - 28 nov)' },
+  { id: 'previa', etiqueta: 'Previa (20 - 22 nov)' },
 ];
+// Tema Black Friday: independiente de CTS. Sin clave guardada el sitio
+// sigue su calendario (23-28 nov); el panel parte de esas mismas fechas.
+const VALOR_BLACKFRIDAY = {
+  activo: true,
+  desde: '2026-11-23T00:00:00-05:00',
+  hasta: '2026-11-28T23:59:00-05:00',
+};
 const VARIANTES_CYBERWOW = [
   { id: 'expo', etiqueta: 'Cyber Wow (verde + rojizo)', color: '#009000' },
   { id: 'midnight', etiqueta: 'Midnight (verde oscuro)', color: '#02140a' },
@@ -86,12 +94,15 @@ export default function AdminAjustes() {
   const [ctsActivo, setCtsActivo] = useState(VALOR_CTS.activo);
   const [ctsFase, setCtsFase] = useState('auto');
   const [ctsHasta, setCtsHasta] = useState('');
+  const [bfActivo, setBfActivo] = useState(VALOR_BLACKFRIDAY.activo);
+  const [bfDesde, setBfDesde] = useState('');
+  const [bfHasta, setBfHasta] = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError('');
     try {
-      const [halloween, aniversario, cyberwow, expochina, cts] = await Promise.all([
+      const [halloween, aniversario, cyberwow, expochina, cts, blackfriday] = await Promise.all([
         siteConfigAPI.obtener(CLAVE_HALLOWEEN, accessToken).catch((err) => {
           if (err?.status !== 404) throw err;
           return VALOR_HALLOWEEN;
@@ -112,6 +123,10 @@ export default function AdminAjustes() {
           if (err?.status !== 404) throw err;
           return VALOR_CTS;
         }),
+        siteConfigAPI.obtener(CLAVE_BLACKFRIDAY, accessToken).catch((err) => {
+          if (err?.status !== 404) throw err;
+          return VALOR_BLACKFRIDAY;
+        }),
       ]);
       setActivo(Boolean(halloween?.activo));
       setVariante(halloween?.variante || VALOR_HALLOWEEN.variante);
@@ -124,6 +139,9 @@ export default function AdminAjustes() {
       setCtsActivo(typeof cts?.activo === 'boolean' ? cts.activo : null);
       setCtsFase(cts?.fase || 'auto');
       setCtsHasta(isoALocal(cts?.hasta));
+      setBfActivo(Boolean(blackfriday?.activo));
+      setBfDesde(isoALocal(blackfriday?.desde));
+      setBfHasta(isoALocal(blackfriday?.hasta));
     } catch (err) {
       setError(err?.message || 'No se pudo leer la configuración de temas');
     } finally {
@@ -151,6 +169,11 @@ export default function AdminAjustes() {
         siteConfigAPI.guardar(
           CLAVE_EXPOCHINA,
           { activo: expoActivo, hasta: localAIso(expoHasta) },
+          accessToken,
+        ),
+        siteConfigAPI.guardar(
+          CLAVE_BLACKFRIDAY,
+          { activo: bfActivo, desde: localAIso(bfDesde), hasta: localAIso(bfHasta) },
           accessToken,
         ),
       ]);
@@ -385,8 +408,8 @@ export default function AdminAjustes() {
                   <p className="text-sm text-gray-500 mt-1 max-w-lg">
                     Barra rotativa sobre el menú, banners por perfil de inversión en la
                     cuadrícula de productos y botón de WhatsApp con asesoría. En
-                    automático sigue el calendario: CTS 16-19 y Black Friday 23-28 de
-                    noviembre.
+                    automático sigue el calendario: CTS 16-19 y previa 20-22 de
+                    noviembre. Black Friday va aparte, con su propio interruptor.
                   </p>
                 </div>
               </div>
@@ -451,6 +474,58 @@ export default function AdminAjustes() {
                     {fase.etiqueta}
                   </button>
                 ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-lg bg-gray-900 text-[#FFC72C] flex items-center justify-center shrink-0">
+                  <Tag className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-semibold text-gray-900">Tema Black Friday</h2>
+                  <p className="text-sm text-gray-500 mt-1 max-w-lg">
+                    Menú y pie verdes, hero negro en la portada, vitrina de ofertas y
+                    precios con "Ahorras" en la tienda, y loader propio. Independiente
+                    del tema CTS. Encendido, se ve entre las dos fechas (sin fecha de
+                    inicio arranca ya; sin fecha de fin no se apaga solo).
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <label className="flex flex-col text-xs font-medium text-gray-500">
+                  Se activa el
+                  <input
+                    type="datetime-local"
+                    value={bfDesde}
+                    onChange={(e) => setBfDesde(e.target.value)}
+                    className="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-700"
+                  />
+                </label>
+                <label className="flex flex-col text-xs font-medium text-gray-500">
+                  Se desactiva el
+                  <input
+                    type="datetime-local"
+                    value={bfHasta}
+                    onChange={(e) => setBfHasta(e.target.value)}
+                    className="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-700"
+                  />
+                </label>
+                {(bfDesde || bfHasta) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBfDesde('');
+                      setBfHasta('');
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Quitar fechas
+                  </button>
+                )}
+                <Interruptor activo={bfActivo} onChange={() => setBfActivo((actual) => !actual)} />
               </div>
             </div>
           </section>

@@ -100,3 +100,13 @@ test('resolverVista: la landing de quien sólo ve una sección es esa sección',
   const can = canDe(['menu:boveda:read']);
   assert.equal(resolverVista(NAV, can, [], 'dashboard', SUBVISTAS, 'dashboard'), 'boveda');
 });
+
+test('Toma de Decisiones: solo con menu:decisiones:read, sin bypass por rol', () => {
+  const item = { key: 'toma-de-decisiones', perm: 'menu:decisiones' };
+  assert.equal(VISTAS_CON_BYPASS['toma-de-decisiones'], undefined);
+  assert.equal(seccionVisible(item, canDe(['menu:decisiones:read']), ['DESARROLLADOR_WEB']), true);
+  // Aunque el rol sea ADMIN, si la matriz no manda el permiso (seed:rbac sin
+  // correr) la sección no aparece: el backend respondería 403 igual.
+  assert.equal(seccionVisible(item, canDe(['menu:dashboard:read']), ['ADMIN']), false);
+  assert.equal(seccionVisible(item, canDe(['menu:citas:read']), ['GERENTE_TIENDA']), false);
+});

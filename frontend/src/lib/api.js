@@ -459,6 +459,34 @@ export const metricsAPI = {
     request('/metrics', { headers: authHeaders(accessToken) }),
 };
 
+// Dashboard «Toma de Decisiones» (Sprint 5): solo agregados, permiso
+// decisiones:read (ADMIN y DESARROLLADOR_WEB). Ver greenline/docs/Sprint5/.
+const consultaDecisiones = (ruta) => (accessToken, { desde, hasta, tiendaId } = {}) => {
+  const query = new URLSearchParams();
+  if (desde) query.set('desde', desde);
+  if (hasta) query.set('hasta', hasta);
+  if (tiendaId) query.set('tiendaId', tiendaId);
+  const qs = query.toString();
+  return request(`/decisiones/${ruta}${qs ? `?${qs}` : ''}`, { headers: authHeaders(accessToken) });
+};
+
+export const decisionesAPI = {
+  resumen: consultaDecisiones('resumen'),
+  demanda: consultaDecisiones('demanda'),
+  zonas: consultaDecisiones('zonas'),
+  postventa: consultaDecisiones('postventa'),
+  inventario: consultaDecisiones('inventario'),
+  campanas: consultaDecisiones('campanas'),
+  tecnico: consultaDecisiones('tecnico'),
+  hallazgos: consultaDecisiones('hallazgos'),
+  // Chat "Pregúntale a tus datos": reglas sobre los agregados (sin IA por ahora).
+  preguntar: (accessToken, pregunta, { desde, hasta, tiendaId } = {}) => request('/decisiones/preguntar', {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({ pregunta, desde, hasta, tiendaId: tiendaId || undefined }),
+  }),
+};
+
 export const imagenesAPI = {
   listar: (ruta, accessToken) =>
     request(`/imagenes/listar?ruta=${encodeURIComponent(ruta || '')}`, {

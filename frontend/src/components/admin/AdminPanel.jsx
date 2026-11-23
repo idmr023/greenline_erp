@@ -18,6 +18,7 @@ import AdminTestimonios from './AdminTestimonios';
 import AdminPedidos from './AdminPedidos';
 import AdminBlog from './AdminBlog';
 import AdminMetrics from './AdminMetrics';
+import AdminDecisiones from './AdminDecisiones';
 import AdminDistribuidores from './AdminDistribuidores';
 import AdminContactos from './AdminContactos';
 import AdminReclamaciones from './AdminReclamaciones';
@@ -32,10 +33,11 @@ import AdminBoveda from './AdminBoveda';
 import AdminUsuarios from './AdminUsuarios';
 import AdminRoles from './AdminRoles';
 import AdminAjustes from './AdminAjustes';
-import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar, Menu, X, ChevronLeft, ChevronRight } from '../../lib/icons';
+import { LayoutDashboard, Package, Palette, MessageSquareQuote, ShoppingCart, LogOut, ShieldCheck, Lock, Mail, Loader2, Activity, FileText, MapPin, Users, Wrench, SlidersHorizontal, Settings, Car, Award, Calendar, Menu, X, ChevronLeft, ChevronRight, TrendingUp } from '../../lib/icons';
 
 const VIEWS = {
   DASHBOARD: 'dashboard',
+  DECISIONES: 'toma-de-decisiones',
   SERVICIO_TECNICO: 'servicio_tecnico',
   SERVICIO_TECNICO_HUB: 'servicio_tecnico_hub',
   PRODUCTOS: 'productos',
@@ -68,6 +70,10 @@ const VIEWS = {
  */
 const NAV_ITEMS = [
   { key: VIEWS.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard, perm: 'menu:dashboard' },
+  // Toma de Decisiones (Sprint 5): agregados de pedidos, zonas y postventa.
+  // Solo ADMIN y DESARROLLADOR_WEB (menu:decisiones:read); el backend
+  // repite la verificación con decisiones:read.
+  { key: VIEWS.DECISIONES, label: 'Toma de Decisiones', icon: TrendingUp, perm: 'menu:decisiones' },
   // Servicio Técnico: dashboard Flask embebido con slug fijo. Sin `href` a
   // propósito: se navega con `navigateTo` para no salir del layout con sidebar
   // (un `href` + window.location.href recargaría a una ruta sin sidebar).
@@ -136,6 +142,7 @@ export default function AdminPanel() {
     const search = window.location.search;
     let candidata = VIEWS.DASHBOARD;
     if (path.includes('/admin/dashboard-embed') && search.includes('servicio-tecnico')) candidata = VIEWS.SERVICIO_TECNICO;
+    else if (path.includes('/admin/toma-de-decisiones')) candidata = VIEWS.DECISIONES;
     else if (path.includes('/admin/distribuidores')) candidata = VIEWS.DISTRIBUIDORES;
     else if (path.includes('/admin/blog')) candidata = VIEWS.BLOG;
     else if (path.includes('/admin/productos')) candidata = VIEWS.PRODUCTOS;
@@ -453,6 +460,7 @@ export default function AdminPanel() {
         {view === VIEWS.DASHBOARD && (
           <AdminDashboardHub onNavigate={navigateTo} />
         )}
+        {view === VIEWS.DECISIONES && <AdminDecisiones />}
         {view === VIEWS.SERVICIO_TECNICO && (
           <DashboardEmbedded key="servicio-tecnico" slugInicial="servicio-tecnico" />
         )}

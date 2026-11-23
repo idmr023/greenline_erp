@@ -225,6 +225,17 @@ function tokensDe(texto) {
     .filter(Boolean);
 }
 
+/**
+ * Unidades en stock sumando los colores visibles (`colores_detalle.stock`
+ * de la vista), o null si ningún color trae un número.
+ */
+export function unidadesDisponibles(producto) {
+  const stocks = (producto?.colores_detalle || [])
+    .filter((c) => c.visible && Number.isFinite(c.stock))
+    .map((c) => c.stock);
+  return stocks.length ? stocks.reduce((a, b) => a + Math.max(0, b), 0) : null;
+}
+
 export function esUltimasUnidades(producto) {
   if (!producto) return false;
   const tokens = new Set([...tokensDe(producto.slug), ...tokensDe(producto.nombre)]);

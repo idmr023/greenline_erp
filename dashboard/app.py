@@ -29,6 +29,7 @@ from services.sheets import (
     fuente_por_id,
     limpiar_cache,
 )
+from services.medicion import cargar_servicios, resumen as resumen_medicion
 from services.taller import TallerError, datos_taller
 
 app = Flask(__name__)
@@ -390,6 +391,43 @@ def dashboard_servicio_tecnico():
         meses=meses_disponibles,
         mes_seleccionado=mes,
         origenes_aceptados=_origenes_aceptados(),
+        generado=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
+MODOS_MEDICION = {
+    "medicion": "Medición de Servicio por Sede y Técnico 2026",
+    "costo": "Servicios con costo",
+    "gratis": "Servicios gratuitos",
+}
+
+
+@app.route("/dashboard/servicio-tecnico/<modo>")
+def dashboard_medicion(modo: str):
+    """Tabla de medición (modo `medicion`) y los dashboards `costo` / `gratis`."""
+    if modo not in MODOS_MEDICION:
+        abort(404)
+    try:
+        servicios, calidad = cargar_servicios(fuente_por_id("servicio-tecnico"))
+    except FuenteError as exc:
+        return render_template("error.html", mensaje=str(exc)), 502
+
+    tecnico = (request.args.get("tecnico") or "").strip()
+    if modo != "medicion":
+        servicios = [s for s in servicios if s["gratis"] == (modo == "gratis")]
+    tecnicos = sorted({s["tecnico"] for s in servicios})
+    if tecnico:
+        servicios = [s for s in servicios if s["tecnico"] == tecnico]
+
+    return render_template(
+        "medicion.html",
+        modo=modo,
+        titulo=MODOS_MEDICION[modo],
+        modos=MODOS_MEDICION,
+        datos=resumen_medicion(servicios),
+        calidad=calidad,
+        tecnicos=tecnicos,
+        tecnico_seleccionado=tecnico,
         generado=datetime.now().strftime("%d/%m/%Y %H:%M"),
     )
 

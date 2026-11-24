@@ -249,3 +249,8 @@ code {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
 }
+
+/* Navegación entre la medición y sus dashboards */
+.pestanas-medicion { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.pestanas-medicion a { padding: 0.4rem 0.8rem; border: 1px solid #c8e6c9; border-radius: 999px; text-decoration: none; color: #2e7d32; }
+.pestanas-medicion a.activa { background: #2e7d32; color: #fff; border-color: #2e7d32; }

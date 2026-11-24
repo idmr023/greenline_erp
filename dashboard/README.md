@@ -295,3 +295,15 @@ npm run import:taller                    # importa
   día): se guarda como una evaluación por persona y ciclo, con el desglose
   (base, puntos sumados/restados, final e incentivo) en la descripción.
 
+
+## Medición de Servicio por Sede y Técnico 2026
+
+Rutas (fuente `servicio-tecnico`, pestañas `<SEDE> 2026`, filas con tipo de venta `SERVICIO`):
+
+- `/dashboard/servicio-tecnico/medicion`: tabla de lo que genera cada servicio (gratis / con costo / mixto), por técnico, sede y mes, más el bloque de calidad de datos.
+- `/dashboard/servicio-tecnico/costo`: dashboard de servicios con costo.
+- `/dashboard/servicio-tecnico/gratis`: dashboard de servicios gratuitos.
+
+Todas aceptan `?tecnico=<NOMBRE>`. Se llega desde la barra superior de "Servicio Técnico por Sede" en el panel.
+
+La estandarización está en `services/medicion.py`: encabezados, técnico sin `ST `, montos (`MONTO`, si no `PRECIO x CANTIDAD`, si no la suma de pagos), fechas y servicio canónico (`REGLAS_SERVICIO` + corrección de tipeo por similitud). Gratis = monto 0 o sin importe. Un servicio nuevo sin regla aparece como `Otro: <texto>` en el bloque de calidad; para agruparlo se añade una regla en `REGLAS_SERVICIO`.

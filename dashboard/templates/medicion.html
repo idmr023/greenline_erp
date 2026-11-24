@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} · Dashboard GreenLine{% endblock %}
+{% block cabeza %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+{% macro soles(v) %}S/ {{ "{:,.2f}".format(v) }}{% endmacro %}
+{% block contenido %}
+  <nav class="pestanas-medicion">
+    {% for m, etiqueta in modos.items() %}
+    <a href="{{ url_for('dashboard_medicion', modo=m, tecnico=tecnico_seleccionado or None) }}"
+       {% if m == modo %}class="activa" aria-current="page"{% endif %}>{{ etiqueta }}</a>
+    {% endfor %}
+    <a href="{{ url_for('dashboard_servicio_tecnico') }}">Resumen por sede</a>
+  </nav>
+
+  <h1>{{ titulo }}</h1>
+  <p class="sutil">Generado el {{ generado }} · datos de las pestañas "&lt;SEDE&gt; 2026", filas con tipo de venta SERVICIO</p>
+
+  <form method="get" action="{{ url_for('dashboard_medicion', modo=modo) }}" class="filtro-mes">
+    <label>Técnico
+      <select name="tecnico" onchange="this.form.submit()">
+        <option value="">Todos los técnicos</option>
+        {% for t in tecnicos %}
+        <option value="{{ t }}" {% if t == tecnico_seleccionado %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+
+  <div class="tarjetas">
+    {% if modo == 'gratis' %}
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Servicios gratuitos</span><span class="kpi-valor">{{ datos.gratis }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Técnicos</span><span class="kpi-valor">{{ datos.tecnicos }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Servicio más frecuente</span><span class="kpi-valor">{{ (datos.por_servicio | sort(attribute='total', reverse=True) | first).nombre if datos.por_servicio else '-' }}</span></div>
+    {% elif modo == 'costo' %}
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Ingresos</span><span class="kpi-valor">{{ soles(datos.ingresos) }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Servicios con costo</span><span class="kpi-valor">{{ datos.con_costo }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Ticket promedio</span><span class="kpi-valor">{{ soles(datos.ticket) }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Técnicos</span><span class="kpi-valor">{{ datos.tecnicos }}</span></div>
+    {% else %}
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Servicios</span><span class="kpi-valor">{{ datos.total }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Con costo</span><span class="kpi-valor">{{ datos.con_costo }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Gratuitos</span><span class="kpi-valor">{{ datos.gratis }}</span></div>
+    <div class="tarjeta kpi"><span class="kpi-etiqueta">Ingresos</span><span class="kpi-valor">{{ soles(datos.ingresos) }}</span></div>
+    {% endif %}
+  </div>
+
+  {% if modo == 'medicion' %}
+  <div class="tarjeta tabla-caja">
+    <h2>Qué genera cada servicio</h2>
+    <p class="sutil">Gratis = monto S/ 0 o sin importe. Mixto = el mismo servicio se registró a veces gratis y a veces cobrado.</p>
+    <table>
+      <thead><tr><th>Servicio</th><th>Tipo</th><th>Total</th><th>Gratis</th><th>Con costo</th><th>Ingresos</th><th>Ticket prom.</th></tr></thead>
+      <tbody>
+        {% for g in datos.por_servicio %}
+        <tr>
+          <td>{{ g.nombre }}</td>
+          <td><span class="badge {{ 'verde' if g.tipo == 'Con costo' else 'amarillo' if g.tipo == 'Mixto' else '' }}">{{ g.tipo }}</span></td>
+          <td>{{ g.total }}</td><td>{{ g.gratis }}</td><td>{{ g.con_costo }}</td>
+          <td>{{ soles(g.ingresos) }}</td><td>{{ soles(g.ticket) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% for titulo_tabla, grupo in [('Por técnico', datos.por_tecnico), ('Por sede', datos.por_sede), ('Por mes', datos.por_mes)] %}
+  <div class="tarjeta tabla-caja">
+    <h2>{{ titulo_tabla }}</h2>
+    <table>
+      <thead><tr><th>{{ titulo_tabla[4:] | capitalize }}</th><th>Total</th><th>Gratis</th><th>% gratis</th><th>Con costo</th><th>Ingresos</th><th>Ticket prom.</th></tr></thead>
+      <tbody>
+        {% for g in grupo %}
+        <tr>
+          <td>{{ g.nombre }}</td><td>{{ g.total }}</td><td>{{ g.gratis }}</td><td>{{ g.pct_gratis }}%</td>
+          <td>{{ g.con_costo }}</td><td>{{ soles(g.ingresos) }}</td><td>{{ soles(g.ticket) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  <div class="tarjeta">
+    <h2>Calidad de los datos</h2>
+    <p class="sutil">Filas que se leyeron pero necesitan corrección en la hoja. Ninguna se descarta.</p>
+    <ul>
+      <li>Sin fecha válida: {{ calidad.sin_fecha }}</li>
+      <li>Sin monto ni precio ni pago (se cuentan como gratis): {{ calidad.sin_monto }}</li>
+      <li>Sin técnico: {{ calidad.sin_tecnico }}</li>
+    </ul>
+    {% if calidad.no_reconocidos %}
+    <h3>Servicios sin regla de clasificación</h3>
+    <p class="sutil">Se muestran tal cual. Para agruparlos, añadir una regla en <code>REGLAS_SERVICIO</code> de <code>services/medicion.py</code>.</p>
+    <table>
+      <thead><tr><th>Texto en la hoja</th><th>Filas</th></tr></thead>
+      <tbody>
+        {% for nombre, n in calidad.no_reconocidos %}<tr><td>{{ nombre }}</td><td>{{ n }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+
+  {% else %}
+  {% set metrica = 'ingresos' if modo == 'costo' else 'total' %}
+  <div class="tarjeta">
+    <h2>{{ 'Ingresos' if modo == 'costo' else 'Servicios gratuitos' }} por mes</h2>
+    <canvas id="chart-mes" height="90"></canvas>
+  </div>
+  <div class="tarjeta">
+    <h2>{{ 'Ingresos' if modo == 'costo' else 'Servicios gratuitos' }} por técnico</h2>
+    <canvas id="chart-tecnico" height="120"></canvas>
+  </div>
+  <div class="tarjeta">
+    <h2>{{ 'Ingresos' if modo == 'costo' else 'Servicios gratuitos' }} por tipo de servicio</h2>
+    <canvas id="chart-servicio" height="120"></canvas>
+  </div>
+  <div class="tarjeta">
+    <h2>Por sede</h2>
+    <canvas id="chart-sede" height="90"></canvas>
+  </div>
+
+  <div class="tarjeta tabla-caja">
+    <h2>Detalle por técnico</h2>
+    <table>
+      <thead><tr><th>Técnico</th><th>Servicios</th>{% if modo == 'costo' %}<th>Ingresos</th><th>Ticket prom.</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for g in datos.por_tecnico | sort(attribute=metrica, reverse=True) %}
+        <tr><td>{{ g.nombre }}</td><td>{{ g.total }}</td>{% if modo == 'costo' %}<td>{{ soles(g.ingresos) }}</td><td>{{ soles(g.ticket) }}</td>{% endif %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if modo != 'medicion' %}
+<script>
+  const datos = {{ datos | tojson }};
+  const metrica = {{ ('ingresos' if modo == 'costo' else 'total') | tojson }};
+  const color = {{ ('#2e7d32' if modo == 'costo' else '#1565c0') | tojson }};
+  const etiqueta = metrica === 'ingresos' ? 'Ingresos (S/)' : 'Servicios';
+
+  function barras(id, grupos, horizontal) {
+    const orden = horizontal ? [...grupos].sort((a, b) => b[metrica] - a[metrica]) : grupos;
+    new Chart(document.getElementById(id), {
+      type: 'bar',
+      data: { labels: orden.map(g => g.nombre), datasets: [{ label: etiqueta, data: orden.map(g => g[metrica]), backgroundColor: color }] },
+      options: {
+        indexAxis: horizontal ? 'y' : 'x',
+        plugins: { legend: { display: false } },
+        scales: { [horizontal ? 'x' : 'y']: { beginAtZero: true } }
+      }
+    });
+  }
+  barras('chart-mes', datos.por_mes, false);
+  barras('chart-tecnico', datos.por_tecnico, true);
+  barras('chart-servicio', datos.por_servicio, true);
+  barras('chart-sede', datos.por_sede, false);
+</script>
+{% endif %}
+{% endblock %}

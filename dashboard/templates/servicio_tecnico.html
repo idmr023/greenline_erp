@@ -4,6 +4,12 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 {% endblock %}
 {% block contenido %}
+  <nav class="pestanas-medicion">
+    <a href="{{ url_for('dashboard_medicion', modo='medicion') }}">Medición de Servicio 2026</a>
+    <a href="{{ url_for('dashboard_medicion', modo='costo') }}">Servicios con costo</a>
+    <a href="{{ url_for('dashboard_medicion', modo='gratis') }}">Servicios gratuitos</a>
+    <a href="{{ url_for('dashboard_servicio_tecnico') }}" class="activa" aria-current="page">Resumen por sede</a>
+  </nav>
   <h1>Servicio Técnico por Sede</h1>
   <p class="sutil">Generado el {{ generado }} · <a href="{{ url_for('index') }}">volver al selector</a></p>
 

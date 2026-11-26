@@ -846,10 +846,128 @@ function SelectTiendaBase({ value, onChange, tiendas, className, disabled, ariaL
   );
 }
 
+// Ficha del técnico: bloque "DATOS" de cada pestaña de la hoja
+// "Sistema_Evaluacion_Incentivos_Armado".
+const fechaInput = (valor) => (valor ? String(valor).slice(0, 10) : '');
+
+function contratoTexto(tecnico) {
+  if (!tecnico.contratoInicio && !tecnico.contratoFin) return '—';
+  const f = (v) => (v ? formatFecha(v) : '?');
+  return `${f(tecnico.contratoInicio)} - ${f(tecnico.contratoFin)}`;
+}
+
+function ModalFichaTecnico({ tecnico, accessToken, puedeEditar, onClose, onSaved, onError }) {
+  const [form, setForm] = useState({
+    nombre: tecnico.nombre,
+    puntajeBase: String(tecnico.puntajeBase ?? 100),
+    fechaIngreso: fechaInput(tecnico.fechaIngreso),
+    contratoInicio: fechaInput(tecnico.contratoInicio),
+    contratoFin: fechaInput(tecnico.contratoFin),
+    tallaPolo: tecnico.tallaPolo || '',
+    tallaPantalon: tecnico.tallaPantalon || '',
+    tallaBotas: tecnico.tallaBotas || '',
+    notas: tecnico.notas || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const campo = (clave) => ({
+    value: form[clave],
+    onChange: (e) => setForm({ ...form, [clave]: e.target.value }),
+    disabled: !puedeEditar,
+    className: 'mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50',
+  });
+
+  async function submit(e) {
+    e.preventDefault();
+    if (form.contratoInicio && form.contratoFin && form.contratoFin < form.contratoInicio) {
+      onError('El fin del contrato no puede ser anterior a su inicio.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await tallerAPI.actualizarTecnico(tecnico.id, {
+        ...form,
+        nombre: form.nombre.trim(),
+        puntajeBase: Number(form.puntajeBase) || 0,
+      }, accessToken);
+      onSaved();
+    } catch (err) {
+      onError(err?.error || err?.message || 'No se pudo guardar la ficha.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div role="dialog" aria-modal="true" aria-label={`Ficha de ${tecnico.nombre}`} className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">Ficha de {tecnico.nombre}</h2>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-5">
+          <fieldset className="grid grid-cols-2 gap-4">
+            <legend className="col-span-2 mb-1 text-xs font-semibold uppercase text-gray-500">Datos</legend>
+            <label className="col-span-2 text-sm font-medium text-gray-700">
+              Nombre del trabajador
+              <input {...campo('nombre')} maxLength={120} required />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Puntaje base inicial
+              <input {...campo('puntajeBase')} type="number" min={0} max={1000} />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Ingreso
+              <input {...campo('fechaIngreso')} type="date" />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Último contrato: inicio
+              <input {...campo('contratoInicio')} type="date" />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Último contrato: fin
+              <input {...campo('contratoFin')} type="date" />
+            </label>
+          </fieldset>
+          <fieldset className="grid grid-cols-3 gap-4">
+            <legend className="col-span-3 mb-1 text-xs font-semibold uppercase text-gray-500">Uniforme (talla)</legend>
+            <label className="text-sm font-medium text-gray-700">
+              Polo
+              <input {...campo('tallaPolo')} maxLength={20} placeholder="M" />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Pantalón
+              <input {...campo('tallaPantalon')} maxLength={20} placeholder="28 - 30" />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Botas
+              <input {...campo('tallaBotas')} maxLength={20} placeholder="40" />
+            </label>
+          </fieldset>
+          <label className="block text-sm font-medium text-gray-700">
+            Notas
+            <textarea {...campo('notas')} rows={2} maxLength={1000} />
+          </label>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              {puedeEditar ? 'Cancelar' : 'Cerrar'}
+            </button>
+            {puedeEditar && (
+              <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium disabled:opacity-50">
+                {saving ? 'Guardando…' : 'Guardar ficha'}
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onError, onAviso }) {
   const [nombre, setNombre] = useState('');
   const [tiendaId, setTiendaId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [ficha, setFicha] = useState(null);
 
   async function cambiarBase(tecnico, valor) {
     setSaving(true);
@@ -960,13 +1078,16 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
             <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase text-gray-500">
               <th className="p-4">Técnico</th>
               <th className="p-4">Tienda base</th>
+              <th className="p-4">Puntaje base</th>
+              <th className="p-4">Ingreso</th>
+              <th className="p-4">Último contrato</th>
               <th className="p-4">Estado</th>
-              {puedeEditar && <th className="p-4 text-right">Acciones</th>}
+              <th className="p-4 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {tecnicos.length === 0 && (
-              <tr><td colSpan={puedeEditar ? 4 : 3} className="p-8 text-center text-gray-500">No hay técnicos registrados.</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-gray-500">No hay técnicos registrados.</td></tr>
             )}
             {tecnicos.map((tecnico) => (
               <tr key={tecnico.id}>
@@ -983,9 +1104,21 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
                     />
                   ) : (tecnico.baseAlmacen ? 'Almacén' : tecnico.tienda?.name || '—')}
                 </td>
+                <td className="p-4 text-gray-600 tabular-nums">{tecnico.puntajeBase ?? 100}</td>
+                <td className="p-4 text-gray-600 whitespace-nowrap">{formatFecha(tecnico.fechaIngreso) || '—'}</td>
+                <td className="p-4 text-gray-600 whitespace-nowrap">{contratoTexto(tecnico)}</td>
                 <td className="p-4 text-gray-600">{tecnico.activo ? 'Activo' : 'Inactivo'}</td>
+                <td className="p-4 text-right whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => setFicha(tecnico)}
+                    className="mr-1 inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    aria-label={`Ficha de ${tecnico.nombre}`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Ficha
+                  </button>
                 {puedeEditar && (
-                  <td className="p-4 text-right">
+                  <>
                     <button
                       type="button"
                       disabled={saving}
@@ -1005,13 +1138,28 @@ function Tecnicos({ accessToken, puedeEditar, tiendas, tecnicos, onRecargar, onE
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
-                  </td>
+                  </>
                 )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {ficha && (
+        <ModalFichaTecnico
+          tecnico={ficha}
+          accessToken={accessToken}
+          puedeEditar={puedeEditar}
+          onClose={() => setFicha(null)}
+          onError={onError}
+          onSaved={async () => {
+            setFicha(null);
+            onAviso('Ficha actualizada.');
+            await onRecargar();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -236,6 +236,15 @@ export function unidadesDisponibles(producto) {
   return stocks.length ? stocks.reduce((a, b) => a + Math.max(0, b), 0) : null;
 }
 
+// Escasez sin número exacto: < 3 -> "Últimas unidades en stock"; 3 a 5 -> "Quedan pocas unidades".
+export function etiquetaEscasez(producto) {
+  const n = unidadesDisponibles(producto);
+  if (!(n > 0)) return null;
+  if (n < 3) return 'Últimas unidades en stock';
+  if (n <= 5) return 'Quedan pocas unidades';
+  return null;
+}
+
 export function esUltimasUnidades(producto) {
   if (!producto) return false;
   const tokens = new Set([...tokensDe(producto.slug), ...tokensDe(producto.nombre)]);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ensambladoAPI, tallerAPI, prestamosVehiculoAPI } from '../../lib/api';
+import { ensambladoAPI, tallerAPI } from '../../lib/api';
 import { nombreMes, ultimosMeses } from '../../utils/meses';
 import {
   Package, Plus, RefreshCw, Trash2, X, Pencil, Wrench, MapPin, User,
@@ -83,14 +83,13 @@ export default function AdminEnsamblado() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    Promise.all([
-      prestamosVehiculoAPI.listarTiendas(accessToken),
-      tallerAPI.listarTecnicos({}, accessToken),
-    ])
-      .then(([t, tec]) => {
-        setTiendas(t.tiendas || []);
-        setTecnicos(tec.tecnicos || []);
-      })
+    // /taller/* usa taller:read, el mismo permiso que este módulo
+    // (/prestamos-vehiculo/tiendas exige vehicles:read y daba 403).
+    tallerAPI.listarTiendas(accessToken)
+      .then((t) => setTiendas(t.tiendas || []))
+      .catch(() => {});
+    tallerAPI.listarTecnicos({}, accessToken)
+      .then((tec) => setTecnicos(tec.tecnicos || []))
       .catch(() => {});
   }, [accessToken]);
 

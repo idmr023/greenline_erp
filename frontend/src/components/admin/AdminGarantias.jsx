@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { garantiasAPI, prestamosVehiculoAPI } from '../../lib/api';
+import { garantiasAPI, tallerAPI } from '../../lib/api';
 import { mesActual, nombreMes, ultimosMeses } from '../../utils/meses';
 import { CATEGORIAS } from '../../lib/productos';
 import {
@@ -87,7 +87,7 @@ export default function AdminGarantias() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    prestamosVehiculoAPI.listarTiendas(accessToken)
+    tallerAPI.listarTiendas(accessToken)
       .then((d) => setTiendas(d.tiendas || []))
       .catch(() => {});
   }, [accessToken]);
